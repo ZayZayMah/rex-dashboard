@@ -1,10 +1,11 @@
-
 [project]
 name = "rex"
 version = "0.1.0"
+description = "REX Discord bot dashboard"
 requires-python = ">=3.12"
 dependencies = [
     "flask",
+    "requests",
 ]
 
 [dependency-groups]
