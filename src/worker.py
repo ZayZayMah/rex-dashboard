@@ -1,18 +1,7 @@
 
-from flask import Flask
 from workers import wsgi
+from app import app
 
-app = Flask(__name__)
-
-@app.get("/")
-def home():
-    return {
-        "message": "REX Dashboard Worker is running",
-        "status": "setup-test"
-    }
-
-@app.get("/health")
-def health():
-    return {"ok": True}
-
+# Use the Flask application defined in app.py.
+# This keeps the existing routes instead of creating a test-only app.
 Default = wsgi.entrypoint(app)
