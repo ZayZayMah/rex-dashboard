@@ -1,102 +1,48 @@
+# REX Dashboard
 
-# 🐺 REX Dashboard
+Website + API for the REX Discord bot. Runs on Cloudflare Workers (static site in `public/`, Python Worker in `src/`). No third-party Python packages.
 
-A web dashboard for the REX Discord bot, featuring REX branding and a foundation for Discord OAuth2 authentication and server management.
+## What's in here
+| Path | What it is |
+|---|---|
+| `public/` | The website (home, server list, server settings, owner health page). Dark steel + electric blue, with an automatic Halloween theme (Oct 15 - Nov 2, or use the button in the nav). |
+| `src/worker.py` | Discord login, sessions, settings API, bot API. |
+| `src/features.py` | **The list of settings shown on the dashboard.** Edit this to match your bot. |
+| `bot/rex_dashboard.py` | discord.py extension that connects your bot to the dashboard. Goes on Ryft, not Cloudflare. |
+| `wrangler.jsonc`, `pyproject.toml` | Cloudflare config. Deploy command stays `uv run pywrangler deploy`. |
 
-## 🚀 Project Status
+## 1. Replace the old repo contents
+In `ZayZayMah/rex-dashboard`: delete `app.py`, `templates/`, `static/`, `Procfile`, `.env.example`, `requirements.txt` (if present), then upload everything from this folder. `FLASK_SECRET_KEY` is no longer needed.
 
-**Status:** Development — Cloudflare integration in progress.
+## 2. Discord Developer Portal
+1. Your application -> OAuth2 -> **Redirects** -> add `https://rex.g7m4fcmnz9.workers.dev/auth/callback` and save.
+2. Copy the **Client ID** and **Client Secret** (reset the secret if it was ever shared).
 
-The project currently contains the original Flask website starter and an initial Cloudflare Workers configuration. The full dashboard has not yet been migrated to the Cloudflare Workers runtime.
+## 3. Cloudflare: Workers & Pages -> rex -> Settings -> Variables and Secrets
+Add these (type **Secret** for the secrets):
+| Name | Value |
+|---|---|
+| `DISCORD_CLIENT_ID` | from step 2 |
+| `DISCORD_CLIENT_SECRET` | from step 2 (Secret) |
+| `BOT_API_KEY` | a long random string you generate, e.g. `python -c "import secrets; print(secrets.token_hex(32))"` (Secret) |
+| `OWNER_ID` | your Discord user ID (unlocks the **Health** page) |
 
-## ✨ Planned Features
+Then redeploy (push to GitHub). If the deploy complains about the KV namespace, create one under Storage & Databases -> KV and put its id in `wrangler.jsonc` as `{"binding": "REX_KV", "id": "..."}`.
 
-- Discord OAuth2 login
-- View Discord servers you own or can manage
-- Server-specific dashboard and settings
-- REX branding and responsive website styling
-- Integration with the REX Discord bot
-- Secure configuration and persistent settings storage
+## 4. The bot (Ryft)
+1. Copy `bot/rex_dashboard.py` next to `main.py`.
+2. Ryft environment: `REX_DASHBOARD_URL=https://rex.g7m4fcmnz9.workers.dev` and `REX_BOT_API_KEY=` (same value as `BOT_API_KEY`).
+3. In `main.py`: `await bot.load_extension("rex_dashboard")`.
+4. **Premium:** set `bot.is_guild_premium = your_async_function` (takes a guild, returns bool) using your existing premium storage. Until then every server counts as free. Call `bot.get_cog("DashboardLink").mark_dirty()` after a successful `/redeem`.
+5. Use dashboard values in your commands/events: `await bot.get_cog("DashboardLink").setting(guild.id, "anti_spam", False)`.
 
-These features require implementation and testing before they can be considered production-ready.
+The bot only *reads* settings; keep your own owner/premium checks in the bot.
 
-## 🛠️ Technology
+## 5. Make the settings match your bot
+`src/features.py` ships with example settings (welcome, moderation, anti-raid). Rename/add/remove entries so each `key` is something your bot actually reads.
 
-- Python
-- Flask
-- HTML and CSS
-- Discord OAuth2 API
-- Cloudflare Workers (Python)
-- GitHub for source control
-
-## 📁 Project Structure
-
-```text
-rex-dashboard/
-├── app.py
-├── requirements.txt
-├── pyproject.toml
-├── wrangler.jsonc
-├── src/
-│   └── worker.py
-├── templates/
-├── static/
-├── .env.example
-├── .gitignore
-└── README.md
-```
-
-## ☁️ Cloudflare Deployment
-
-The project is being prepared for Cloudflare Workers using Python support.
-
-1. Push the project files to the connected GitHub repository.
-2. Connect the repository to your Cloudflare Worker.
-3. Configure the Python Worker entry point and dependencies.
-4. Add required environment variables and secrets through Cloudflare.
-5. Deploy and test the Worker using its `workers.dev` URL.
-6. Complete and test the Flask application migration before connecting the production domain.
-
-The current Worker entry point is a basic test scaffold. It does not yet provide the complete Discord dashboard.
-
-## 🔐 Environment Variables
-
-Configure credentials securely through Cloudflare's Variables and Secrets settings when the application is ready.
-
-The final application will require values for items such as:
-
-- Discord OAuth2 client ID
-- Discord OAuth2 client secret
-- Discord OAuth2 redirect URL
-- Flask session secret
-
-Use `.env.example` to document required variable names. Never commit real credentials, bot tokens, or secret keys to GitHub.
-
-## 💾 Storage
-
-The original Flask starter uses local JSON-file storage for settings. Before production deployment on Cloudflare Workers, this must be replaced with a suitable persistent storage service, such as Cloudflare KV or D1.
-
-## 🧪 Testing
-
-Before public release, test:
-
-- Worker deployment and health endpoint
-- Discord OAuth2 login and callback
-- Server access permissions
-- Settings persistence
-- Session security
-- Integration with the REX Discord bot
-
-## 📜 License
-
-No license has been selected yet. All rights and reuse permissions remain subject to the applicable rights holders until a license is added.
-```
-
-## What to do next
-
-1. Open `README.md` in your GitHub repository.
-2. Click the pencil icon to edit it.
-3. Replace the existing content with the Markdown above.
-4. Click **Commit changes**.
-
-**Important:** This only updates the project documentation. It won't fix deployment by itself. The next technical step is to get the Python Worker running, then migrate the real Flask dashboard so its Discord login and settings work correctly.
+## Notes
+- Settings take up to ~1 minute to reach the bot (cache) and KV is eventually consistent across regions.
+- Free-plan KV allows 1,000 writes/day. The bot heartbeat defaults to every 5 minutes (~288/day). On a paid plan you can set `REX_HEARTBEAT_SECONDS=60`.
+- Optional artwork: add your own `public/img/avatar.png` and it appears in the home page hero.
+- If the deploy says `No module named features`, paste the contents of `src/features.py` at the top of `src/worker.py` and delete the `from features import ...` lines.

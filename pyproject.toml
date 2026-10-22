@@ -1,15 +1,9 @@
 [project]
-name = "rex"
-version = "0.1.0"
-description = "REX Discord bot dashboard"
+name = "rex-dashboard"
+version = "1.0.0"
+description = "REX Discord bot dashboard (Cloudflare Python Worker + static site)"
 requires-python = ">=3.12"
-dependencies = [
-    "flask",
-    "requests",
-]
+dependencies = []
 
 [dependency-groups]
-dev = [
-    "workers-py",
-    "workers-runtime-sdk",
-]
+dev = ["workers-py", "workers-runtime-sdk"]

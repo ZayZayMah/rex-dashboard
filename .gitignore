@@ -1,5 +1,8 @@
-.env
 .venv/
 __pycache__/
-data/
-*.py[cod]
+*.pyc
+.wrangler/
+node_modules/
+python_modules/
+.dev.vars
+.env

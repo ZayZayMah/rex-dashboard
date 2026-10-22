@@ -1,0 +1,6 @@
+# Local development only (copy to .dev.vars, never commit it).
+# On Cloudflare, add these under Settings -> Variables and Secrets instead.
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+BOT_API_KEY=
+OWNER_ID=

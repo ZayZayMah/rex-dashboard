@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="29" fill="none" stroke="#000" stroke-width="2.6" stroke-dasharray="150 32" stroke-linecap="butt" transform="rotate(-62 32 32)"/>
+  <polygon fill="#000" points="32,35 41,39 46,47 41,55 32,57 23,55 18,47 23,39"/>
+  <polygon fill="#000" points="9,31 14,25 19,31 17,38 11,38"/>
+  <polygon fill="#000" points="20,22 25,14 31,22 28,29 22,29"/>
+  <polygon fill="#000" points="44,22 39,14 33,22 36,29 42,29"/>
+  <polygon fill="#000" points="55,31 50,25 45,31 47,38 53,38"/>
+</svg>
