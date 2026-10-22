@@ -1,15 +1,20 @@
 """REX Dashboard - Cloudflare Python Worker.
 
-Serves only /api/* and /auth/* (the static site in /public is served by
-Cloudflare directly). No third-party Python packages are needed.
+Serves only /api/* and /auth/* (the static website in /public is served directly by Cloudflare).
+No third-party Python packages are needed.
 
-Secrets / variables (Cloudflare -> Settings -> Variables and Secrets):
-  DISCORD_CLIENT_ID      required  Discord application (OAuth2) client ID
-  DISCORD_CLIENT_SECRET  required  Discord application client secret   (Secret)
-  BOT_API_KEY            required  shared key the bot uses to talk to us (Secret)
-  OWNER_ID               optional  your Discord user ID (unlocks /admin)
+Variables / secrets (Cloudflare -> Workers & Pages -> rex -> Settings -> Variables and Secrets):
+  DISCORD_CLIENT_ID      required  Discord application client ID
+  DISCORD_CLIENT_SECRET  required  Discord application client secret            (Secret)
+  BOT_API_KEY            required  shared key the bot uses to talk to us          (Secret)
+  OWNER_ID               optional  your Discord user ID(s), comma separated. Unlocks /admin and
+                                   lets you open every server REX is in.
+  SUPPORT_URL            optional  defaults to https://discord.gg/rexsupport
   PUBLIC_URL             optional  override the site origin used for OAuth redirects
-  INVITE_PERMISSIONS     optional  permission number for the "Add REX" link
+  INVITE_PERMISSIONS     optional  permission number for the "Add REX" link (default 8)
+
+The BOT is the source of truth for settings. Website saves go into a queue; the bot picks them
+up, re-checks them (who you are in Discord, your permissions, the server's tier) and applies them.
 """
 import hashlib
 import hmac
@@ -24,29 +29,30 @@ from js import fetch as js_fetch
 from pyodide.ffi import to_js
 from workers import Response, WorkerEntrypoint
 
-from features import (
-    effective_settings,
-    is_premium,
-    public_schema,
-    setting_index,
-    validate,
+from schema import (
+    SNOWFLAKE,
+    clean_str,
+    index_schema,
+    sanitize_schema,
+    tier_active,
+    validate_value,
 )
 
 DISCORD_API = "https://discord.com/api/v10"
-USER_AGENT = "DiscordBot (https://github.com/ZayZayMah/rex-dashboard, 1.0)"
+USER_AGENT = "DiscordBot (https://github.com/ZayZayMah/rex-dashboard, 2.0)"
+DEFAULT_SUPPORT = "https://discord.gg/rexsupport"
 
 SESSION_COOKIE = "rex_session"
 STATE_COOKIE = "rex_oauth_state"
 SESSION_TTL = 7 * 24 * 3600
-
-SNOWFLAKE = re.compile(r"^\d{15,25}$")
 ASSET_HASH = re.compile(r"^[A-Za-z0-9_]{1,64}$")
 ADMINISTRATOR = 0x8
 MANAGE_GUILD = 0x20
 
-# The bot sends a heartbeat every few minutes (default 5). Treat it as offline
-# when nothing has been received for this long.
-ONLINE_WINDOW = 12 * 60
+ONLINE_WINDOW = 12 * 60          # bot counts as offline after this many seconds without a heartbeat
+PENDING_MAX_AGE = 24 * 3600      # queued website changes older than this are dropped
+WATCH_MAX_AGE = 14 * 24 * 3600   # profiles are kept fresh for people who logged in within this window
+TIER_NAMES = ("premium", "priority", "ultra")
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -56,14 +62,16 @@ SECURITY_HEADERS = {
 }
 
 _RATE = {}
+_CACHE = {}
 
 
 class HttpError(Exception):
-    def __init__(self, status, code, message=""):
+    def __init__(self, status, code, message="", extra=None):
         super().__init__(code)
         self.status = status
         self.code = code
         self.message = message or code.replace("_", " ")
+        self.extra = extra or {}
 
 
 # --------------------------------------------------------------------------- helpers
@@ -72,7 +80,6 @@ def now():
 
 
 def rate_limited(key, limit, window):
-    """Best-effort per-isolate limiter (protects the KV write quota)."""
     t = time.time()
     hits = [x for x in _RATE.get(key, []) if t - x < window]
     if len(hits) >= limit:
@@ -150,17 +157,15 @@ def icon_url(gid, icon_hash):
     return None
 
 
-def clean_str(value, limit):
-    if not isinstance(value, str):
-        return ""
-    return re.sub(r"[\x00-\x1f\x7f]", "", value).strip()[:limit]
-
-
 def clean_int(value, low=0, high=10**12):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     value = int(value)
     return value if low <= value <= high else None
+
+
+def clean_epoch(value):
+    return clean_int(value, 0, 4102444800)
 
 
 async def http(method, url, headers=None, body=None):
@@ -198,8 +203,41 @@ class Store:
         await self.kv.delete(key)
 
 
+def highest_tier(tiers):
+    best = "free"
+    for name in TIER_NAMES:
+        if (tiers.get(name) or {}).get("active"):
+            best = name
+    return best
+
+
+# --------------------------------------------------------------------------- sanitizers (bot -> website)
+def sanitize_tiers(raw):
+    out = {}
+    raw = raw if isinstance(raw, dict) else {}
+    for name in TIER_NAMES:
+        entry = raw.get(name) if isinstance(raw.get(name), dict) else {}
+        out[name] = {
+            "active": bool(entry.get("active")),
+            "expires": clean_epoch(entry.get("expires")),
+            "inherited": bool(entry.get("inherited")),
+        }
+    return out
+
+
+def sanitize_value(value):
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        return int(value) if float(value) == int(value) else value
+    if isinstance(value, str):
+        return value[:2000]
+    if isinstance(value, list):
+        return [str(x)[:100] for x in value[:100]]
+    return None
+
+
 def sanitize_guild(raw):
-    """Validate one guild object pushed by the bot. Returns a clean dict or None."""
     if not isinstance(raw, dict):
         return None
     gid = raw.get("id")
@@ -207,27 +245,30 @@ def sanitize_guild(raw):
         return None
     icon = raw.get("icon")
     channels, roles = [], []
-    for c in (raw.get("channels") or [])[:500]:
-        if isinstance(c, dict) and isinstance(c.get("id"), str) and SNOWFLAKE.match(c["id"]):
-            kind = "announcement" if c.get("type") == "announcement" else "text"
-            channels.append({"id": c["id"], "name": clean_str(c.get("name"), 100), "type": kind})
+    for c in (raw.get("channels") or [])[:400]:
+        if isinstance(c, dict) and isinstance(c.get("id"), str) and SNOWFLAKE.match(c["id"]) \
+                and c.get("type") in ("text", "announcement", "category", "voice"):
+            channels.append({"id": c["id"], "name": clean_str(c.get("name"), 100), "type": c["type"],
+                             "parent": clean_str(c.get("parent"), 100)})
     for r in (raw.get("roles") or [])[:250]:
         if isinstance(r, dict) and isinstance(r.get("id"), str) and SNOWFLAKE.match(r["id"]):
-            roles.append({
-                "id": r["id"],
-                "name": clean_str(r.get("name"), 100),
-                "color": clean_int(r.get("color"), 0, 0xFFFFFF) or 0,
-                "managed": bool(r.get("managed")),
-                "position": clean_int(r.get("position"), 0, 10000) or 0,
-            })
+            roles.append({"id": r["id"], "name": clean_str(r.get("name"), 100),
+                          "color": clean_int(r.get("color"), 0, 0xFFFFFF) or 0,
+                          "managed": bool(r.get("managed")), "position": clean_int(r.get("position"), 0, 10000) or 0})
+    values = {}
+    if isinstance(raw.get("values"), dict):
+        for key, value in list(raw["values"].items())[:200]:
+            if isinstance(key, str) and len(key) <= 80:
+                values[key] = sanitize_value(value)
     return {
         "id": gid,
         "name": clean_str(raw.get("name"), 100) or "Unknown server",
         "icon": icon if isinstance(icon, str) and ASSET_HASH.match(icon) else None,
         "member_count": clean_int(raw.get("member_count")) or 0,
-        "premium": bool(raw.get("premium")),
+        "tiers": sanitize_tiers(raw.get("tiers")),
         "channels": channels,
         "roles": roles,
+        "values": values,
     }
 
 
@@ -237,30 +278,77 @@ def sanitize_stats(raw):
     out = {"ts": now()}
     status = raw.get("status")
     out["status"] = status if status in ("online", "degraded", "starting") else "online"
-    for key in ("latency_ms", "uptime_s", "guild_count", "user_count", "command_count",
-                "shard_count", "errors_last_hour", "last_health_check", "next_health_check"):
+    for key in ("latency_ms", "uptime_s", "guild_count", "user_count", "command_count", "shard_count",
+                "errors_last_hour", "last_health_check", "next_health_check"):
         value = clean_int(raw.get(key))
         if value is not None:
             out[key] = value
-    out["version"] = clean_str(raw.get("version"), 32)
+    out["version"] = clean_str(raw.get("version"), 60)
     features = {}
-    raw_features = raw.get("features")
-    if isinstance(raw_features, dict):
-        for name, info in list(raw_features.items())[:40]:
-            if not isinstance(info, dict):
-                continue
-            state = info.get("state")
-            features[clean_str(name, 40)] = {
-                "state": state if state in ("ok", "degraded", "down", "unknown") else "unknown",
-                "detail": clean_str(info.get("detail"), 200),
-            }
+    if isinstance(raw.get("features"), dict):
+        for name, info in list(raw["features"].items())[:40]:
+            if isinstance(info, dict):
+                state = info.get("state")
+                features[clean_str(name, 40)] = {
+                    "state": state if state in ("ok", "degraded", "down", "unknown") else "unknown",
+                    "detail": clean_str(info.get("detail"), 240),
+                }
     out["features"] = features
     return out
 
 
+def sanitize_catalog(raw):
+    if not isinstance(raw, dict) or not isinstance(raw.get("commands"), list):
+        raise HttpError(400, "bad_request", "Expected {commands: [...]}.")
+    commands = []
+    for c in raw["commands"][:700]:
+        if not isinstance(c, dict):
+            continue
+        name = clean_str(c.get("name"), 100)
+        if not name:
+            continue
+        params = []
+        for p in (c.get("params") or [])[:25]:
+            if not isinstance(p, dict):
+                continue
+            choices = []
+            for ch in (p.get("choices") or [])[:25]:
+                if isinstance(ch, dict):
+                    v = ch.get("value")
+                    choices.append({"name": clean_str(ch.get("name"), 100),
+                                    "value": v if isinstance(v, (int, float)) and not isinstance(v, bool) else clean_str(str(v), 100)})
+            params.append({
+                "name": clean_str(p.get("name"), 40),
+                "description": clean_str(p.get("description"), 200),
+                "required": bool(p.get("required")),
+                "type": clean_str(p.get("type"), 20),
+                "choices": choices,
+                "min": p.get("min") if isinstance(p.get("min"), (int, float)) and not isinstance(p.get("min"), bool) else None,
+                "max": p.get("max") if isinstance(p.get("max"), (int, float)) and not isinstance(p.get("max"), bool) else None,
+            })
+        commands.append({
+            "name": name,
+            "description": clean_str(c.get("description"), 200),
+            "params": params,
+            "access": c.get("access") if c.get("access") in ("everyone", "staff", "owner") else "staff",
+            "requires": [clean_str(x, 40) for x in (c.get("requires") or [])[:10] if isinstance(x, str)],
+            "scope": "server" if c.get("scope") == "server" else "global",
+        })
+    groups = {}
+    if isinstance(raw.get("groups"), dict):
+        for k, v in list(raw["groups"].items())[:200]:
+            groups[clean_str(k, 100)] = clean_str(v, 200)
+    return {"ts": now(), "commands": commands, "groups": groups}
+
+
+def public_tiers(tiers):
+    return {n: {"active": bool((tiers.get(n) or {}).get("active")),
+                "expires": (tiers.get(n) or {}).get("expires"),
+                "inherited": bool((tiers.get(n) or {}).get("inherited"))} for n in TIER_NAMES}
+
+
 # --------------------------------------------------------------------------- worker
 class Default(WorkerEntrypoint):
-    # ---- plumbing
     def cfg(self, name, default=None):
         value = getattr(self.env, name, None)
         if value is None or value == "":
@@ -283,15 +371,23 @@ class Default(WorkerEntrypoint):
     def missing_config(self, *names):
         return [n for n in names if not self.cfg(n)]
 
+    @property
+    def support_url(self):
+        return self.cfg("SUPPORT_URL", DEFAULT_SUPPORT)
+
+    def owner_ids(self):
+        raw = self.cfg("OWNER_ID", "") or ""
+        return {x for x in re.split(r"[\s,;]+", raw) if SNOWFLAKE.match(x)}
+
+    def is_owner(self, session):
+        return session["user"]["id"] in self.owner_ids()
+
     def invite_url(self, guild_id=None):
         client_id = self.cfg("DISCORD_CLIENT_ID")
         if not client_id:
             return None
-        params = {
-            "client_id": client_id,
-            "permissions": self.cfg("INVITE_PERMISSIONS", "8"),
-            "scope": "bot applications.commands",
-        }
+        params = {"client_id": client_id, "permissions": self.cfg("INVITE_PERMISSIONS", "8"),
+                  "scope": "bot applications.commands"}
         if guild_id:
             params["guild_id"] = guild_id
             params["disable_guild_select"] = "true"
@@ -306,13 +402,23 @@ class Default(WorkerEntrypoint):
         except ValueError:
             raise HttpError(400, "bad_json", "Body must be valid JSON.")
 
+    async def get_schema(self):
+        cached = _CACHE.get("schema")
+        if cached and time.time() - cached[0] < 60:
+            return cached[1]
+        schema = await self.store.get("schema")
+        _CACHE["schema"] = (time.time(), schema)
+        return schema
+
     # ---- entry point
     async def fetch(self, request):
         try:
             return await self.route(request)
         except HttpError as err:
-            return json_response({"error": err.code, "message": err.message}, err.status)
-        except Exception as err:  # never leak internals to the browser
+            body = {"error": err.code, "message": err.message}
+            body.update(err.extra)
+            return json_response(body, err.status)
+        except Exception as err:
             print("unhandled error:", type(err).__name__, str(err)[:300])
             return json_response({"error": "internal_error", "message": "Something went wrong."}, 500)
 
@@ -327,6 +433,10 @@ class Default(WorkerEntrypoint):
             return await self.auth_callback(request, url)
         if path == "/api/status" and method == "GET":
             return await self.api_status()
+        if path == "/api/commands" and method == "GET":
+            return await self.api_commands()
+        if path == "/api/schema" and method == "GET":
+            return await self.api_public_schema()
         if path.startswith("/api/bot/"):
             return await self.route_bot(request, path, method)
         if path.startswith("/api/"):
@@ -342,10 +452,7 @@ class Default(WorkerEntrypoint):
                 "<body style='font:16px system-ui;background:#04070f;color:#e8f7ff;padding:40px;max-width:640px;margin:auto'>"
                 "<h1>REX dashboard setup</h1><p>Discord login is not configured yet. "
                 "Add these in Cloudflare under <b>Workers &amp; Pages &rarr; rex &rarr; Settings &rarr; "
-                "Variables and Secrets</b>, then reload:</p>"
-                f"<ul>{items}</ul></body>",
-                status=503,
-            )
+                "Variables and Secrets</b>, then reload:</p>" f"<ul>{items}</ul></body>", status=503)
         state = secrets.token_urlsafe(24)
         params = {
             "client_id": self.cfg("DISCORD_CLIENT_ID"),
@@ -370,8 +477,7 @@ class Default(WorkerEntrypoint):
             return redirect("/dashboard?login=failed")
 
         status, text = await http(
-            "POST",
-            DISCORD_API + "/oauth2/token",
+            "POST", DISCORD_API + "/oauth2/token",
             {"Content-Type": "application/x-www-form-urlencoded", "User-Agent": USER_AGENT},
             urlencode({
                 "client_id": self.cfg("DISCORD_CLIENT_ID"),
@@ -404,18 +510,21 @@ class Default(WorkerEntrypoint):
                 perms = int(g.get("permissions") or 0)
             except (TypeError, ValueError):
                 perms = 0
-            if g.get("owner") or perms & ADMINISTRATOR or perms & MANAGE_GUILD:
+            is_admin = bool(g.get("owner")) or bool(perms & ADMINISTRATOR)
+            if is_admin or perms & MANAGE_GUILD:
                 managed.append({
                     "id": str(g["id"]),
                     "name": clean_str(g.get("name"), 100),
                     "icon": g.get("icon") if isinstance(g.get("icon"), str) and ASSET_HASH.match(g["icon"]) else None,
                     "owner": bool(g.get("owner")),
+                    "admin": is_admin,
                 })
 
+        uid = str(user["id"])
         token = secrets.token_urlsafe(32)
         session = {
             "user": {
-                "id": str(user["id"]),
+                "id": uid,
                 "username": clean_str(user.get("username"), 64),
                 "name": clean_str(user.get("global_name") or user.get("username"), 64),
                 "avatar": user.get("avatar") if isinstance(user.get("avatar"), str) and ASSET_HASH.match(user["avatar"]) else None,
@@ -425,7 +534,17 @@ class Default(WorkerEntrypoint):
             "exp": now() + SESSION_TTL,
         }
         await self.store.put("sess:" + token_hash(token), session, ttl=SESSION_TTL)
+        await self.touch_watch(uid)
         return redirect("/dashboard", make_cookie(SESSION_COOKIE, token, SESSION_TTL))
+
+    async def touch_watch(self, uid):
+        """Remember who logged in recently so the bot keeps their profile data fresh."""
+        watch = await self.store.get("watch") or {}
+        t = now()
+        if t - int(watch.get(uid, 0)) > 12 * 3600:
+            watch[uid] = t
+            watch = {k: v for k, v in watch.items() if t - int(v) < WATCH_MAX_AGE}
+            await self.store.put("watch", watch)
 
     # ---- sessions
     async def get_session(self, request):
@@ -451,11 +570,7 @@ class Default(WorkerEntrypoint):
         if not safe_equal(sent, session["csrf"]):
             raise HttpError(403, "bad_csrf", "Session check failed. Reload the page.")
 
-    def is_owner(self, session):
-        owner = self.cfg("OWNER_ID")
-        return bool(owner) and safe_equal(session["user"]["id"], owner)
-
-    # ---- public status
+    # ---- public
     async def api_status(self):
         stats = await self.store.get("stats:latest")
         online = bool(stats) and now() - stats.get("ts", 0) < ONLINE_WINDOW
@@ -463,6 +578,7 @@ class Default(WorkerEntrypoint):
             "online": online,
             "login_ready": not self.missing_config("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"),
             "invite_url": self.invite_url(),
+            "support_url": self.support_url,
             "last_seen": stats.get("ts") if stats else None,
         }
         if stats:
@@ -470,12 +586,31 @@ class Default(WorkerEntrypoint):
                 body[key] = stats.get(key)
         return json_response(body, headers={"Cache-Control": "public, max-age=30"})
 
+    async def api_commands(self):
+        catalog = await self.store.get("commands")
+        if not catalog:
+            catalog = {"ts": None, "commands": [], "groups": {}}
+        return json_response(catalog, headers={"Cache-Control": "public, max-age=120"})
+
+    async def api_public_schema(self):
+        """Feature list by tier for the public Premium page (no server data)."""
+        schema = await self.get_schema()
+        sections = []
+        for sec in (schema or {}).get("sections", []):
+            sections.append({
+                "id": sec["id"], "name": sec["name"], "description": sec["description"], "tier": sec["tier"],
+                "settings": [{"label": s["label"], "tier": s["tier"], "description": s["description"]} for s in sec["settings"]],
+            })
+        return json_response({"sections": sections}, headers={"Cache-Control": "public, max-age=300"})
+
     # ---- logged-in API
     async def route_user(self, request, url, path, method):
         session = await self.require_session(request)
 
         if path == "/api/me" and method == "GET":
             return await self.api_me(session)
+        if path == "/api/profile" and method == "GET":
+            return await self.api_profile(session)
         if path == "/api/logout" and method == "POST":
             self.check_mutation(request, url, session)
             token = get_cookie(request, SESSION_COOKIE)
@@ -488,128 +623,172 @@ class Default(WorkerEntrypoint):
         if len(parts) in (4, 5) and parts[2] == "guilds":
             gid = parts[3]
             if len(parts) == 4 and method == "GET":
-                return await self.api_guild(session, gid)
+                lite = "lite=1" in (url.query or "")
+                return await self.api_guild(session, gid, lite)
             if len(parts) == 5 and parts[4] == "settings" and method == "PUT":
                 return await self.api_guild_save(request, url, session, gid)
         raise HttpError(404, "not_found", "Not found.")
 
     async def api_me(self, session):
         index = await self.store.get("bot:guilds") or {}
+        owner = self.is_owner(session)
+        listed = set()
         guilds = []
         for g in session["guilds"]:
             known = index.get(g["id"])
+            listed.add(g["id"])
             guilds.append({
-                "id": g["id"],
-                "name": g["name"],
-                "icon_url": icon_url(g["id"], g["icon"]),
-                "owner": g["owner"],
-                "bot_present": known is not None,
-                "premium": bool(known and known.get("p")),
+                "id": g["id"], "name": g["name"], "icon_url": icon_url(g["id"], g["icon"]),
+                "owner": g["owner"], "admin": g.get("admin", g["owner"]),
+                "bot_present": known is not None, "tier": (known or {}).get("t", "free"),
                 "invite_url": None if known is not None else self.invite_url(g["id"]),
+                "via": "discord",
             })
-        guilds.sort(key=lambda x: (not x["bot_present"], x["name"].lower()))
+        if owner:
+            for gid, known in index.items():
+                if gid not in listed:
+                    guilds.append({
+                        "id": gid, "name": known.get("n", gid), "icon_url": icon_url(gid, known.get("i")),
+                        "owner": False, "admin": True, "bot_present": True, "tier": known.get("t", "free"),
+                        "invite_url": None, "via": "owner",
+                    })
+        guilds.sort(key=lambda x: (not x["bot_present"], x["via"] == "owner", x["name"].lower()))
         user = session["user"]
         return json_response({
-            "user": {
-                "id": user["id"],
-                "name": user["name"],
-                "username": user["username"],
-                "avatar_url": avatar_url(user["id"], user["avatar"]),
-            },
+            "user": {"id": user["id"], "name": user["name"], "username": user["username"],
+                     "avatar_url": avatar_url(user["id"], user["avatar"])},
             "csrf": session["csrf"],
-            "is_owner": self.is_owner(session),
+            "is_owner": owner,
+            "support_url": self.support_url,
             "guilds": guilds,
         })
 
-    async def require_guild(self, session, gid):
+    async def api_profile(self, session):
+        user = session["user"]
+        profile = await self.store.get("profile:" + user["id"])
+        return json_response({
+            "user": {"id": user["id"], "name": user["name"], "username": user["username"],
+                     "avatar_url": avatar_url(user["id"], user["avatar"])},
+            "is_owner": self.is_owner(session),
+            "profile": profile,
+            "servers_managed": len(session["guilds"]),
+        })
+
+    def guild_access(self, session, gid):
+        """Return {'admin': bool} for this person in this server, or raise 403."""
         if not SNOWFLAKE.match(gid):
             raise HttpError(404, "not_found", "Server not found.")
-        if gid not in {g["id"] for g in session["guilds"]}:
-            raise HttpError(403, "forbidden", "You need Manage Server permission in that server.")
+        for g in session["guilds"]:
+            if g["id"] == gid:
+                return {"admin": bool(g.get("admin", g.get("owner")))}
+        if self.is_owner(session):
+            return {"admin": True}
+        raise HttpError(403, "forbidden", "You need Manage Server permission in that server.")
+
+    async def api_guild(self, session, gid, lite=False):
+        access = self.guild_access(session, gid)
         guild = await self.store.get("guild:" + gid)
         if not guild:
             raise HttpError(404, "bot_not_in_server", "REX is not in that server yet.")
-        return guild
-
-    async def api_guild(self, session, gid):
-        guild = await self.require_guild(session, gid)
-        stored = await self.store.get("settings:" + gid) or {}
-        premium = bool(guild.get("premium"))
-        return json_response({
+        queue = await self.store.get("q:all") or {}
+        results = await self.store.get("res:" + gid) or []
+        t = now()
+        pending = [{"id": e["id"], "ts": e["ts"], "by": e.get("byname", ""), "keys": list(e["changes"].keys())}
+                   for e in queue.get(gid, []) if t - e["ts"] < PENDING_MAX_AGE]
+        body = {"values": guild.get("values", {}), "pending": pending, "results": results}
+        if lite:
+            return json_response(body)
+        stats = await self.store.get("stats:latest")
+        body.update({
             "guild": {
-                "id": gid,
-                "name": guild["name"],
-                "icon_url": icon_url(gid, guild.get("icon")),
-                "member_count": guild.get("member_count", 0),
-                "premium": premium,
-                "channels": guild.get("channels", []),
-                "roles": guild.get("roles", []),
+                "id": gid, "name": guild["name"], "icon_url": icon_url(gid, guild.get("icon")),
+                "member_count": guild.get("member_count", 0), "tiers": public_tiers(guild.get("tiers") or {}),
+                "channels": guild.get("channels", []), "roles": guild.get("roles", []),
             },
-            "schema": public_schema(),
-            "settings": effective_settings(stored.get("values", {}), premium, guild),
-            "history": stored.get("history", []),
-            "updated": stored.get("updated"),
+            "schema": await self.get_schema(),
+            "can_admin": access["admin"],
+            "owner_override": self.is_owner(session),
+            "bot_online": bool(stats) and t - stats.get("ts", 0) < ONLINE_WINDOW,
+            "support_url": self.support_url,
         })
+        return json_response(body)
 
     async def api_guild_save(self, request, url, session, gid):
         self.check_mutation(request, url, session)
         user = session["user"]
         if rate_limited("w:" + user["id"], 20, 60):
             raise HttpError(429, "slow_down", "Too many changes. Wait a moment and try again.")
-        guild = await self.require_guild(session, gid)
+        access = self.guild_access(session, gid)
+        guild = await self.store.get("guild:" + gid)
+        if not guild:
+            raise HttpError(404, "bot_not_in_server", "REX is not in that server yet.")
+        schema = await self.get_schema()
+        if not schema:
+            raise HttpError(503, "bot_not_synced", "REX has not sent its settings list yet. Is the bot online?")
         body = await self.read_json(request, 64 * 1024)
         changes = body.get("changes") if isinstance(body, dict) else None
-        if not isinstance(changes, dict) or not changes or len(changes) > 50:
+        if not isinstance(changes, dict) or not changes or len(changes) > 60:
             raise HttpError(400, "bad_request", "Send a non-empty 'changes' object.")
 
-        index = setting_index()
-        premium = bool(guild.get("premium"))
-        stored = await self.store.get("settings:" + gid) or {}
-        values = dict(stored.get("values", {}))
-        changed = []
+        index = index_schema(schema)
+        owner = self.is_owner(session)
+        errors, clean = {}, {}
         for key, raw in changes.items():
-            if key not in index:
-                raise HttpError(400, "unknown_setting", f"Unknown setting: {clean_str(str(key), 40)}")
-            section, setting = index[key]
+            spec = index.get(key)
+            if spec is None:
+                errors[str(key)[:60]] = "Unknown setting."
+                continue
+            if not owner and not tier_active(guild, spec["tier"]):
+                errors[key] = f"{spec['label']} needs REX {spec['tier'].title()} on this server."
+                continue
+            if spec["perm"] == "admin" and not access["admin"]:
+                errors[key] = f"{spec['label']} needs the Administrator permission."
+                continue
             try:
-                cleaned = validate(setting, raw, guild)
+                value = validate_value(spec, raw, guild)
             except ValueError as err:
-                raise HttpError(400, "invalid_value", str(err))
-            if is_premium(section, setting) and not premium and cleaned != setting["default"]:
-                raise HttpError(403, "premium_required", f"{setting['label']} needs REX Premium on this server.")
-            if values.get(key, setting["default"]) != cleaned:
-                values[key] = cleaned
-                changed.append(key)
+                errors[key] = str(err)
+                continue
+            if guild.get("values", {}).get(key) != value:
+                clean[key] = value
+        if errors:
+            raise HttpError(400, "invalid_value", "Some settings were rejected.", {"errors": errors})
+        if not clean:
+            return json_response({"queued": False, "unchanged": True})
 
-        history = stored.get("history", [])
-        updated = stored.get("updated")
-        if changed:
-            history = ([{"t": now(), "u": user["id"], "n": user["name"], "k": changed[:20]}] + history)[:15]
-            updated = now()
-            await self.store.put("settings:" + gid, {"values": values, "history": history, "updated": updated})
-        return json_response({
-            "settings": effective_settings(values, premium, guild),
-            "changed": changed,
-            "history": history,
-            "updated": updated,
-        })
+        queue = await self.store.get("q:all") or {}
+        t = now()
+        for g, entries in list(queue.items()):
+            queue[g] = [e for e in entries if t - e["ts"] < PENDING_MAX_AGE]
+            if not queue[g]:
+                del queue[g]
+        entries = queue.setdefault(gid, [])
+        if len(entries) >= 10:
+            raise HttpError(429, "queue_full", "Several changes are already waiting for REX. Try again shortly.")
+        entry_id = secrets.token_hex(6)
+        entries.append({"id": entry_id, "ts": t, "by": user["id"], "byname": user["name"], "changes": clean})
+        await self.store.put("q:all", queue)
+        return json_response({"queued": True, "id": entry_id, "keys": list(clean.keys())}, status=202)
 
     async def api_admin_health(self, session):
         if not self.is_owner(session):
             raise HttpError(403, "owner_only", "Only the bot owner can view this.")
         stats = await self.store.get("stats:latest")
         index = await self.store.get("bot:guilds") or {}
+        queue = await self.store.get("q:all") or {}
         online = bool(stats) and now() - stats.get("ts", 0) < ONLINE_WINDOW
         return json_response({
             "online": online,
             "server_time": now(),
             "stats": stats,
             "synced_guilds": len(index),
-            "premium_guilds": sum(1 for v in index.values() if v.get("p")),
+            "tier_counts": {n: sum(1 for v in index.values() if v.get("t") == n) for n in TIER_NAMES},
+            "pending_changes": sum(len(v) for v in queue.values()),
+            "schema_synced": bool(await self.get_schema()),
             "config": {
                 "discord_login": not self.missing_config("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"),
                 "bot_api_key": bool(self.cfg("BOT_API_KEY")),
-                "owner_id": bool(self.cfg("OWNER_ID")),
+                "owner_id": bool(self.owner_ids()),
             },
         })
 
@@ -626,17 +805,37 @@ class Default(WorkerEntrypoint):
     async def route_bot(self, request, path, method):
         self.require_bot(request)
         parts = path.split("/")  # ['', 'api', 'bot', ...]
+        tail = parts[3:]
 
-        if parts[3:] == ["heartbeat"] and method == "POST":
+        if tail == ["heartbeat"] and method == "POST":
             stats = sanitize_stats(await self.read_json(request, 64 * 1024))
             await self.store.put("stats:latest", stats)
             return json_response({"ok": True})
-
-        if parts[3:] == ["sync"] and method == "POST":
-            return await self.bot_sync(await self.read_json(request, 1024 * 1024))
-
-        if len(parts) == 5 and parts[3] == "guilds" and method == "DELETE":
-            gid = parts[4]
+        if tail == ["schema"] and method == "POST":
+            try:
+                schema = sanitize_schema(await self.read_json(request, 256 * 1024))
+            except ValueError as err:
+                raise HttpError(400, "bad_schema", str(err))
+            if await self.store.get("schema") != schema:
+                await self.store.put("schema", schema)
+            _CACHE.pop("schema", None)
+            return json_response({"ok": True, "settings": sum(len(s["settings"]) for s in schema["sections"])})
+        if tail == ["commands"] and method == "POST":
+            catalog = sanitize_catalog(await self.read_json(request, 2 * 1024 * 1024))
+            existing = await self.store.get("commands") or {}
+            if existing.get("commands") != catalog["commands"] or existing.get("groups") != catalog["groups"]:
+                await self.store.put("commands", catalog)
+            return json_response({"ok": True, "commands": len(catalog["commands"])})
+        if tail == ["sync"] and method == "POST":
+            return await self.bot_sync(await self.read_json(request, 2 * 1024 * 1024))
+        if tail == ["poll"] and method == "GET":
+            return await self.bot_poll()
+        if tail == ["ack"] and method == "POST":
+            return await self.bot_ack(await self.read_json(request, 512 * 1024))
+        if tail == ["profiles"] and method == "POST":
+            return await self.bot_profiles(await self.read_json(request, 1024 * 1024))
+        if len(tail) == 2 and tail[0] == "guilds" and method == "DELETE":
+            gid = tail[1]
             if not SNOWFLAKE.match(gid):
                 raise HttpError(400, "bad_request", "Bad guild id.")
             index = await self.store.get("bot:guilds") or {}
@@ -645,23 +844,6 @@ class Default(WorkerEntrypoint):
                 await self.store.put("bot:guilds", index)
             await self.store.delete("guild:" + gid)
             return json_response({"ok": True})
-
-        if len(parts) == 6 and parts[3] == "guilds" and parts[5] == "settings" and method == "GET":
-            gid = parts[4]
-            if not SNOWFLAKE.match(gid):
-                raise HttpError(400, "bad_request", "Bad guild id.")
-            guild = await self.store.get("guild:" + gid)
-            if not guild:
-                raise HttpError(404, "unknown_guild", "That server has not been synced yet.")
-            stored = await self.store.get("settings:" + gid) or {}
-            premium = bool(guild.get("premium"))
-            return json_response({
-                "guild_id": gid,
-                "premium": premium,
-                "settings": effective_settings(stored.get("values", {}), premium, guild),
-                "updated": stored.get("updated"),
-            })
-
         raise HttpError(404, "not_found", "Not found.")
 
     async def bot_sync(self, body):
@@ -673,14 +855,16 @@ class Default(WorkerEntrypoint):
         written = 0
         for g in batch:
             existing = await self.store.get("guild:" + g["id"])
-            if existing != g:
+            same = existing is not None and {k: v for k, v in existing.items() if k != "member_count"} == \
+                {k: v for k, v in g.items() if k != "member_count"}
+            if not same:
                 await self.store.put("guild:" + g["id"], g)
                 written += 1
-            entry = {"n": g["name"], "i": g["icon"], "p": g["premium"]}
-            if index.get(g["id"]) != entry:
+            entry = {"n": g["name"], "i": g["icon"], "t": highest_tier(g["tiers"]), "m": g["member_count"]}
+            old = index.get(g["id"])
+            if not old or {k: v for k, v in old.items() if k != "m"} != {k: v for k, v in entry.items() if k != "m"}:
                 index[g["id"]] = entry
                 index_changed = True
-
         pruned = 0
         keep = body.get("prune_to")
         if isinstance(keep, list):
@@ -693,3 +877,92 @@ class Default(WorkerEntrypoint):
         if index_changed:
             await self.store.put("bot:guilds", index)
         return json_response({"ok": True, "received": len(batch), "written": written, "pruned": pruned})
+
+    async def bot_poll(self):
+        queue = await self.store.get("q:all") or {}
+        t = now()
+        pending = []
+        for gid, entries in queue.items():
+            for e in entries:
+                if t - e["ts"] < PENDING_MAX_AGE:
+                    pending.append({"id": e["id"], "gid": gid, "by": e["by"], "changes": e["changes"]})
+        watch = await self.store.get("watch") or {}
+        recent = [uid for uid, ts in watch.items() if t - int(ts) < WATCH_MAX_AGE][:200]
+        return json_response({"pending": pending[:50], "watch": recent})
+
+    async def bot_ack(self, body):
+        if not isinstance(body, dict) or not isinstance(body.get("results"), list):
+            raise HttpError(400, "bad_request", "Expected {results: [...]}.")
+        queue = await self.store.get("q:all") or {}
+        t = now()
+        by_guild = {}
+        for r in body["results"][:50]:
+            if not isinstance(r, dict):
+                continue
+            gid, rid = str(r.get("gid", "")), str(r.get("id", ""))
+            if not SNOWFLAKE.match(gid):
+                continue
+            entries = queue.get(gid, [])
+            match = [e for e in entries if e["id"] == rid]
+            queue[gid] = [e for e in entries if e["id"] != rid]
+            if not queue[gid]:
+                queue.pop(gid, None)
+            if r.get("duplicate") or not match:
+                continue
+            applied = r.get("applied") if isinstance(r.get("applied"), dict) else {}
+            errors = r.get("errors") if isinstance(r.get("errors"), dict) else {}
+            by_guild.setdefault(gid, []).append({
+                "id": rid, "t": t, "by": match[0].get("byname", ""),
+                "applied": {clean_str(k, 80): sanitize_value(v) for k, v in list(applied.items())[:60]},
+                "errors": {clean_str(k, 80): clean_str(v, 240) for k, v in list(errors.items())[:60]},
+                "notes": [clean_str(n, 240) for n in (r.get("notes") or [])[:5] if isinstance(n, str)],
+            })
+        await self.store.put("q:all", queue)
+        for gid, records in by_guild.items():
+            history = await self.store.get("res:" + gid) or []
+            history = (list(reversed(records)) + history)[:15]
+            await self.store.put("res:" + gid, history)
+            guild = await self.store.get("guild:" + gid)
+            if guild:
+                for rec in records:
+                    guild.setdefault("values", {}).update(rec["applied"])
+                await self.store.put("guild:" + gid, guild)
+        return json_response({"ok": True, "recorded": sum(len(v) for v in by_guild.values())})
+
+    async def bot_profiles(self, body):
+        if not isinstance(body, dict) or not isinstance(body.get("profiles"), dict):
+            raise HttpError(400, "bad_request", "Expected {profiles: {...}}.")
+        stored = 0
+        for uid, raw in list(body["profiles"].items())[:25]:
+            if not SNOWFLAKE.match(str(uid)) or not isinstance(raw, dict):
+                continue
+            servers = []
+            for s in (raw.get("servers") or [])[:40]:
+                if not isinstance(s, dict) or not SNOWFLAKE.match(str(s.get("id", ""))):
+                    continue
+                servers.append({
+                    "id": s["id"], "name": clean_str(s.get("name"), 100),
+                    "icon_url": icon_url(s["id"], s.get("icon")),
+                    "level": clean_int(s.get("level")) or 0, "xp": clean_int(s.get("xp")) or 0,
+                    "xp_per_level": clean_int(s.get("xp_per_level")) or 350,
+                    "rank": clean_int(s.get("rank")), "ranked": clean_int(s.get("ranked")) or 0,
+                    "coins": clean_int(s.get("coins")), "won": clean_int(s.get("won")),
+                    "lost": clean_int(s.get("lost")), "games": clean_int(s.get("games")),
+                    "roblox": clean_str(s.get("roblox"), 40) or None,
+                    "tier": s.get("tier") if s.get("tier") in ("free",) + TIER_NAMES else "free",
+                })
+            account = raw.get("account_premium")
+            if isinstance(account, dict):
+                account = {"active": bool(account.get("active")), "expires": clean_epoch(account.get("expires")),
+                           "source": clean_str(account.get("source"), 40)}
+            else:
+                account = None
+            profile = {"account_premium": account, "free_trial_claimed": bool(raw.get("free_trial_claimed")),
+                       "servers": servers, "owner": bool(raw.get("owner"))}
+            existing = await self.store.get("profile:" + str(uid))
+            if existing and {k: v for k, v in existing.items() if k != "updated"} == profile:
+                continue
+            profile["updated"] = now()
+            await self.store.put("profile:" + str(uid), profile, ttl=WATCH_MAX_AGE + 86400)
+            stored += 1
+        return json_response({"ok": True, "stored": stored})

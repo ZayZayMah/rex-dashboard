@@ -1,6 +1,6 @@
 [project]
 name = "rex-dashboard"
-version = "1.0.0"
+version = "2.0.0"
 description = "REX Discord bot dashboard (Cloudflare Python Worker + static site)"
 requires-python = ">=3.12"
 dependencies = []

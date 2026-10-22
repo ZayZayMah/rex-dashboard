@@ -1,7 +1,7 @@
 'use strict';
 /* Shared helpers: safe DOM builder, API client, nav, toasts, formatting. */
 
-const REX = { me: null, csrf: null };
+const REX = { me: null, csrf: null, support: 'https://discord.gg/rexsupport' };
 
 /** Build DOM safely (text is never parsed as HTML). */
 function h(tag, attrs, ...kids) {
@@ -33,6 +33,7 @@ async function api(path, opts = {}) {
     const err = new Error((data && data.message) || res.statusText || 'Request failed');
     err.status = res.status;
     err.code = data && data.error;
+    err.data = data;
     throw err;
   }
   return data;
@@ -95,6 +96,24 @@ function loadOptional(src) {
   });
 }
 
+const TIER_LABEL = { free: 'Free', premium: 'Premium', priority: 'Priority', ultra: 'Ultra' };
+function tierBadge(tier) {
+  return h('span', { class: 'badge tier-' + (tier || 'free') }, TIER_LABEL[tier] || 'Free');
+}
+
+function mountFooter() {
+  let host = document.getElementById('footer');
+  if (!host) { host = h('footer', { id: 'footer' }); document.body.append(host); }
+  host.replaceChildren(h('div', { class: 'wrap foot' },
+    h('div', { class: 'foot-brand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('div', {}, h('b', {}, 'REX'), h('div', { class: 'small' }, 'Smart / Helpful / Always here'))),
+    h('div', { class: 'foot-links' },
+      h('a', { href: '/about' }, 'About'), h('a', { href: '/commands' }, 'Commands'), h('a', { href: '/premium' }, 'Premium'),
+      h('a', { href: '/dashboard' }, 'Dashboard'), h('a', { href: '/profile' }, 'Profile')),
+    h('div', { class: 'foot-end' },
+      h('a', { class: 'btn sm discord', href: REX.support, target: '_blank', rel: 'noopener noreferrer' }, 'Join support server'),
+      h('span', { class: 'small' }, 'Not affiliated with Discord Inc.'))));
+}
+
 async function mountNav(active) {
   const host = document.getElementById('nav');
   if (!host) return;
@@ -106,19 +125,28 @@ async function mountNav(active) {
     },
   }, document.documentElement.getAttribute('data-theme') === 'halloween' ? '🎃' : '⚡');
 
-  const end = h('div', { class: 'nav-end' }, themeBtn);
+  const support = h('a', { class: 'btn ghost sm support-btn', href: REX.support, target: '_blank', rel: 'noopener noreferrer' }, 'Support');
+  const end = h('div', { class: 'nav-end' }, support, themeBtn);
   const link = (href, label, key) => h('a', { href, class: active === key ? 'active' : '' }, label);
   const links = h('nav', { class: 'nav-links', 'aria-label': 'Main' },
-    link('/', 'Home', 'home'), link('/dashboard', 'Dashboard', 'dashboard'));
+    link('/', 'Home', 'home'), link('/about', 'About', 'about'), link('/commands', 'Commands', 'commands'),
+    link('/premium', 'Premium', 'premium'), link('/dashboard', 'Dashboard', 'dashboard'));
   host.replaceChildren(h('div', { class: 'wrap nav-in' },
     h('a', { href: '/', class: 'brand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), 'REX'),
     links, end));
+  mountFooter();
 
   const me = await loadMe();
   if (me) {
+    if (me.support_url) {
+      REX.support = me.support_url;
+      support.href = me.support_url;
+      mountFooter();
+    }
+    links.append(link('/profile', 'Profile', 'profile'));
     if (me.is_owner) links.append(link('/admin', 'Health', 'admin'));
     end.prepend(
-      h('div', { class: 'user-chip' }, h('img', { src: me.user.avatar_url, alt: '', width: 28, height: 28 }), h('span', {}, me.user.name)),
+      h('a', { class: 'user-chip', href: '/profile' }, h('img', { src: me.user.avatar_url, alt: '', width: 28, height: 28 }), h('span', {}, me.user.name)),
       h('button', {
         class: 'btn ghost sm', type: 'button',
         onclick: async () => { try { await api('/api/logout', { method: 'POST' }); } catch (e) { /* ignore */ } location.href = '/'; },

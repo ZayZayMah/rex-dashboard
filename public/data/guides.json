@@ -1,0 +1,262 @@
+{
+ "redeem": {
+  "category": "utility",
+  "summary": "Redeem a REX Premium, Priority or Ultra code for the server you run it in, or an XP code.",
+  "details": "Premium-type codes start with REX-PREMIUM-, REX-PRIORITY- or REX-ULTRA-. Run the command inside the server you want to upgrade.",
+  "example": "/redeem code:REX-PREMIUM-XXXXXXXXXXXXXXXX",
+  "tips": [
+   "Codes work for the server where you redeem them.",
+   "A code can be expired, deactivated or used up; REX tells you which."
+  ]
+ },
+ "premium": {
+  "category": "utility",
+  "summary": "Check Premium status or view the Premium feature list.",
+  "details": "Code generation, giveaways and removal inside this command are for REX owners only.",
+  "example": "/premium action:Check status"
+ },
+ "settings": {
+  "category": "setup",
+  "summary": "Opens the in-Discord settings dashboard.",
+  "details": "The website dashboard covers the same settings with channel and role pickers.",
+  "example": "/settings"
+ },
+ "ban": {
+  "category": "moderation",
+  "summary": "Ban a member and record a moderation case.",
+  "example": "/ban user:@someone reason:Spamming invites",
+  "tips": [
+   "Cases can be looked up with /case and /history."
+  ]
+ },
+ "unban": {
+  "category": "moderation",
+  "summary": "Unban a user by their Discord ID.",
+  "example": "/unban user_id:123456789012345678 reason:Appeal accepted"
+ },
+ "kick": {
+  "category": "moderation",
+  "summary": "Kick a member from the server.",
+  "example": "/kick user:@someone reason:Breaking rule 3"
+ },
+ "timeout": {
+  "category": "moderation",
+  "summary": "Time a member out for a number of minutes.",
+  "example": "/timeout user:@someone minutes:60 reason:Cool off"
+ },
+ "un timeout": {
+  "category": "moderation",
+  "summary": "Remove an active timeout from a member.",
+  "example": "/un timeout user:@someone"
+ },
+ "mass-timeout": {
+  "category": "moderation",
+  "summary": "Time out several members at once (Premium).",
+  "example": "/mass-timeout users:@a @b minutes:30"
+ },
+ "warn": {
+  "category": "moderation",
+  "summary": "Warn a member. Warnings are stored and can be reviewed later.",
+  "example": "/warn user:@someone reason:Please stay on topic",
+  "tips": [
+   "View them with /warns, clear them with /clearwarns."
+  ]
+ },
+ "warns": {
+  "category": "moderation",
+  "summary": "List a member's warnings.",
+  "example": "/warns user:@someone"
+ },
+ "clearwarns": {
+  "category": "moderation",
+  "summary": "Clear all warnings for a member.",
+  "example": "/clearwarns user:@someone"
+ },
+ "case": {
+  "category": "moderation",
+  "summary": "Look up one moderation case by its number.",
+  "example": "/case case_id:12"
+ },
+ "history": {
+  "category": "moderation",
+  "summary": "Show a member's recent moderation history.",
+  "example": "/history user:@someone"
+ },
+ "notes": {
+  "category": "moderation",
+  "summary": "Read the private staff notes on a member.",
+  "example": "/notes user:@someone"
+ },
+ "staffnote": {
+  "category": "moderation",
+  "summary": "Add a private note about a member that only staff can read.",
+  "example": "/staffnote user:@someone note:Asked about appeals"
+ },
+ "purge": {
+  "category": "moderation",
+  "summary": "Delete a number of recent messages in the current channel.",
+  "example": "/purge amount:25"
+ },
+ "clear": {
+  "category": "moderation",
+  "summary": "Delete recent messages (same idea as /purge).",
+  "example": "/clear amount:10"
+ },
+ "slowmode": {
+  "category": "moderation",
+  "summary": "Set the slowmode delay for the current channel, in seconds.",
+  "example": "/slowmode seconds:10"
+ },
+ "lock": {
+  "category": "moderation",
+  "summary": "Lock a channel so members cannot send messages.",
+  "example": "/lock channel:#general"
+ },
+ "unlock": {
+  "category": "moderation",
+  "summary": "Unlock a channel you locked.",
+  "example": "/unlock channel:#general"
+ },
+ "lockdown": {
+  "category": "moderation",
+  "summary": "Lock every channel in the server until you run /unlockdown.",
+  "tips": [
+   "Use /unlockdown to reopen the channels that /lockdown closed."
+  ]
+ },
+ "unlockdown": {
+  "category": "moderation",
+  "summary": "Reopen the channels that /lockdown closed."
+ },
+ "quarantine": {
+  "category": "moderation",
+  "summary": "Remove all roles REX can manage from a member, to contain a compromised or risky account.",
+  "example": "/quarantine user:@someone reason:Suspected hacked account"
+ },
+ "temprole": {
+  "category": "moderation",
+  "summary": "Give a member a role that is removed automatically after a set time.",
+  "example": "/temprole user:@someone role:@Event duration:1d"
+ },
+ "report": {
+  "category": "moderation",
+  "summary": "Report a member to the server staff.",
+  "details": "Reports go to the report channel the server has configured.",
+  "example": "/report user:@someone reason:Harassing members"
+ },
+ "ticket": {
+  "category": "setup",
+  "summary": "Create and manage the ticket system.",
+  "tips": [
+   "Set the ticket category, panel title and welcome message from the dashboard."
+  ]
+ },
+ "ticket-action": {
+  "category": "setup",
+  "summary": "Manage the ticket you are in with one action menu."
+ },
+ "counting": {
+  "category": "setup",
+  "summary": "Configure the counting channel.",
+  "tips": [
+   "Changing the counting channel on the dashboard resets the count to 0."
+  ]
+ },
+ "announce": {
+  "category": "setup",
+  "summary": "Send a server announcement.",
+  "example": "/announce message:Maintenance tonight at 8pm"
+ },
+ "announcement": {
+  "category": "setup",
+  "summary": "Send an announcement to a channel of your choice.",
+  "example": "/announcement channel:#news message:New season starts Friday"
+ },
+ "level": {
+  "category": "levels",
+  "summary": "Show your animated level card, or someone else's.",
+  "example": "/level user:@someone"
+ },
+ "leaderboard": {
+  "category": "levels",
+  "summary": "Show the XP leaderboard for the server."
+ },
+ "profile": {
+  "category": "levels",
+  "summary": "Show your REX profile.",
+  "tips": [
+   "The website Profile page shows your levels and coins across servers."
+  ]
+ },
+ "daily": {
+  "category": "levels",
+  "summary": "Claim your daily economy reward."
+ },
+ "balance": {
+  "category": "levels",
+  "summary": "Check your coin balance."
+ },
+ "giveaway": {
+  "category": "games",
+  "summary": "Start a giveaway with a duration, number of winners and a prize.",
+  "example": "/giveaway duration:1h winners:1 prize:Nitro"
+ },
+ "polls": {
+  "category": "games",
+  "summary": "Create a two-option poll.",
+  "example": "/polls message1:Pizza message2:Burgers"
+ },
+ "vote": {
+  "category": "games",
+  "summary": "Create a quick yes/no vote.",
+  "example": "/vote question:Movie night on Friday?"
+ },
+ "rps": {
+  "category": "games",
+  "summary": "Play rock paper scissors against another member.",
+  "example": "/rps user:@someone"
+ },
+ "choose": {
+  "category": "games",
+  "summary": "Let REX pick between options you give it.",
+  "example": "/choose options:tea, coffee, water"
+ },
+ "ping": {
+  "category": "utility",
+  "summary": "Check REX's latency."
+ },
+ "serverinfo": {
+  "category": "utility",
+  "summary": "Show server information with buttons for channel and role detail."
+ },
+ "userinfo": {
+  "category": "utility",
+  "summary": "Show information about a user, including their avatar.",
+  "example": "/userinfo user:@someone"
+ },
+ "info": {
+  "category": "utility",
+  "summary": "Show information about REX."
+ },
+ "reminder": {
+  "category": "utility",
+  "summary": "Set a reminder for a number of minutes from now.",
+  "example": "/reminder minutes:30 message:Check the oven"
+ },
+ "afk": {
+  "category": "utility",
+  "summary": "Mark yourself AFK with an optional reason.",
+  "example": "/afk reason:Back in 10"
+ },
+ "timezone": {
+  "category": "utility",
+  "summary": "Set your timezone preference for REX."
+ },
+ "custom-command": {
+  "category": "premium",
+  "summary": "Create server-specific slash commands that reply with text or embeds (Premium).",
+  "tips": [
+   "Custom commands only exist in your server, so they are not in this directory."
+  ]
+ }
+}

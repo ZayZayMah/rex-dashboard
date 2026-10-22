@@ -40,7 +40,7 @@
         stat('Servers', fmtNum(s.guild_count)), stat('Members', fmtNum(s.user_count)),
         stat('Latency', s.latency_ms == null ? '—' : s.latency_ms + ' ms'), stat('Uptime', fmtDuration(s.uptime_s)),
         stat('Commands', fmtNum(s.command_count)), stat('Errors (1h)', fmtNum(s.errors_last_hour)),
-        stat('Synced servers', fmtNum(d.synced_guilds)), stat('Premium servers', fmtNum(d.premium_guilds))),
+        stat('Synced servers', fmtNum(d.synced_guilds)), stat('Premium+ servers', fmtNum((d.tier_counts.premium||0)+(d.tier_counts.priority||0)+(d.tier_counts.ultra||0)))),
       h('div', { class: 'section-title' }, h('h2', {}, 'Feature checks')),
       h('div', { class: 'panel' }, rows,
         h('p', { class: 'muted small' }, 'Last check: ' + (s.last_health_check ? timeAgo(s.last_health_check) : 'not reported') +
