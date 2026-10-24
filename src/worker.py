@@ -53,6 +53,14 @@ ONLINE_WINDOW = 12 * 60          # bot counts as offline after this many seconds
 PENDING_MAX_AGE = 24 * 3600      # queued website changes older than this are dropped
 WATCH_MAX_AGE = 14 * 24 * 3600   # profiles are kept fresh for people who logged in within this window
 TIER_NAMES = ("premium", "priority", "ultra")
+RESULTS_MAX = 40                 # activity-log entries kept per server
+TRANSCRIPT_TTL = 30 * 24 * 3600  # Premium / Priority transcripts; Ultra transcripts have no expiry
+HOT_WINDOW = 90                  # seconds the bot polls fast after someone opens the site
+XP_PER_BAT = 10
+XP_DAILY_BATS = 30
+THEMES = ("normal", "halloween", "christmas")
+OWNER_OPS = ("tier", "blacklist", "invite", "dm", "gen_code", "owner_tool")
+IMG_URL = re.compile(r"^https://[^\s<>\"']{4,500}$")
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -63,6 +71,7 @@ SECURITY_HEADERS = {
 
 _RATE = {}
 _CACHE = {}
+_XPDAY = {}
 
 
 class HttpError(Exception):
@@ -233,6 +242,12 @@ def sanitize_value(value):
     if isinstance(value, str):
         return value[:2000]
     if isinstance(value, list):
+        if value and all(isinstance(x, dict) for x in value[:5]):
+            out = []
+            for item in value[:5]:
+                out.append({"label": str(item.get("label", ""))[:45],
+                            "questions": [str(q)[:45] for q in (item.get("questions") or [])[:2]]})
+            return out
         return [str(x)[:100] for x in value[:100]]
     return None
 
@@ -265,6 +280,10 @@ def sanitize_guild(raw):
         "name": clean_str(raw.get("name"), 100) or "Unknown server",
         "icon": icon if isinstance(icon, str) and ASSET_HASH.match(icon) else None,
         "member_count": clean_int(raw.get("member_count")) or 0,
+        "owner_id": raw.get("owner_id") if isinstance(raw.get("owner_id"), str) and SNOWFLAKE.match(raw.get("owner_id")) else "",
+        "owner_name": clean_str(raw.get("owner_name"), 60),
+        "created": clean_epoch(raw.get("created")),
+        "blacklisted": bool(raw.get("blacklisted")),
         "tiers": sanitize_tiers(raw.get("tiers")),
         "channels": channels,
         "roles": roles,
@@ -373,7 +392,26 @@ class Default(WorkerEntrypoint):
 
     @property
     def support_url(self):
-        return self.cfg("SUPPORT_URL", DEFAULT_SUPPORT)
+        site = (_CACHE.get("site") or (0, {}))[1] or {}
+        return site.get("support_url") or self.cfg("SUPPORT_URL", DEFAULT_SUPPORT)
+
+    async def get_site(self):
+        cached = _CACHE.get("site")
+        if cached and time.time() - cached[0] < 20:
+            return cached[1]
+        site = await self.store.get("site") or {}
+        maint = site.get("maint") if isinstance(site.get("maint"), dict) else {}
+        clean = {
+            "theme": site.get("theme") if site.get("theme") in THEMES else "normal",
+            "maint": {"on": bool(maint.get("on")), "title": clean_str(maint.get("title"), 80) or "We'll be right back",
+                      "desc": clean_str(maint.get("desc"), 300) or "We're currently under maintenance. Please try again later."},
+            "support_url": clean_str(site.get("support_url"), 200),
+        }
+        _CACHE["site"] = (time.time(), clean)
+        return clean
+
+    def maintenance_on(self):
+        return bool(((_CACHE.get("site") or (0, {}))[1] or {}).get("maint", {}).get("on"))
 
     def owner_ids(self):
         raw = self.cfg("OWNER_ID", "") or ""
@@ -431,6 +469,14 @@ class Default(WorkerEntrypoint):
             return await self.auth_login(url)
         if path == "/auth/callback" and method == "GET":
             return await self.auth_callback(request, url)
+        if path.startswith("/api/"):
+            await self.get_site()
+        if path == "/api/site" and method == "GET":
+            return await self.api_site()
+        if path == "/api/live" and method == "GET":
+            return await self.api_live()
+        if path == "/api/transcript" and method == "GET":
+            return await self.api_transcript_get(request, url)
         if path == "/api/status" and method == "GET":
             return await self.api_status()
         if path == "/api/commands" and method == "GET":
@@ -458,15 +504,17 @@ class Default(WorkerEntrypoint):
             "client_id": self.cfg("DISCORD_CLIENT_ID"),
             "response_type": "code",
             "redirect_uri": self.public_origin(url) + "/auth/callback",
-            "scope": "identify guilds",
+            "scope": "identify guilds email",
             "state": state,
-            "prompt": "none",
+            "prompt": "consent" if "consent=1" in (url.query or "") else "none",
         }
         location = "https://discord.com/oauth2/authorize?" + urlencode(params, quote_via=quote)
         return redirect(location, make_cookie(STATE_COOKIE, state, 600, path="/auth"))
 
     async def auth_callback(self, request, url):
         query = {k: v[0] for k, v in parse_qs(url.query).items() if v}
+        if query.get("error") in ("consent_required", "interaction_required", "login_required"):
+            return redirect("/auth/login?consent=1")
         if query.get("error"):
             return redirect("/dashboard?login=denied")
         code, state = query.get("code"), query.get("state")
@@ -534,14 +582,21 @@ class Default(WorkerEntrypoint):
             "exp": now() + SESSION_TTL,
         }
         await self.store.put("sess:" + token_hash(token), session, ttl=SESSION_TTL)
-        await self.touch_watch(uid)
+        email = clean_str(user.get("email"), 120) if user.get("verified") else ""
+        users = await self.store.get("users") or {}
+        prev = users.get(uid) or {}
+        users[uid] = {"n": session["user"]["name"], "u": session["user"]["username"], "a": session["user"]["avatar"],
+                      "e": email or prev.get("e", ""), "ll": now(), "lc": int(prev.get("lc", 0)) + 1,
+                      "fs": prev.get("fs") or now(), "g": [g["id"] for g in managed][:100]}
+        await self.store.put("users", users)
+        await self.touch_watch(uid, force=True)
         return redirect("/dashboard", make_cookie(SESSION_COOKIE, token, SESSION_TTL))
 
-    async def touch_watch(self, uid):
-        """Remember who logged in recently so the bot keeps their profile data fresh."""
+    async def touch_watch(self, uid, force=False):
+        """Remember who is around so the bot keeps their profile fresh, and polls fast while they are here."""
         watch = await self.store.get("watch") or {}
         t = now()
-        if t - int(watch.get(uid, 0)) > 12 * 3600:
+        if force or t - int(watch.get(uid, 0)) > 45:
             watch[uid] = t
             watch = {k: v for k, v in watch.items() if t - int(v) < WATCH_MAX_AGE}
             await self.store.put("watch", watch)
@@ -562,7 +617,26 @@ class Default(WorkerEntrypoint):
             raise HttpError(401, "not_logged_in", "Please log in with Discord.")
         return session
 
+    async def save_session(self, request, session):
+        token = get_cookie(request, SESSION_COOKIE)
+        if token:
+            await self.store.put("sess:" + token_hash(token), session, ttl=max(120, int(session.get("exp", now()) - now())))
+
+    def owner_mode(self, session):
+        return self.is_owner(session) and bool(session.get("om"))
+
+    def require_owner_mode(self, session):
+        if not self.is_owner(session):
+            raise HttpError(403, "owner_only", "Owner only.")
+        if not session.get("om"):
+            raise HttpError(403, "owner_mode_off", "Enter owner mode first.")
+
+    def client_ip(self, request):
+        return request.headers.get("CF-Connecting-IP") or "?"
+
     def check_mutation(self, request, url, session):
+        if self.maintenance_on() and not self.is_owner(session):
+            raise HttpError(503, "maintenance", "The site is under maintenance. Please try again later.")
         origin = request.headers.get("Origin")
         if origin and origin != self.public_origin(url):
             raise HttpError(403, "bad_origin", "Cross-site request blocked.")
@@ -618,6 +692,16 @@ class Default(WorkerEntrypoint):
             return json_response({"ok": True}, headers={"Set-Cookie": make_cookie(SESSION_COOKIE, "", 0)})
         if path == "/api/admin/health" and method == "GET":
             return await self.api_admin_health(session)
+        if path == "/api/xp" and method == "POST":
+            return await self.api_xp(request, url, session)
+        if path == "/api/result" and method == "GET":
+            return await self.api_result(session, url)
+        if path == "/api/me/delete" and method == "POST":
+            return await self.api_delete_me(request, url, session)
+        if path == "/api/transcript" and method == "DELETE":
+            return await self.api_transcript_delete(request, url, session)
+        if path.startswith("/api/owner/"):
+            return await self.route_owner(request, url, path, method, session)
 
         parts = path.split("/")  # ['', 'api', 'guilds', '<id>', 'settings']
         if len(parts) in (4, 5) and parts[2] == "guilds":
@@ -627,6 +711,12 @@ class Default(WorkerEntrypoint):
                 return await self.api_guild(session, gid, lite)
             if len(parts) == 5 and parts[4] == "settings" and method == "PUT":
                 return await self.api_guild_save(request, url, session, gid)
+            if len(parts) == 5 and parts[4] == "undo" and method == "POST":
+                return await self.api_undo(request, url, session, gid)
+            if len(parts) == 5 and parts[4] == "redeem" and method == "POST":
+                return await self.api_redeem(request, url, session, gid)
+            if len(parts) == 5 and parts[4] == "transcripts" and method == "GET":
+                return await self.api_transcripts_list(session, gid)
         raise HttpError(404, "not_found", "Not found.")
 
     async def api_me(self, session):
@@ -659,6 +749,7 @@ class Default(WorkerEntrypoint):
                      "avatar_url": avatar_url(user["id"], user["avatar"])},
             "csrf": session["csrf"],
             "is_owner": owner,
+            "owner_mode": self.owner_mode(session),
             "support_url": self.support_url,
             "guilds": guilds,
         })
@@ -666,6 +757,8 @@ class Default(WorkerEntrypoint):
     async def api_profile(self, session):
         user = session["user"]
         profile = await self.store.get("profile:" + user["id"])
+        if not profile or now() - int(profile.get("updated", 0)) > 40:
+            await self.touch_watch(user["id"])
         return json_response({
             "user": {"id": user["id"], "name": user["name"], "username": user["username"],
                      "avatar_url": avatar_url(user["id"], user["avatar"])},
@@ -698,6 +791,12 @@ class Default(WorkerEntrypoint):
         body = {"values": guild.get("values", {}), "pending": pending, "results": results}
         if lite:
             return json_response(body)
+        if self.owner_mode(session):
+            body["owner_info"] = {"owner_id": guild.get("owner_id"), "owner_name": guild.get("owner_name"),
+                                  "created": guild.get("created"), "blacklisted": guild.get("blacklisted")}
+        me_owner = next((g.get("owner") for g in session["guilds"] if g["id"] == gid), False)
+        body["can_undo"] = bool(me_owner) or self.is_owner(session)
+        await self.touch_watch(session["user"]["id"])
         stats = await self.store.get("stats:latest")
         body.update({
             "guild": {
@@ -766,7 +865,8 @@ class Default(WorkerEntrypoint):
         if len(entries) >= 10:
             raise HttpError(429, "queue_full", "Several changes are already waiting for REX. Try again shortly.")
         entry_id = secrets.token_hex(6)
-        entries.append({"id": entry_id, "ts": t, "by": user["id"], "byname": user["name"], "changes": clean})
+        silent = bool(body.get("silent")) and self.owner_mode(session)
+        entries.append({"id": entry_id, "ts": t, "by": user["id"], "byname": user["name"], "changes": clean, "silent": silent})
         await self.store.put("q:all", queue)
         return json_response({"queued": True, "id": entry_id, "keys": list(clean.keys())}, status=202)
 
@@ -792,6 +892,327 @@ class Default(WorkerEntrypoint):
             },
         })
 
+
+    # ---- public: site config, live stats
+    async def api_site(self):
+        site = await self.get_site()
+        return json_response({
+            "theme": site["theme"], "maintenance": site["maint"], "support_url": self.support_url,
+            "invite_url": self.invite_url(), "login_ready": not self.missing_config("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"),
+        }, headers={"Cache-Control": "public, max-age=15"})
+
+    async def api_live(self):
+        stats = await self.store.get("stats:latest") or {}
+        index = await self.store.get("bot:guilds") or {}
+        t = now()
+        body = {
+            "online": bool(stats) and t - stats.get("ts", 0) < ONLINE_WINDOW,
+            "stats": {k: v for k, v in stats.items() if k != "hist"},
+            "hist": stats.get("hist", []),
+            "server_time": t,
+            "tier_counts": {n: sum(1 for v in index.values() if v.get("t") == n) for n in TIER_NAMES},
+            "synced_guilds": len(index),
+        }
+        return json_response(body, headers={"Cache-Control": "public, max-age=15"})
+
+    # ---- bat xp (website xp)
+    async def api_xp(self, request, url, session):
+        self.check_mutation(request, url, session)
+        user = session["user"]
+        body = await self.read_json(request, 1024)
+        count = clean_int(body.get("count") if isinstance(body, dict) else None, 1, 5)
+        if count is None:
+            raise HttpError(400, "bad_request", "count must be 1-5.")
+        if rate_limited("xp:" + user["id"], 6, 60):
+            raise HttpError(429, "slow_down", "Slow down.")
+        day = time.strftime("%Y%m%d", time.gmtime())
+        key = (user["id"], day)
+        used = _XPDAY.get(key, 0)
+        if used >= XP_DAILY_BATS:
+            return json_response({"ok": True, "xp": 0, "capped": True})
+        count = min(count, XP_DAILY_BATS - used)
+        _XPDAY[key] = used + count
+        if len(_XPDAY) > 3000:
+            _XPDAY.clear()
+        queue = await self.store.get("xpq") or {}
+        queue[user["id"]] = int(queue.get(user["id"], 0)) + count * XP_PER_BAT
+        await self.store.put("xpq", queue)
+        return json_response({"ok": True, "xp": count * XP_PER_BAT})
+
+    # ---- results of queued operations (redeem, owner ops)
+    async def api_result(self, session, url):
+        rid = (parse_qs(url.query).get("id") or [""])[0]
+        if not re.match(r"^[0-9a-f]{12}$", rid):
+            raise HttpError(400, "bad_request", "Bad id.")
+        rec = await self.store.get("ores:" + rid)
+        if not rec:
+            return json_response({"done": False})
+        if rec.get("by") != session["user"]["id"]:
+            raise HttpError(403, "forbidden", "Not yours.")
+        return json_response({"done": True, "ok": not rec.get("errors"), "errors": rec.get("errors", {}),
+                              "notes": rec.get("notes", []), "out": rec.get("out", {})})
+
+    async def enqueue(self, gid, entry):
+        queue = await self.store.get("q:all") or {}
+        t = now()
+        for g, entries in list(queue.items()):
+            queue[g] = [e for e in entries if t - e["ts"] < PENDING_MAX_AGE]
+            if not queue[g]:
+                del queue[g]
+        entries = queue.setdefault(gid, [])
+        if len(entries) >= 10:
+            raise HttpError(429, "queue_full", "Several requests are already waiting for REX. Try again shortly.")
+        entries.append(entry)
+        await self.store.put("q:all", queue)
+
+    async def api_redeem(self, request, url, session, gid):
+        self.check_mutation(request, url, session)
+        user = session["user"]
+        access = self.guild_access(session, gid)
+        if not access["admin"]:
+            raise HttpError(403, "forbidden", "You need Administrator in that server to redeem a code.")
+        if rate_limited("rd:" + user["id"], 6, 300):
+            raise HttpError(429, "slow_down", "Too many attempts. Wait a few minutes.")
+        if not await self.store.get("guild:" + gid):
+            raise HttpError(404, "bot_not_in_server", "REX is not in that server yet.")
+        body = await self.read_json(request, 1024)
+        code = clean_str(body.get("code") if isinstance(body, dict) else "", 80).upper()
+        if not re.match(r"^REX-(PREMIUM|PRIORITY|ULTRA)-[A-Z0-9-]{4,60}$", code):
+            raise HttpError(400, "bad_code", "That doesn't look like a REX code.")
+        rid = secrets.token_hex(6)
+        await self.enqueue(gid, {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "op": "redeem",
+                                 "args": {"code": code}})
+        return json_response({"queued": True, "id": rid}, status=202)
+
+    async def api_delete_me(self, request, url, session):
+        self.check_mutation(request, url, session)
+        uid = session["user"]["id"]
+        users = await self.store.get("users") or {}
+        if uid in users:
+            del users[uid]
+            await self.store.put("users", users)
+        watch = await self.store.get("watch") or {}
+        if uid in watch:
+            del watch[uid]
+            await self.store.put("watch", watch)
+        await self.store.delete("profile:" + uid)
+        token = get_cookie(request, SESSION_COOKIE)
+        if token:
+            await self.store.delete("sess:" + token_hash(token))
+        return json_response({"ok": True}, headers={"Set-Cookie": make_cookie(SESSION_COOKIE, "", 0)})
+
+    # ---- undo (server owner or bot owner)
+    async def api_undo(self, request, url, session, gid):
+        self.check_mutation(request, url, session)
+        user = session["user"]
+        me_owner = next((g.get("owner") for g in session["guilds"] if g["id"] == gid), False)
+        if not me_owner and not self.is_owner(session):
+            raise HttpError(403, "forbidden", "Only the server owner can undo changes.")
+        if rate_limited("undo:" + user["id"], 10, 60):
+            raise HttpError(429, "slow_down", "Slow down.")
+        guild = await self.store.get("guild:" + gid)
+        if not guild:
+            raise HttpError(404, "bot_not_in_server", "REX is not in that server yet.")
+        body = await self.read_json(request, 2048)
+        history = await self.store.get("res:" + gid) or []
+        if isinstance(body, dict) and body.get("id"):
+            targets = [e for e in history if e.get("id") == body["id"]]
+        elif isinstance(body, dict) and body.get("user"):
+            targets = [e for e in history if e.get("byid") == str(body["user"])]
+        else:
+            raise HttpError(400, "bad_request", "Say which change to undo.")
+        earliest, latest, ids = {}, {}, []
+        for e in reversed(targets):  # oldest first, so the earliest "before" wins
+            if e.get("undone") or e.get("undo_of") or not e.get("before"):
+                continue
+            used = False
+            for k, v in (e.get("applied") or {}).items():
+                if k.startswith("_") or k not in e["before"]:
+                    continue
+                used = True
+                earliest.setdefault(k, e["before"][k])
+                latest[k] = v
+            if used:
+                ids.append(e["id"])
+        current = guild.get("values", {})
+        changes, skipped = {}, []
+        for k, before in earliest.items():
+            if current.get(k) == latest[k]:
+                changes[k] = before
+            else:
+                skipped.append(k)
+        if not changes:
+            raise HttpError(409, "nothing_to_undo", "Nothing can be undone - those settings were changed again since.", {"skipped": skipped})
+        rid = secrets.token_hex(6)
+        await self.enqueue(gid, {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "changes": changes,
+                                 "undo": True, "undo_ids": ids})
+        return json_response({"queued": True, "id": rid, "keys": list(changes), "skipped": skipped}, status=202)
+
+    # ---- transcripts
+    async def api_transcript_get(self, request, url):
+        if rate_limited("trv:" + self.client_ip(request), 90, 60):
+            raise HttpError(429, "slow_down", "Too many requests.")
+        tid = (parse_qs(url.query).get("id") or [""])[0]
+        if not re.match(r"^[A-Za-z0-9_-]{10,40}$", tid):
+            raise HttpError(404, "not_found", "Transcript not found.")
+        tr = await self.store.get("tr:" + tid)
+        if not tr:
+            raise HttpError(404, "not_found", "This transcript has been deleted or has expired.")
+        return json_response(tr, headers={"X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, max-age=30"})
+
+    async def api_transcripts_list(self, session, gid):
+        self.guild_access(session, gid)
+        items = await self.store.get("trx:" + gid) or []
+        t = now()
+        items = [i for i in items if not i.get("exp") or i["exp"] > t]
+        return json_response({"items": items})
+
+    async def api_transcript_delete(self, request, url, session):
+        self.check_mutation(request, url, session)
+        tid = (parse_qs(url.query).get("id") or [""])[0]
+        if not re.match(r"^[A-Za-z0-9_-]{10,40}$", tid):
+            raise HttpError(404, "not_found", "Transcript not found.")
+        tr = await self.store.get("tr:" + tid)
+        gid = (tr or {}).get("gid")
+        if not tr or not gid:
+            raise HttpError(404, "not_found", "Transcript not found.")
+        access = self.guild_access(session, gid)
+        if not access["admin"]:
+            raise HttpError(403, "forbidden", "Only a server admin, the server owner or a REX owner can delete transcripts.")
+        await self.store.delete("tr:" + tid)
+        items = await self.store.get("trx:" + gid) or []
+        await self.store.put("trx:" + gid, [i for i in items if i.get("id") != tid])
+        return json_response({"ok": True})
+
+    # ---- owner mode
+    async def route_owner(self, request, url, path, method, session):
+        if path == "/api/owner/mode" and method == "POST":
+            self.check_mutation(request, url, session)
+            if not self.is_owner(session):
+                raise HttpError(403, "owner_only", "Owner only.")
+            body = await self.read_json(request, 256)
+            session["om"] = bool(isinstance(body, dict) and body.get("on"))
+            await self.save_session(request, session)
+            return json_response({"owner_mode": session["om"]})
+        self.require_owner_mode(session)
+        if path == "/api/owner/servers" and method == "GET":
+            index = await self.store.get("bot:guilds") or {}
+            rows = [{"id": gid, "name": v.get("n"), "icon_url": icon_url(gid, v.get("i")), "tier": v.get("t", "free"),
+                     "members": v.get("m", 0), "owner": v.get("o", ""), "owner_id": v.get("oi", ""),
+                     "blacklisted": bool(v.get("b"))} for gid, v in index.items()]
+            rows.sort(key=lambda r: (r["name"] or "").lower())
+            return json_response({"servers": rows})
+        if path == "/api/owner/users" and method == "GET":
+            users = await self.store.get("users") or {}
+            rows = [{"id": uid, "name": u.get("n"), "username": u.get("u"), "avatar_url": avatar_url(uid, u.get("a")),
+                     "email": u.get("e", ""), "last_login": u.get("ll"), "logins": u.get("lc", 0), "first_seen": u.get("fs"),
+                     "servers": len(u.get("g") or [])} for uid, u in users.items()]
+            rows.sort(key=lambda r: -(r["last_login"] or 0))
+            return json_response({"users": rows})
+        if path == "/api/owner/user" and method == "GET":
+            uid = (parse_qs(url.query).get("id") or [""])[0]
+            if not SNOWFLAKE.match(uid):
+                raise HttpError(400, "bad_request", "Bad user id.")
+            users = await self.store.get("users") or {}
+            u = users.get(uid)
+            if not u:
+                raise HttpError(404, "not_found", "No such user.")
+            index = await self.store.get("bot:guilds") or {}
+            managed = [{"id": g, "name": (index.get(g) or {}).get("n", g), "icon_url": icon_url(g, (index.get(g) or {}).get("i")),
+                        "bot_present": g in index} for g in (u.get("g") or [])]
+            return json_response({
+                "user": {"id": uid, "name": u.get("n"), "username": u.get("u"), "avatar_url": avatar_url(uid, u.get("a")),
+                         "email": u.get("e", ""), "last_login": u.get("ll"), "logins": u.get("lc", 0), "first_seen": u.get("fs")},
+                "profile": await self.store.get("profile:" + uid), "managed": managed})
+        if path == "/api/owner/audit" and method == "GET":
+            return json_response({"items": await self.store.get("audit") or []})
+        if path == "/api/owner/site" and method == "PUT":
+            self.check_mutation(request, url, session)
+            body = await self.read_json(request, 4096)
+            if not isinstance(body, dict):
+                raise HttpError(400, "bad_request", "Bad body.")
+            site = await self.store.get("site") or {}
+            if "theme" in body:
+                if body["theme"] not in THEMES:
+                    raise HttpError(400, "bad_request", "Unknown theme.")
+                site["theme"] = body["theme"]
+            if isinstance(body.get("maint"), dict):
+                m = body["maint"]
+                site["maint"] = {"on": bool(m.get("on")), "title": clean_str(m.get("title"), 80),
+                                 "desc": clean_str(m.get("desc"), 300)}
+            if "support_url" in body:
+                link = clean_str(body.get("support_url"), 200)
+                if link and not link.startswith("https://"):
+                    raise HttpError(400, "bad_request", "The support link must start with https://")
+                site["support_url"] = link
+            await self.store.put("site", site)
+            _CACHE.pop("site", None)
+            await self.audit(session, "site", "Website settings changed")
+            return json_response(await self.get_site())
+        if path == "/api/owner/op" and method == "POST":
+            return await self.owner_op(request, url, session)
+        raise HttpError(404, "not_found", "Not found.")
+
+    async def audit(self, session, op, summary):
+        items = await self.store.get("audit") or []
+        items.insert(0, {"t": now(), "by": session["user"]["name"], "byid": session["user"]["id"], "op": op,
+                         "summary": clean_str(summary, 240)})
+        await self.store.put("audit", items[:100])
+
+    async def owner_op(self, request, url, session):
+        self.check_mutation(request, url, session)
+        user = session["user"]
+        if rate_limited("oop:" + user["id"], 30, 60):
+            raise HttpError(429, "slow_down", "Slow down.")
+        body = await self.read_json(request, 8192)
+        op = body.get("op") if isinstance(body, dict) else None
+        if op not in OWNER_OPS:
+            raise HttpError(400, "bad_request", "Unknown operation.")
+        a = body.get("args") if isinstance(body.get("args"), dict) else {}
+        gid = str(body.get("gid") or "")
+        args, summary = {}, op
+        if op in ("tier", "blacklist", "invite"):
+            if not SNOWFLAKE.match(gid):
+                raise HttpError(400, "bad_request", "Pick a server.")
+        if op == "tier":
+            tier = a.get("tier")
+            if tier not in TIER_NAMES:
+                raise HttpError(400, "bad_request", "Unknown tier.")
+            days = clean_int(a.get("days"), 0, 3650) or 0
+            args = {"tier": tier, "days": days, "remove": bool(a.get("remove"))}
+            summary = f"{'Removed' if args['remove'] else 'Granted'} {tier} {('for ' + str(days) + ' days') if days and not args['remove'] else ''} on {gid}"
+        elif op == "blacklist":
+            args = {"gid": gid, "reason": clean_str(a.get("reason"), 200), "remove": bool(a.get("remove"))}
+            summary = f"{'Unblacklisted' if args['remove'] else 'Blacklisted'} {gid}"
+        elif op == "invite":
+            summary = f"Created an invite for {gid}"
+        elif op == "dm":
+            uid = str(a.get("uid") or "")
+            text = clean_str(a.get("text"), 1800)
+            if not SNOWFLAKE.match(uid) or not text:
+                raise HttpError(400, "bad_request", "Needs a user and a message.")
+            args = {"uid": uid, "text": text}
+            summary = f"Sent a DM to {uid}"
+            gid = ""
+        elif op == "gen_code":
+            tier = a.get("tier")
+            if tier not in TIER_NAMES:
+                raise HttpError(400, "bad_request", "Unknown tier.")
+            args = {"tier": tier, "duration": clean_str(a.get("duration"), 20), "limit": clean_int(a.get("limit"), 1, 1000) or 1}
+            summary = f"Generated a {tier} code ({args['duration']})"
+            gid = ""
+        elif op == "owner_tool":
+            args = {k: clean_str(a.get(k), 500) for k in ("action", "target", "value", "reason")}
+            if not args["action"]:
+                raise HttpError(400, "bad_request", "Pick an action.")
+            summary = f"Owner tool: {args['action']}"
+            gid = ""
+        rid = secrets.token_hex(6)
+        await self.enqueue(gid or "_", {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "op": op, "args": args,
+                                        "gid": gid or "_"})
+        await self.audit(session, op, summary)
+        return json_response({"queued": True, "id": rid}, status=202)
+
     # ---- bot API (used by bot/rex_dashboard.py)
     def require_bot(self, request):
         key = self.cfg("BOT_API_KEY")
@@ -809,6 +1230,11 @@ class Default(WorkerEntrypoint):
 
         if tail == ["heartbeat"] and method == "POST":
             stats = sanitize_stats(await self.read_json(request, 64 * 1024))
+            previous = await self.store.get("stats:latest") or {}
+            hist = list(previous.get("hist") or [])
+            hist.append([stats["ts"], stats.get("latency_ms"), stats.get("guild_count"), stats.get("user_count"),
+                         stats.get("errors_last_hour")])
+            stats["hist"] = hist[-96:]
             await self.store.put("stats:latest", stats)
             return json_response({"ok": True})
         if tail == ["schema"] and method == "POST":
@@ -832,6 +1258,8 @@ class Default(WorkerEntrypoint):
             return await self.bot_poll()
         if tail == ["ack"] and method == "POST":
             return await self.bot_ack(await self.read_json(request, 512 * 1024))
+        if tail == ["transcript"] and method == "POST":
+            return await self.bot_transcript(request, await self.read_json(request, 3 * 1024 * 1024))
         if tail == ["profiles"] and method == "POST":
             return await self.bot_profiles(await self.read_json(request, 1024 * 1024))
         if len(tail) == 2 and tail[0] == "guilds" and method == "DELETE":
@@ -860,7 +1288,8 @@ class Default(WorkerEntrypoint):
             if not same:
                 await self.store.put("guild:" + g["id"], g)
                 written += 1
-            entry = {"n": g["name"], "i": g["icon"], "t": highest_tier(g["tiers"]), "m": g["member_count"]}
+            entry = {"n": g["name"], "i": g["icon"], "t": highest_tier(g["tiers"]), "m": g["member_count"],
+                     "o": g["owner_name"], "oi": g["owner_id"], "b": g["blacklisted"], "cr": g["created"]}
             old = index.get(g["id"])
             if not old or {k: v for k, v in old.items() if k != "m"} != {k: v for k, v in entry.items() if k != "m"}:
                 index[g["id"]] = entry
@@ -885,22 +1314,45 @@ class Default(WorkerEntrypoint):
         for gid, entries in queue.items():
             for e in entries:
                 if t - e["ts"] < PENDING_MAX_AGE:
-                    pending.append({"id": e["id"], "gid": gid, "by": e["by"], "changes": e["changes"]})
+                    item = {"id": e["id"], "gid": gid, "by": e["by"]}
+                    if e.get("op"):
+                        item["op"], item["args"] = e["op"], e.get("args") or {}
+                    else:
+                        item["changes"] = e.get("changes") or {}
+                        if e.get("undo"):
+                            item["undo"] = True
+                    pending.append(item)
         watch = await self.store.get("watch") or {}
         recent = [uid for uid, ts in watch.items() if t - int(ts) < WATCH_MAX_AGE][:200]
-        return json_response({"pending": pending[:50], "watch": recent})
+        hot = bool(pending) or any(t - int(ts) < HOT_WINDOW for ts in watch.values())
+        xpq = await self.store.get("xpq") or {}
+        return json_response({"pending": pending[:50], "watch": recent, "hot": hot, "xp": xpq})
 
     async def bot_ack(self, body):
-        if not isinstance(body, dict) or not isinstance(body.get("results"), list):
-            raise HttpError(400, "bad_request", "Expected {results: [...]}.")
+        if not isinstance(body, dict):
+            raise HttpError(400, "bad_request", "Expected an object.")
+        results = body.get("results") if isinstance(body.get("results"), list) else []
+        done_xp = body.get("xp_done") if isinstance(body.get("xp_done"), dict) else {}
+        if done_xp:
+            xpq = await self.store.get("xpq") or {}
+            for uid, amount in list(done_xp.items())[:200]:
+                amount = clean_int(amount, 0, 10**6) or 0
+                left = int(xpq.get(str(uid), 0)) - amount
+                if left > 0:
+                    xpq[str(uid)] = left
+                else:
+                    xpq.pop(str(uid), None)
+            await self.store.put("xpq", xpq)
+        if not results:
+            return json_response({"ok": True, "recorded": 0})
         queue = await self.store.get("q:all") or {}
         t = now()
         by_guild = {}
-        for r in body["results"][:50]:
+        for r in results[:50]:
             if not isinstance(r, dict):
                 continue
             gid, rid = str(r.get("gid", "")), str(r.get("id", ""))
-            if not SNOWFLAKE.match(gid):
+            if not (SNOWFLAKE.match(gid) or gid == "_"):
                 continue
             entries = queue.get(gid, [])
             match = [e for e in entries if e["id"] == rid]
@@ -909,25 +1361,120 @@ class Default(WorkerEntrypoint):
                 queue.pop(gid, None)
             if r.get("duplicate") or not match:
                 continue
+            entry = match[0]
             applied = r.get("applied") if isinstance(r.get("applied"), dict) else {}
+            before = r.get("before") if isinstance(r.get("before"), dict) else {}
             errors = r.get("errors") if isinstance(r.get("errors"), dict) else {}
-            by_guild.setdefault(gid, []).append({
-                "id": rid, "t": t, "by": match[0].get("byname", ""),
+            notes = [clean_str(n, 240) for n in (r.get("notes") or [])[:5] if isinstance(n, str)]
+            out = r.get("out") if isinstance(r.get("out"), dict) else {}
+            clean_out = {clean_str(k, 40): (sanitize_value(v) if not isinstance(v, str) else clean_str(v, 1800)) for k, v in list(out.items())[:8]}
+            if entry.get("op"):
+                # operations: the person who asked reads the result; only redeem shows in the server's log
+                await self.store.put("ores:" + rid, {"by": entry["by"], "errors": {clean_str(k, 60): clean_str(v, 240) for k, v in errors.items()},
+                                                     "notes": notes, "out": clean_out}, ttl=900)
+                if entry["op"] == "redeem" and applied.get("_redeem") and SNOWFLAKE.match(gid):
+                    by_guild.setdefault(gid, []).append({
+                        "id": rid, "t": t, "by": entry.get("byname", ""), "byid": entry["by"],
+                        "applied": {"_redeem": clean_str(str(applied.get("_redeem")), 20)}, "before": {}, "errors": {}, "notes": []})
+                continue
+            record = {
+                "id": rid, "t": t, "by": entry.get("byname", ""), "byid": entry["by"],
                 "applied": {clean_str(k, 80): sanitize_value(v) for k, v in list(applied.items())[:60]},
+                "before": {clean_str(k, 80): sanitize_value(v) for k, v in list(before.items())[:60]},
                 "errors": {clean_str(k, 80): clean_str(v, 240) for k, v in list(errors.items())[:60]},
-                "notes": [clean_str(n, 240) for n in (r.get("notes") or [])[:5] if isinstance(n, str)],
-            })
+                "notes": notes,
+            }
+            if entry.get("undo"):
+                record["undo_of"] = [x for x in (entry.get("undo_ids") or []) if isinstance(x, str)][:40]
+            by_guild.setdefault(gid, []).append(record)
+            if entry.get("silent"):
+                record["_silent"] = True
         await self.store.put("q:all", queue)
         for gid, records in by_guild.items():
             history = await self.store.get("res:" + gid) or []
-            history = (list(reversed(records)) + history)[:15]
-            await self.store.put("res:" + gid, history)
+            undone = {x for rec in records if rec["applied"] for x in rec.get("undo_of", [])}
+            if undone:
+                for h in history:
+                    if h.get("id") in undone:
+                        h["undone"] = True
+            visible = [{k: v for k, v in rec.items() if k != "_silent"} for rec in records if not rec.get("_silent")]
+            if visible or undone:
+                history = (list(reversed(visible)) + history)[:RESULTS_MAX]
+                await self.store.put("res:" + gid, history)
             guild = await self.store.get("guild:" + gid)
             if guild:
                 for rec in records:
-                    guild.setdefault("values", {}).update(rec["applied"])
+                    guild.setdefault("values", {}).update({k: v for k, v in rec["applied"].items() if not k.startswith("_")})
                 await self.store.put("guild:" + gid, guild)
         return json_response({"ok": True, "recorded": sum(len(v) for v in by_guild.values())})
+
+    async def bot_transcript(self, request, body):
+        if not isinstance(body, dict):
+            raise HttpError(400, "bad_request", "Expected an object.")
+        gid = str(body.get("gid", ""))
+        if not SNOWFLAKE.match(gid):
+            raise HttpError(400, "bad_request", "Bad guild id.")
+        tier = body.get("tier") if body.get("tier") in TIER_NAMES else "premium"
+
+        def snow(v):
+            return v if isinstance(v, str) and SNOWFLAKE.match(v) else ""
+
+        def img(v):
+            return v if isinstance(v, str) and IMG_URL.match(v) else None
+
+        messages = []
+        for m in (body.get("messages") or [])[:1000]:
+            if not isinstance(m, dict):
+                continue
+            a = m.get("author") if isinstance(m.get("author"), dict) else {}
+            embeds = []
+            for e in (m.get("embeds") or [])[:5]:
+                if isinstance(e, dict):
+                    embeds.append({
+                        "title": clean_str(e.get("title"), 256), "description": clean_str(e.get("description"), 2000),
+                        "color": clean_int(e.get("color"), 0, 0xFFFFFF) or 0,
+                        "fields": [{"name": clean_str(f.get("name"), 256), "value": clean_str(f.get("value"), 1024), "inline": bool(f.get("inline"))}
+                                   for f in (e.get("fields") or [])[:10] if isinstance(f, dict)],
+                        "image": img(e.get("image")), "thumb": img(e.get("thumb")),
+                        "footer": clean_str(e.get("footer"), 200), "author": clean_str(e.get("author"), 100)})
+            messages.append({
+                "id": snow(m.get("id")), "ts": clean_epoch(m.get("ts")) or 0, "edited": clean_epoch(m.get("edited")),
+                "author": {"id": snow(a.get("id")), "name": clean_str(a.get("name"), 80) or "Unknown", "bot": bool(a.get("bot")),
+                           "avatar": img(a.get("avatar")), "color": clean_int(a.get("color"), 0, 0xFFFFFF) or 0},
+                "content": (m.get("content") or "")[:2000] if isinstance(m.get("content"), str) else "",
+                "users": {snow(k): clean_str(v, 80) for k, v in list((m.get("users") or {}).items())[:30] if snow(k)},
+                "roles": {snow(k): {"name": clean_str((v or {}).get("name"), 80), "color": clean_int((v or {}).get("color"), 0, 0xFFFFFF) or 0}
+                          for k, v in list((m.get("roles") or {}).items())[:30] if snow(k) and isinstance(v, dict)},
+                "channels": {snow(k): clean_str(v, 80) for k, v in list((m.get("channels") or {}).items())[:30] if snow(k)},
+                "attachments": [{"name": clean_str(x.get("name"), 100), "url": img(x.get("url")), "type": clean_str(x.get("type"), 60),
+                                 "size": clean_int(x.get("size"), 0, 10**10) or 0}
+                                for x in (m.get("attachments") or [])[:6] if isinstance(x, dict) and img(x.get("url"))],
+                "embeds": embeds,
+                "reply": {"id": snow(m["reply"].get("id"))} if isinstance(m.get("reply"), dict) and snow(m["reply"].get("id")) else None,
+                "system": bool(m.get("system")),
+            })
+        if not messages:
+            raise HttpError(400, "bad_request", "No messages.")
+        g = body.get("guild") if isinstance(body.get("guild"), dict) else {}
+        closed_by = body.get("closed_by") if isinstance(body.get("closed_by"), dict) else {}
+        tid = secrets.token_urlsafe(12)
+        t = now()
+        record = {
+            "v": 1, "id": tid, "gid": gid, "tier": tier,
+            "guild": {"name": clean_str(g.get("name"), 100) or "Server", "icon_url": icon_url(gid, g.get("icon"))},
+            "channel": clean_str(body.get("channel"), 100), "opened": clean_epoch(body.get("opened")) or t, "closed": t,
+            "closed_by": {"id": snow(closed_by.get("id")), "name": clean_str(closed_by.get("name"), 80)},
+            "expires": None if tier == "ultra" else t + TRANSCRIPT_TTL,
+            "messages": messages,
+        }
+        await self.store.put("tr:" + tid, record, ttl=None if tier == "ultra" else TRANSCRIPT_TTL)
+        items = await self.store.get("trx:" + gid) or []
+        items = [i for i in items if not i.get("exp") or i["exp"] > t]
+        items.insert(0, {"id": tid, "ch": record["channel"], "n": len(messages), "t": t, "tier": tier, "exp": record["expires"],
+                         "by": record["closed_by"]["name"]})
+        await self.store.put("trx:" + gid, items[:200])
+        origin = self.public_origin(urlparse(request.url))
+        return json_response({"ok": True, "id": tid, "url": f"{origin}/transcript?id={tid}"})
 
     async def bot_profiles(self, body):
         if not isinstance(body, dict) or not isinstance(body.get("profiles"), dict):
@@ -958,7 +1505,7 @@ class Default(WorkerEntrypoint):
             else:
                 account = None
             profile = {"account_premium": account, "free_trial_claimed": bool(raw.get("free_trial_claimed")),
-                       "servers": servers, "owner": bool(raw.get("owner"))}
+                       "servers": servers, "owner": bool(raw.get("owner")), "web_xp": clean_int(raw.get("web_xp")) or 0}
             existing = await self.store.get("profile:" + str(uid))
             if existing and {k: v for k, v in existing.items() if k != "updated"} == profile:
                 continue

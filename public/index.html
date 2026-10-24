@@ -1,72 +1,37 @@
 <!doctype html>
-<html lang="en" data-theme="default">
+<html lang="en" data-theme="normal">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>REX · Smart. Helpful. Always here.</title>
-<meta name="description" content="REX is a Discord bot with a full website dashboard: log in with Discord and control it for every server you manage.">
-<meta name="theme-color" content="#04070f">
+<title>Rex - Smart. Helpful. Always here.</title>
+<meta name="description" content="Rex is a Discord bot for moderation, tickets, levels and security, with a full web dashboard for every server you manage.">
+<meta name="theme-color" content="#2f8cff">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rex">
+<meta property="og:title" content="Rex - Smart. Helpful. Always here.">
+<meta property="og:description" content="Rex is a Discord bot for moderation, tickets, levels and security, with a full web dashboard for every server you manage.">
+<meta property="og:url" content="https://rex.g7m4fcmnz9.workers.dev/">
+<meta property="og:image" content="https://rex.g7m4fcmnz9.workers.dev/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Rex - Smart. Helpful. Always here.">
+<meta name="twitter:description" content="Rex is a Discord bot for moderation, tickets, levels and security, with a full web dashboard for every server you manage.">
+<meta name="twitter:image" content="https://rex.g7m4fcmnz9.workers.dev/img/og.png">
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Fraunces:wght@600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="/css/style.css">
 <script src="/js/theme.js"></script>
 </head>
-<body>
-<div class="bg-ring" aria-hidden="true"></div>
+<body class="page-home">
+<div id="fx" aria-hidden="true"></div>
 <header id="nav" class="nav"></header>
-
-<main class="wrap">
-  <section class="hero">
-    <div>
-      <div class="eyebrow">Discord bot · Control panel</div>
-      <h1>REX</h1>
-      <div class="tagline"><span>Smart</span><i>/</i><span>Helpful</span><i>/</i><span>Always here</span></div>
-      <p class="lead">Moderation, tickets, levels, games and security in one bot. Log in with Discord, pick a server you manage, and change how REX behaves there. Changes are checked and applied by the bot itself.</p>
-      <div class="cta">
-        <a class="btn" id="invite" href="/dashboard">Add REX to a server</a>
-        <a class="btn ghost" href="/dashboard">Open dashboard</a>
-        <a class="btn discord" id="support" href="https://discord.gg/rexsupport" target="_blank" rel="noopener noreferrer">Join support server</a>
-      </div>
-    </div>
-    <div class="hero-art">
-      <div class="mark-wrap" id="art"><span class="mark xl" aria-hidden="true"></span></div>
-    </div>
-  </section>
-
-  <section aria-label="Live status">
-    <div class="section-title"><h2>Live status</h2><span class="pill" id="pill">Checking…</span><span class="muted small" id="seen"></span></div>
-    <div class="statbar">
-      <div class="stat"><b id="s-guilds">—</b><span>Servers</span></div>
-      <div class="stat"><b id="s-users">—</b><span>Members</span></div>
-      <div class="stat"><b id="s-ping">—</b><span>Latency</span></div>
-      <div class="stat"><b id="s-up">—</b><span>Uptime</span></div>
-    </div>
-  </section>
-
-  <section aria-label="Explore">
-    <div class="section-title"><h2>Explore REX</h2></div>
-    <div class="grid cols-4 tiles">
-      <a class="panel" href="/about"><h3>About</h3><p>What REX does and how to get it running in your server.</p></a>
-      <a class="panel" href="/commands"><h3>Commands</h3><p>Every slash command with usage, options and who can run it.</p></a>
-      <a class="panel" href="/premium"><h3>Premium tiers</h3><p>Free, Premium, Priority and Ultra compared side by side.</p></a>
-      <a class="panel" href="/dashboard"><h3>Dashboard</h3><p>Manage welcome, tickets, levels, security and more per server.</p></a>
-    </div>
-  </section>
-
-  <section aria-label="What the dashboard does">
-    <div class="section-title"><h2>One panel, every server</h2></div>
-    <div class="grid cols-3">
-      <article class="panel feature"><h3>Discord login</h3><p>Sign in with Discord. You only see servers where you can manage the server, and the bot re-checks your permissions on every change.</p></article>
-      <article class="panel feature"><h3>Live from the bot</h3><p>Channels, roles, tiers and current values come straight from REX, so what you see is what the bot is really using.</p></article>
-      <article class="panel feature"><h3>Tier aware</h3><p>Premium, Priority and Ultra settings unlock when REX reports the server has that tier. The bot enforces it, not just the website.</p></article>
-    </div>
-  </section>
-</main>
-
+<main id="app" class="wrap"><div class="skel"></div></main>
 <footer id="footer"></footer>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <script src="/js/app.js"></script>
+<script src="/js/fx.js"></script>
 <script src="/js/home.js"></script>
 </body>
 </html>

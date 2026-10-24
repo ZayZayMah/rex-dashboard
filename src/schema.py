@@ -9,7 +9,7 @@ import re
 SNOWFLAKE = re.compile(r"^\d{15,25}$")
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 TIERS = ("free", "premium", "priority", "ultra")
-TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags")
+TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes")
 TEXT_KINDS = ("text", "announcement")
 
 
@@ -142,6 +142,23 @@ def validate_value(spec, raw, guild):
             if value not in seen:
                 seen.add(value)
                 out.append(value)
+        return out
+
+    if kind == "tickettypes":
+        if not isinstance(raw, list) or len(raw) > 5:
+            raise ValueError(f"{label} can have at most 5 types.")
+        out, seen = [], set()
+        for item in raw:
+            if not isinstance(item, dict):
+                raise ValueError(f"{label}: invalid entry.")
+            name = clean_str(item.get("label"), 45)
+            if not name:
+                raise ValueError(f"{label}: every button needs a name.")
+            if name.lower() in seen:
+                raise ValueError(f"{label}: two buttons are called '{name}'.")
+            seen.add(name.lower())
+            qs = [clean_str(q, 45) for q in (item.get("questions") or []) if isinstance(q, str)]
+            out.append({"label": name, "questions": [q for q in qs if q][:2]})
         return out
 
     if kind in ("channel", "role", "user"):

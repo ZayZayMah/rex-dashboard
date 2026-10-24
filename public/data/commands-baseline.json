@@ -1,5 +1,5 @@
 {
- "generated_from": "static analysis of main.py",
+ "generated_from": "live command tree",
  "commands": [
   {
    "name": "afk",
@@ -82,6 +82,50 @@
      "description": "Action to perform",
      "required": true,
      "type": "string",
+     "choices": [
+      {
+       "name": "Check my appeal status",
+       "value": "status"
+      },
+      {
+       "name": "Close this appeal",
+       "value": "close"
+      },
+      {
+       "name": "Accept this appeal",
+       "value": "accept"
+      },
+      {
+       "name": "Deny this appeal",
+       "value": "deny"
+      }
+     ],
+     "min": null,
+     "max": null
+    }
+   ],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "appeals",
+   "description": "Set up ban appeal tickets in the Rex Support Server",
+   "params": [
+    {
+     "name": "category_id",
+     "description": "Support category ID",
+     "required": true,
+     "type": "string",
+     "choices": [],
+     "min": null,
+     "max": null
+    },
+    {
+     "name": "staff_role_id",
+     "description": "Support staff role ID",
+     "required": true,
+     "type": "string",
      "choices": [],
      "min": null,
      "max": null
@@ -137,7 +181,7 @@
    "scope": "global"
   },
   {
-   "name": "boosting-benefits-message",
+   "name": "boostmsg",
    "description": "Post the Rex Boosting Benefits panel in a channel",
    "params": [
     {
@@ -151,14 +195,6 @@
     }
    ],
    "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "bot-server",
-   "description": "Show Rex's server list and IDs",
-   "params": [],
-   "access": "owner",
    "requires": [],
    "scope": "global"
   },
@@ -251,7 +287,20 @@
      "description": "Set up, change, or disable counting",
      "required": true,
      "type": "string",
-     "choices": [],
+     "choices": [
+      {
+       "name": "setup",
+       "value": "setup"
+      },
+      {
+       "name": "set",
+       "value": "set"
+      },
+      {
+       "name": "disable",
+       "value": "disable"
+      }
+     ],
      "min": null,
      "max": null
     },
@@ -269,217 +318,6 @@
      "description": "Number the next correct message should start from",
      "required": false,
      "type": "integer",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command create",
-   "description": "Create a custom slash command",
-   "params": [
-    {
-     "name": "name",
-     "description": "1-32 lowercase letters, numbers, hyphens or underscores",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    },
-    {
-     "name": "response",
-     "description": "What Rex should reply with. Variables: {user}, {user_mention}, {server}, {channel}",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command delete",
-   "description": "Delete a custom slash command",
-   "params": [
-    {
-     "name": "name",
-     "description": "Custom command name to delete",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command edit",
-   "description": "Edit a custom slash command",
-   "params": [
-    {
-     "name": "name",
-     "description": "Existing custom command name",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    },
-    {
-     "name": "response",
-     "description": "New response text",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command embed",
-   "description": "Send a custom embed to a channel",
-   "params": [],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command list",
-   "description": "List this server's Premium custom commands",
-   "params": [],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-audit-log",
-   "description": "Review premium-feature activity records.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-automations",
-   "description": "Review automation rule planning.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-branding",
-   "description": "Review supported branding customisation options.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-custom-embeds",
-   "description": "Review premium embed-template options.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-dashboard",
-   "description": "Review premium availability and server status.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-feature-list",
-   "description": "Show a summary of premium feature categories.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-gift",
-   "description": "Review the supported premium-gifting workflow.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-history",
-   "description": "Review premium activation history guidance.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-revoke",
-   "description": "Review the premium-revocation workflow.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-scheduled-messages",
-   "description": "Review scheduled message planning.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-server-settings",
-   "description": "Review server-specific premium configuration.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command premium-tools premium-usage",
-   "description": "Review usage tracking for premium features.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "custom-command toggle",
-   "description": "Enable or disable a Premium custom slash command",
-   "params": [
-    {
-     "name": "name",
-     "description": "Custom command name",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    },
-    {
-     "name": "enabled",
-     "description": "Whether the command should be enabled",
-     "required": true,
-     "type": "boolean",
      "choices": [],
      "min": null,
      "max": null
@@ -525,6 +363,106 @@
    "scope": "global"
   },
   {
+   "name": "fun arcade connect4",
+   "description": "Play Connect Four against another member.",
+   "params": [
+    {
+     "name": "opponent",
+     "description": "",
+     "required": true,
+     "type": "user",
+     "choices": [],
+     "min": null,
+     "max": null
+    }
+   ],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade duel",
+   "description": "Challenge another member to a friendly RPS duel.",
+   "params": [
+    {
+     "name": "opponent",
+     "description": "",
+     "required": true,
+     "type": "user",
+     "choices": [],
+     "min": null,
+     "max": null
+    }
+   ],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade guess",
+   "description": "Guess Rex\u2019s hidden number from 1 to 100.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade hangman",
+   "description": "Play an interactive Hangman word game.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade hilo",
+   "description": "Play ten rounds of Higher or Lower.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade math",
+   "description": "Answer five maths questions.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade memory",
+   "description": "Find all matching pairs in Memory Match.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade minesweeper",
+   "description": "Play a 4x4 Minesweeper puzzle.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade top",
+   "description": "View the server game leaderboard.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun arcade wordle",
+   "description": "Play a five-letter Word Puzzle.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
    "name": "fun coinflip",
    "description": "Flip a coin",
    "params": [],
@@ -543,86 +481,6 @@
   {
    "name": "fun fact",
    "description": "Share a random general-knowledge fact",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus connect-four",
-   "description": "Play Connect Four against another member.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus duel",
-   "description": "Challenge another member to a friendly RPS duel.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus game-leaderboard",
-   "description": "View the server game leaderboard.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus guess-number",
-   "description": "Guess Rex’s hidden number from 1 to 100.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus hangman",
-   "description": "Play an interactive Hangman word game.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus higher-lower",
-   "description": "Play ten rounds of Higher or Lower.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus math-challenge",
-   "description": "Answer five maths questions.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus memory-match",
-   "description": "Find all matching pairs in Memory Match.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus minesweeper",
-   "description": "Play a 4x4 Minesweeper puzzle.",
-   "params": [],
-   "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun games-plus wordle",
-   "description": "Play a five-letter Word Puzzle.",
    "params": [],
    "access": "everyone",
    "requires": [],
@@ -708,6 +566,24 @@
    "scope": "global"
   },
   {
+   "name": "fun tictactoe",
+   "description": "Play Tic-Tac-Toe with another member",
+   "params": [
+    {
+     "name": "user",
+     "description": "Your opponent",
+     "required": true,
+     "type": "user",
+     "choices": [],
+     "min": null,
+     "max": null
+    }
+   ],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
    "name": "fun trivia",
    "description": "Get a Rex trivia question",
    "params": [],
@@ -716,7 +592,7 @@
    "scope": "global"
   },
   {
-   "name": "fun utility bot-permissions",
+   "name": "fun utility botperms",
    "description": "Check which permissions Rex has in this server",
    "params": [],
    "access": "everyone",
@@ -777,12 +653,53 @@
      "description": "Choose a conversion",
      "required": true,
      "type": "string",
-     "choices": [],
+     "choices": [
+      {
+       "name": "Kilometres to miles",
+       "value": "km-mi"
+      },
+      {
+       "name": "Miles to kilometres",
+       "value": "mi-km"
+      },
+      {
+       "name": "Kilograms to pounds",
+       "value": "kg-lb"
+      },
+      {
+       "name": "Pounds to kilograms",
+       "value": "lb-kg"
+      },
+      {
+       "name": "Centimetres to inches",
+       "value": "cm-in"
+      },
+      {
+       "name": "Inches to centimetres",
+       "value": "in-cm"
+      },
+      {
+       "name": "Celsius to Fahrenheit",
+       "value": "c-f"
+      },
+      {
+       "name": "Fahrenheit to Celsius",
+       "value": "f-c"
+      }
+     ],
      "min": null,
      "max": null
     }
    ],
    "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "fun utility export",
+   "description": "Export this server's Rex configuration as JSON",
+   "params": [],
+   "access": "staff",
    "requires": [],
    "scope": "global"
   },
@@ -795,15 +712,7 @@
    "scope": "global"
   },
   {
-   "name": "fun utility server-owner export",
-   "description": "Export this server's Rex configuration as JSON",
-   "params": [],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "fun utility server-owner permission-check",
+   "name": "fun utility permcheck",
    "description": "Check Rex's permissions in this server",
    "params": [],
    "access": "staff",
@@ -811,7 +720,7 @@
    "scope": "global"
   },
   {
-   "name": "fun utility server-owner setup-check",
+   "name": "fun utility setupcheck",
    "description": "Check Rex's basic setup in this server",
    "params": [],
    "access": "staff",
@@ -903,188 +812,6 @@
     }
    ],
    "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-command-audit",
-   "description": "Review the registered slash-command tree.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-config-export",
-   "description": "Review supported configuration export options.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-config-import",
-   "description": "Review validated configuration import guidance.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-diagnostics",
-   "description": "Show diagnostic information useful when reporting a bug.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-error-details",
-   "description": "Review how to inspect a specific bot error.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-errors",
-   "description": "Review the bot error-log feature.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-feature-flags",
-   "description": "Review feature-switch configuration.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-health",
-   "description": "Review current bot connectivity and runtime health.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-maintenance-status",
-   "description": "Show whether Rex has a global maintenance window active.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-release-notes",
-   "description": "Show the current Rex release-note summary.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-server-audit",
-   "description": "Review a summary of Rex’s server connections.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-sync-commands",
-   "description": "Review the slash-command sync workflow.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools rex-task-status",
-   "description": "Review the bot background-task status.",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools server-count",
-   "description": "Show how many servers Rex is in",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools stats",
-   "description": "View private global Rex bot statistics",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools update",
-   "description": "Post an automatic Rex update embed",
-   "params": [
-    {
-     "name": "option",
-     "description": "Choose Upcoming Updates, Current Update, or Bug Fixes.",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    },
-    {
-     "name": "channel",
-     "description": "The channel where Rex should post the update embed.",
-     "required": true,
-     "type": "channel",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global rex-tools version",
-   "description": "Show Rex's code version label",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "global warn",
-   "description": "Issue a global owner warning",
-   "params": [
-    {
-     "name": "user",
-     "description": "User to globally warn",
-     "required": true,
-     "type": "user",
-     "choices": [],
-     "min": null,
-     "max": null
-    },
-    {
-     "name": "threat_level",
-     "description": "Threat level",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "owner",
    "requires": [],
    "scope": "global"
   },
@@ -1202,7 +929,7 @@
    "scope": "global"
   },
   {
-   "name": "mass-timeout",
+   "name": "masstimeout",
    "description": "Premium: timeout multiple members at once",
    "params": [
     {
@@ -1234,7 +961,9 @@
     }
    ],
    "access": "staff",
-   "requires": [],
+   "requires": [
+    "moderate_members"
+   ],
    "scope": "global"
   },
   {
@@ -1251,14 +980,6 @@
      "max": null
     }
    ],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "owner-tools",
-   "description": "Open the Rex bot-owner control panel",
-   "params": [],
    "access": "staff",
    "requires": [],
    "scope": "global"
@@ -1324,7 +1045,36 @@
      "description": "Choose what you want to do",
      "required": true,
      "type": "string",
-     "choices": [],
+     "choices": [
+      {
+       "name": "Generate code",
+       "value": "generate"
+      },
+      {
+       "name": "Generate Rex Priority code",
+       "value": "generate-priority"
+      },
+      {
+       "name": "Generate Rex Ultra code",
+       "value": "generate-ultra"
+      },
+      {
+       "name": "Premium giveaway",
+       "value": "giveaway"
+      },
+      {
+       "name": "Check status",
+       "value": "status"
+      },
+      {
+       "name": "View features",
+       "value": "features"
+      },
+      {
+       "name": "Remove Premium",
+       "value": "remove"
+      }
+     ],
      "min": null,
      "max": null
     },
@@ -1333,7 +1083,32 @@
      "description": "Premium duration for code generation or the giveaway prize",
      "required": false,
      "type": "string",
-     "choices": [],
+     "choices": [
+      {
+       "name": "1 day",
+       "value": "1 day"
+      },
+      {
+       "name": "7 days",
+       "value": "7 days"
+      },
+      {
+       "name": "30 days",
+       "value": "30 days"
+      },
+      {
+       "name": "90 days",
+       "value": "90 days"
+      },
+      {
+       "name": "1 year",
+       "value": "1 year"
+      },
+      {
+       "name": "lifetime",
+       "value": "lifetime"
+      }
+     ],
      "min": null,
      "max": null
     },
@@ -1514,33 +1289,6 @@
    "scope": "global"
   },
   {
-   "name": "rex-setup",
-   "description": "Set up the Rex Support report system.",
-   "params": [
-    {
-     "name": "report_channel_id",
-     "description": "Channel where reports are sent.",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    },
-    {
-     "name": "embed_channel_id",
-     "description": "Channel where the report menu is posted.",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
    "name": "role",
    "description": "Add or remove a role",
    "params": [
@@ -1549,7 +1297,16 @@
      "description": "Add or remove",
      "required": true,
      "type": "string",
-     "choices": [],
+     "choices": [
+      {
+       "name": "Add",
+       "value": "add"
+      },
+      {
+       "name": "Remove",
+       "value": "remove"
+      }
+     ],
      "min": null,
      "max": null
     },
@@ -1603,6 +1360,24 @@
    "scope": "global"
   },
   {
+   "name": "rulesmsg",
+   "description": "Post the Rex interactive Server Rules panel in a channel",
+   "params": [
+    {
+     "name": "channel",
+     "description": "The channel where the Server Rules should be posted",
+     "required": true,
+     "type": "channel",
+     "choices": [],
+     "min": null,
+     "max": null
+    }
+   ],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
    "name": "say",
    "description": "Make Rex send a message",
    "params": [
@@ -1621,24 +1396,6 @@
    "scope": "global"
   },
   {
-   "name": "server-rules-message",
-   "description": "Post the Rex interactive Server Rules panel in a channel",
-   "params": [
-    {
-     "name": "channel",
-     "description": "The channel where the Server Rules should be posted",
-     "required": true,
-     "type": "channel",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "staff",
-   "requires": [],
-   "scope": "global"
-  },
-  {
    "name": "serverinfo",
    "description": "Show all server information with channel and role detail buttons",
    "params": [],
@@ -1647,45 +1404,10 @@
    "scope": "global"
   },
   {
-   "name": "servers",
-   "description": "List Rex servers and create owner invites",
-   "params": [],
-   "access": "owner",
-   "requires": [],
-   "scope": "global"
-  },
-  {
    "name": "settings",
    "description": "Open the Rex settings dashboard",
    "params": [],
    "access": "everyone",
-   "requires": [],
-   "scope": "global"
-  },
-  {
-   "name": "setup-appeal",
-   "description": "Set up ban appeal tickets in the Rex Support Server",
-   "params": [
-    {
-     "name": "category_id",
-     "description": "Support category ID",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    },
-    {
-     "name": "staff_role_id",
-     "description": "Support staff role ID",
-     "required": true,
-     "type": "string",
-     "choices": [],
-     "min": null,
-     "max": null
-    }
-   ],
-   "access": "staff",
    "requires": [],
    "scope": "global"
   },
@@ -1743,6 +1465,222 @@
    "scope": "global"
   },
   {
+   "name": "suggest analytics activity",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics channels",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics commands",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics dashboard",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics export",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics growth",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics messages",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics monthly",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics retention",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics roles",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics voice",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest analytics weekly",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community birthday",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community birthdays",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community countdown",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community dailyq",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community eventadd",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community eventcancel",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community events",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community goals",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community intros",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community milestones",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community spotlight",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community starboard",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community starstats",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community thank",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "suggest community welcometest",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
    "name": "suggest panel",
    "description": "Staff-only: create a suggestion panel",
    "params": [
@@ -1770,7 +1708,7 @@
    "scope": "global"
   },
   {
-   "name": "support-center-message",
+   "name": "supportmsg",
    "description": "Post the Rex Support Center panel in a channel",
    "params": [
     {
@@ -1829,7 +1767,9 @@
     }
    ],
    "access": "staff",
-   "requires": [],
+   "requires": [
+    "manage_roles"
+   ],
    "scope": "global"
   },
   {
@@ -1841,7 +1781,28 @@
      "description": "Ticket action",
      "required": true,
      "type": "string",
-     "choices": [],
+     "choices": [
+      {
+       "name": "Quick Setup \u2014 create a simple ticket panel",
+       "value": "quick-setup"
+      },
+      {
+       "name": "Post Ticket Panel",
+       "value": "panel"
+      },
+      {
+       "name": "Close Current Ticket",
+       "value": "close"
+      },
+      {
+       "name": "Delete Current Ticket",
+       "value": "delete"
+      },
+      {
+       "name": "Claim Current Ticket",
+       "value": "claim"
+      }
+     ],
      "min": null,
      "max": null
     },
@@ -1877,7 +1838,32 @@
      "description": "Action to perform",
      "required": true,
      "type": "string",
-     "choices": [],
+     "choices": [
+      {
+       "name": "Add member",
+       "value": "add"
+      },
+      {
+       "name": "Remove member",
+       "value": "remove"
+      },
+      {
+       "name": "Rename ticket",
+       "value": "rename"
+      },
+      {
+       "name": "Claim ticket",
+       "value": "claim"
+      },
+      {
+       "name": "Unclaim ticket",
+       "value": "unclaim"
+      },
+      {
+       "name": "Create transcript",
+       "value": "transcript"
+      }
+     ],
      "min": null,
      "max": null
     },
@@ -1954,6 +1940,416 @@
      "max": null
     }
    ],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security antibot",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security antimention",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security antinuke",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security antiwebhook",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security bypass",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security dashboard",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security joingate",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security log",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security roblox",
+   "description": "Configure Premium Roblox verification.",
+   "params": [
+    {
+     "name": "action",
+     "description": "Choose a Roblox verification action",
+     "required": true,
+     "type": "string",
+     "choices": [
+      {
+       "name": "setup",
+       "value": "setup"
+      },
+      {
+       "name": "panel",
+       "value": "panel"
+      },
+      {
+       "name": "status",
+       "value": "status"
+      },
+      {
+       "name": "disable",
+       "value": "disable"
+      }
+     ],
+     "min": null,
+     "max": null
+    },
+    {
+     "name": "role",
+     "description": "Role given after Roblox verification",
+     "required": false,
+     "type": "role",
+     "choices": [],
+     "min": null,
+     "max": null
+    },
+    {
+     "name": "channel",
+     "description": "Channel where the Roblox panel should be posted",
+     "required": false,
+     "type": "channel",
+     "choices": [],
+     "min": null,
+     "max": null
+    }
+   ],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security scan",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security test",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security trusted",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security verification",
+   "description": "Configure or publish normal verification.",
+   "params": [
+    {
+     "name": "action",
+     "description": "Choose what Rex should do",
+     "required": true,
+     "type": "string",
+     "choices": [
+      {
+       "name": "setup",
+       "value": "setup"
+      },
+      {
+       "name": "panel",
+       "value": "panel"
+      },
+      {
+       "name": "status",
+       "value": "status"
+      },
+      {
+       "name": "disable",
+       "value": "disable"
+      }
+     ],
+     "min": null,
+     "max": null
+    },
+    {
+     "name": "role",
+     "description": "Role given to verified members",
+     "required": false,
+     "type": "role",
+     "choices": [],
+     "min": null,
+     "max": null
+    },
+    {
+     "name": "channel",
+     "description": "Channel where the panel should be posted",
+     "required": false,
+     "type": "channel",
+     "choices": [],
+     "min": null,
+     "max": null
+    }
+   ],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un security verify",
+   "description": "Verify yourself in this server.",
+   "params": [],
+   "access": "everyone",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff activity",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff appreview",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff appstats",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff demotions",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff feedback",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff meeting",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff promotions",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff roster",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff shiftend",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff shifts",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff shiftstart",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff task",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff tasks",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un staff training",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets archive",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets blacklist",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets categories",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets feedback",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets forms",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets priority",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets reopen",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets search",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets sla",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets staffstats",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets stats",
+   "description": "Open this Rex feature panel.",
+   "params": [],
+   "access": "staff",
+   "requires": [],
+   "scope": "global"
+  },
+  {
+   "name": "un tickets transfer",
+   "description": "Open this Rex feature panel.",
+   "params": [],
    "access": "staff",
    "requires": [],
    "scope": "global"
@@ -2131,16 +2527,17 @@
  ],
  "groups": {
   "un": "Remove moderation actions",
+  "un security": "Security and anti-abuse",
+  "un tickets": "Advanced ticket tools",
+  "un staff": "Staff management",
   "global": "Rex owner global tools",
-  "apply-setup": "Configure and publish the Rex staff application panel",
+  "global system": "Private Rex owner tools",
+  "global mod": "Extra moderation tools",
   "suggest": "Official Rex support suggestion tools",
+  "suggest analytics": "Server analytics",
+  "suggest community": "Community and engagement",
   "fun": "Rex fun and social commands",
   "fun utility": "Free Rex utility tools",
-  "fun utility server-owner": "Tools for the actual Discord server owner",
-  "global rex-tools": "Private Rex owner tools",
-  "custom-command premium-tools": "Rex Premium tools",
-  "ultra": "Rex Ultra server-only tools, security and advanced moderation",
-  "custom-command": "Create and manage server-specific Premium slash commands",
-  "fun games-plus": "Interactive games"
+  "fun arcade": "Interactive games"
  }
 }

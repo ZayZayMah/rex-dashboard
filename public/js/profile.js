@@ -2,69 +2,67 @@
 (async function () {
   const app = document.getElementById('app');
   const me = await mountNav('profile');
-  if (!me) {
-    app.replaceChildren(h('div', { class: 'panel empty' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('h2', {}, 'Sign in to see your profile'),
-      h('p', { class: 'muted' }, 'Log in with Discord to see your REX levels, economy and servers.'), h('a', { class: 'btn', href: '/auth/login' }, 'Login with Discord')));
-    return;
+  if (REX.blocked) return;
+  if (!me) return app.replaceChildren(stateScreen('Log in first', 'Log in with Discord to see your Rex profile.', h('a', { class: 'btn', href: '/auth/login' }, 'Log in with Discord')));
+
+  let data = null, fast = null, tries = 0;
+  const hero = h('div', { class: 'prof-hero' });
+  const body = h('div', { class: 'wrap narrow stack', style: 'padding-bottom:60px' });
+  app.replaceChildren(hero, body);
+
+  function bar(pct) { return h('div', { class: 'xpbar', role: 'progressbar', 'aria-valuenow': String(Math.round(pct)), 'aria-valuemin': '0', 'aria-valuemax': '100' }, h('i', { style: 'width:' + Math.max(2, Math.min(100, pct)) + '%' })); }
+
+  function draw() {
+    const u = data.user, p = data.profile;
+    const totalXp = p ? p.servers.reduce((a, s) => a + s.xp, 0) + (p.web_xp || 0) : 0;
+    const best = p && p.servers.length ? p.servers[0] : null;
+    hero.replaceChildren(h('div', { class: 'wrap narrow center' },
+      h('img', { class: 'prof-avatar', src: u.avatar_url, alt: '', width: 128, height: 128 }),
+      h('h1', {}, u.name), h('div', { class: 'muted' }, '@' + u.username),
+      h('div', { style: 'display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap' },
+        p && p.account_premium ? tierBadge('premium') : null, data.is_owner ? h('span', { class: 'badge warn' }, 'Rex owner') : null)));
+    body.replaceChildren();
+    if (!p) {
+      body.append(h('div', { class: 'well center' }, h('span', { class: 'spin' }), h('p', { class: 'muted' }, 'Loading your stats from Rex...')));
+    } else {
+      body.append(h('div', { class: 'stat-row' },
+        h('div', { class: 'stat' }, h('b', {}, fmtNum(totalXp)), h('span', {}, 'Total XP')),
+        h('div', { class: 'stat' }, h('b', {}, fmtNum(p.servers.length)), h('span', {}, 'Servers with Rex')),
+        h('div', { class: 'stat' }, h('b', {}, best ? 'Lv ' + best.level : '-'), h('span', {}, best ? 'Best level' : 'No levels yet')),
+        h('div', { class: 'stat' }, h('b', {}, fmtNum(p.web_xp || 0)), h('span', {}, 'Website XP'))));
+      if (!p.servers.length) body.append(h('div', { class: 'well center' }, h('p', { class: 'muted', style: 'margin:0' }, 'Rex has no XP or coins recorded for you yet. Chat in a server with Rex to get started.')));
+      else body.append(h('div', { class: 'ledger' }, p.servers.map((s) => {
+        const into = s.xp % s.xp_per_level, pct = (into / s.xp_per_level) * 100;
+        return h('div', { class: 'prof-srv' },
+          guildIcon({ name: s.name, icon_url: s.icon ? 'https://cdn.discordapp.com/icons/' + s.id + '/' + s.icon + '.png?size=96' : null }),
+          h('div', { class: 'grow' },
+            h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, h('b', {}, s.name), s.tier !== 'free' ? tierBadge(s.tier) : null),
+            h('div', { class: 'muted small' }, 'Level ' + s.level + '  -  ' + fmtNum(s.xp) + ' XP' + (s.rank ? '  -  Rank ' + s.rank + ' of ' + s.ranked : '')),
+            bar(pct),
+            s.coins != null ? h('div', { class: 'muted small' }, fmtNum(s.coins) + ' coins' + (s.games ? '  -  ' + s.games + ' games, ' + fmtNum(s.won) + ' won, ' + fmtNum(s.lost) + ' lost' : '')) : null,
+            s.roblox ? h('div', { class: 'muted small' }, 'Roblox: ' + s.roblox) : null));
+      })));
+      if (p.account_premium) body.append(h('div', { class: 'frame' }, h('b', {}, 'Account premium is active'),
+        h('div', { class: 'muted small' }, p.account_premium.expires ? 'Until ' + fmtDate(p.account_premium.expires) : 'Never expires')));
+    }
+    if (data.is_owner) body.append(h('div', { class: 'frame', style: 'text-align:center' },
+      h('h3', {}, 'Rex owner tools'), h('p', { class: 'muted small' }, 'Codes, servers, users and website settings.'),
+      me.owner_mode ? h('a', { class: 'btn', href: '/owner' }, 'Open owner mode')
+        : h('button', { class: 'btn', type: 'button', onclick: async () => { try { await api('/api/owner/mode', { method: 'POST', body: { on: true } }); location.href = '/owner'; } catch (e) { toast(e.message, 'bad'); } } }, 'Enter Owner Mode')));
+    body.append(h('div', { class: 'well' }, h('h3', {}, 'Your data'),
+      h('p', { class: 'muted small' }, 'Rex keeps your Discord ID, name, avatar, email (if shared), the servers you can manage and your stats so the website can work. You can remove it at any time. Logging in again recreates a fresh record.'),
+      h('button', { class: 'btn danger sm', type: 'button', onclick: async () => {
+        if (!confirm('Delete your website data and log out? Your XP in Discord servers is not affected.')) return;
+        try { await api('/api/me/delete', { method: 'POST', body: {} }); location.href = '/'; } catch (e) { toast(e.message, 'bad'); }
+      } }, 'Delete my website data')));
   }
-  let data;
-  try { data = await api('/api/profile'); } catch (e) {
-    app.replaceChildren(h('div', { class: 'panel empty' }, h('h2', {}, 'Could not load'), h('p', { class: 'muted' }, e.message))); return;
+
+  async function load() {
+    try { data = await api('/api/profile'); } catch (e) { return toast(e.message, 'bad'); }
+    draw();
+    if (!data.profile && !fast) fast = setInterval(async () => { if (++tries > 20) { clearInterval(fast); fast = null; return; } await load(); }, 2000);
+    else if (data.profile && fast) { clearInterval(fast); fast = null; }
   }
-  const u = data.user, p = data.profile;
-  const fmtDate = (ts) => (ts ? new Date(ts * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'never');
-
-  const head = h('div', { class: 'panel profile-head' },
-    h('img', { class: 'avatar-lg', src: u.avatar_url, alt: '', width: 96, height: 96 }),
-    h('div', {}, h('div', { class: 'eyebrow' }, 'Profile'), h('h1', { style: 'margin:4px 0' }, u.name), h('div', { class: 'muted' }, '@' + u.username),
-      h('div', { class: 'meta', style: 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap' },
-        data.is_owner ? h('span', { class: 'badge bad' }, 'Bot owner') : null,
-        p && p.account_premium && p.account_premium.active ? h('span', { class: 'badge tier-premium' }, 'Account Premium') : null,
-        h('span', { class: 'badge' }, data.servers_managed + ' servers managed'))));
-
-  if (!p) {
-    app.replaceChildren(head, h('div', { class: 'panel', style: 'margin-top:18px' }, h('h2', {}, 'Your REX stats are on their way'),
-      h('p', { class: 'muted' }, 'REX sends your levels and economy to the website shortly after you log in (usually under two minutes). Refresh this page in a moment.'),
-      h('button', { class: 'btn ghost sm', type: 'button', onclick: () => location.reload() }, 'Refresh')));
-    return;
-  }
-
-  const acct = p.account_premium;
-  const premiumPanel = h('section', { class: 'panel' }, h('h2', {}, 'Account Premium'),
-    acct && acct.active
-      ? [h('p', {}, 'Active. It applies to every server you manage.'), h('p', { class: 'muted' }, 'Expires ' + fmtDate(acct.expires)), h('p', { class: 'muted small' }, 'Source: ' + (acct.source || 'unknown').replace(/_/g, ' '))]
-      : [h('p', { class: 'muted' }, 'You do not have Account Premium.'), h('a', { class: 'btn ghost sm', href: '/premium' }, 'See tiers')],
-    h('p', { class: 'muted small' }, p.free_trial_claimed ? 'You have already used the one-time free Premium trial.' : 'The one-time 7-day trial is available with /free-premium in the official server.'));
-
-  const totalCoins = p.servers.reduce((n, s) => n + (s.coins || 0), 0);
-  const best = p.servers.reduce((b, s) => (s.level > (b ? b.level : -1) ? s : b), null);
-  const summary = h('section', { class: 'panel' }, h('h2', {}, 'At a glance'),
-    h('div', { class: 'chipline' }, h('span', {}, 'Servers with stats ', h('b', {}, fmtNum(p.servers.length))), h('span', {}, 'Coins ', h('b', {}, fmtNum(totalCoins))),
-      best ? h('span', {}, 'Highest level ', h('b', {}, best.level + ' in ' + best.name)) : null),
-    h('p', { class: 'muted small' }, 'Updated ' + timeAgo(p.updated)));
-
-  const rows = p.servers.length
-    ? p.servers.map((s) => {
-      const into = s.xp_per_level ? Math.min(100, Math.round(((s.xp % s.xp_per_level) / s.xp_per_level) * 100)) : 0;
-      return h('div', { class: 'srv-row' }, guildIcon({ name: s.name, icon_url: s.icon_url }),
-        h('div', {}, h('h3', {}, s.name, tierBadge(s.tier), s.roblox ? h('span', { class: 'badge' }, 'Roblox: ' + s.roblox) : null),
-          h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': into, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Progress to next level' }, h('i', { style: 'width:' + into + '%' })),
-          h('div', { class: 'chipline' }, h('span', {}, 'Level ', h('b', {}, s.level)), h('span', {}, 'XP ', h('b', {}, fmtNum(s.xp))),
-            s.rank ? h('span', {}, 'Rank ', h('b', {}, '#' + s.rank + (s.ranked ? ' of ' + s.ranked : ''))) : null,
-            s.coins != null ? h('span', {}, 'Coins ', h('b', {}, fmtNum(s.coins))) : null,
-            s.games ? h('span', {}, 'Games ', h('b', {}, s.games), ' (', s.won || 0, 'W / ', s.lost || 0, 'L)') : null)));
-    })
-    : [h('p', { class: 'muted' }, 'No level or economy activity recorded yet. Chat in a server with REX to start earning XP.')];
-
-  const managed = h('section', { class: 'panel' }, h('h2', {}, 'Servers you manage'),
-    me.guilds.length ? me.guilds.map((g) => h('div', { class: 'srv-row' }, guildIcon(g),
-      h('div', {}, h('h3', {}, g.name, g.bot_present ? tierBadge(g.tier) : null),
-        g.bot_present ? h('a', { class: 'small', href: '/server?id=' + encodeURIComponent(g.id) }, 'Open settings')
-          : (g.invite_url ? h('a', { class: 'small', href: g.invite_url }, 'Add REX') : h('span', { class: 'muted small' }, 'REX not added')))))
-      : h('p', { class: 'muted' }, 'You do not manage any servers yet.'));
-
-  app.replaceChildren(head,
-    h('div', { class: 'profile-grid' }, summary, premiumPanel),
-    h('div', { class: 'section-title' }, h('h2', {}, 'Levels & economy')), h('div', { class: 'panel' }, rows),
-    h('div', { class: 'section-title' }, h('h2', {}, 'Your servers')), managed);
+  await load();
+  setInterval(() => { if (!document.hidden) load(); }, 30000);
 })();

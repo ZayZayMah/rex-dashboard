@@ -1,37 +1,26 @@
 'use strict';
 (async function () {
+  const app = document.getElementById('app');
   const me = await mountNav('dashboard');
-  const content = document.getElementById('content');
-  const notice = document.getElementById('notice');
-
+  if (REX.blocked) return;
   const login = new URLSearchParams(location.search).get('login');
-  if (login === 'failed' || login === 'denied') {
-    notice.append(h('div', { class: 'alert', role: 'alert' }, login === 'denied' ? 'Login was cancelled.' : 'Discord login failed. Please try again.'));
-  }
 
   if (!me) {
-    content.className = '';
-    content.replaceChildren(h('div', { class: 'panel empty' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('h2', {}, 'Sign in to manage REX'),
-      h('p', { class: 'muted' }, 'Log in with Discord to see the servers you can manage.'), h('a', { class: 'btn', href: '/auth/login' }, 'Login with Discord')));
-    return;
-  }
-  if (!me.guilds.length) {
-    content.className = '';
-    content.replaceChildren(h('div', { class: 'panel empty' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('h2', {}, 'No servers found'),
-      h('p', { class: 'muted' }, 'You need the Manage Server permission (or to own the server) for it to show up here.'), h('a', { class: 'btn ghost', href: '/auth/login' }, 'Refresh from Discord')));
+    const msg = login === 'denied' ? 'Discord login was cancelled.' : login === 'failed' ? 'Discord login did not complete. Please try again.' : 'Log in with Discord to see the servers you manage.';
+    app.replaceChildren(stateScreen('Log in to continue', msg, h('a', { class: 'btn lg', href: '/auth/login' }, 'Log in with Discord')));
     return;
   }
 
-  content.replaceChildren(...me.guilds.map((g) => {
-    const badges = h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' });
-    if (g.bot_present) badges.append(tierBadge(g.tier));
-    if (g.owner) badges.append(h('span', { class: 'badge' }, 'Owner'));
-    if (g.via === 'owner') badges.append(h('span', { class: 'badge bad' }, 'Bot owner access'));
-    const action = g.bot_present
-      ? h('a', { class: 'btn sm', href: '/server?id=' + encodeURIComponent(g.id) }, 'Manage')
-      : (g.invite_url ? h('a', { class: 'btn ghost sm', href: g.invite_url }, 'Add REX') : h('span', { class: 'muted small' }, 'REX not added'));
-    return h('article', { class: 'panel server' + (g.bot_present ? '' : ' dim') },
-      h('div', { class: 'server-head' }, guildIcon(g), h('div', {}, h('h3', {}, g.name), h('span', { class: 'muted small' }, g.bot_present ? 'REX is here' : 'REX not in this server'))),
-      h('div', { class: 'row' }, badges, action));
-  }));
+  const withBot = me.guilds.filter((g) => g.bot_present);
+  const without = me.guilds.filter((g) => !g.bot_present);
+  const card = (g) => h('a', { class: 'srv-card ' + (g.tier === 'ultra' ? 'frame' : g.tier === 'free' ? 'slab' : 'plate'), href: '/server?id=' + encodeURIComponent(g.id) },
+    guildIcon(g), h('div', {}, h('h3', {}, g.name), h('div', {}, tierBadge(g.tier), g.via === 'owner' ? h('span', { class: 'badge warn', style: 'margin-left:6px' }, 'Owner access') : null)));
+  const addCard = (g) => h('div', { class: 'srv-card off' }, guildIcon(g), h('div', {}, h('h3', {}, g.name),
+    h('a', { class: 'btn sm ghost', href: g.invite_url || '#', target: '_blank', rel: 'noopener noreferrer' }, 'Add Rex')));
+
+  app.replaceChildren(
+    h('div', { class: 'page-head' }, h('h1', {}, 'Your servers'), h('p', {}, 'Pick a server to change how Rex works there.')),
+    withBot.length ? h('div', { class: 'srv-grid' }, withBot.map(card)) : h('div', { class: 'narrow' }, stateScreen('Rex is not in any of your servers yet', 'Add Rex to a server you manage, wait a moment, then come back.')),
+    ...(without.length ? [h('div', { class: 'section-title mid' }, h('h2', {}, 'Add Rex to more servers')), h('div', { class: 'srv-grid' }, without.map(addCard))] : []),
+    h('p', { class: 'src-note' }, 'Only servers where you have Manage Server or Administrator are listed.'));
 })();

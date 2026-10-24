@@ -1,11 +1,24 @@
-# REX Dashboard (v2)
+# Rex Dashboard (v3)
 
-Website + API for the REX Discord bot on Cloudflare Workers: static site in `public/`, Python Worker in `src/`. No third-party Python packages.
-
-**The bot is the source of truth.** It pushes its server list, settings schema, command list, stats and profile data to this site; website edits go into a queue that the bot re-validates and applies. The bot side lives in the separate *bot-update* download (`rex_dashboard.py`).
+Website + API for the Rex Discord bot on Cloudflare Workers: static site in `public/`, Python Worker in `src/`. No third-party Python packages. The bot is the source of truth; website edits go through a queue the bot re-validates.
 
 ## Pages
-Home (live status, support button) · About · Command directory (`/commands`, search + filters) · Command detail (`/command?c=ban`) · Premium tiers · Dashboard (your servers) · Server settings (68 settings in 12 sections, tier/permission aware, shows "waiting → applied") · Profile (levels, coins, account premium) · Health (owner only).
+Home (live status) / About (with sub pages Commands, Premium, Live stats) / Dashboard / Server settings (one section at a time, activity console with undo, redeem codes, transcripts) / Profile (auto-refreshing stats, Enter Owner Mode for owners) / Owner mode (tools + code generator, website theme + maintenance mode, all servers, all users + DM, audit, health) / Transcript viewer (`/transcript?id=...`).
+
+## Update steps
+1. Replace the repo contents with this folder (keep hidden files) and commit. Cloudflare redeploys.
+2. Cloudflare -> Settings -> Variables and Secrets: set `OWNER_ID` to `1500533136591949926,1488216696215965956,1289304415144247399`. Keep `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `BOT_API_KEY`.
+3. Upload the bot files (see the bot zip) and restart the bot.
+4. Log out and back in once so Discord asks for the `email` permission (Users tab in owner mode shows emails).
+5. Profile -> Enter Owner Mode.
+
+Link previews: the site address is written into the page tags (`og:` tags). If it ever changes run `python3 tools/build_pages.py https://your-address` and commit. Discord link previews cannot contain buttons; use `/messages` for a message with link buttons.
+
+## Themes
+Owner mode -> Website. Normal, Halloween (own layout, `css/halloween.css`), Christmas (`css/christmas.css`). The old ember recolour is still in `css/style.css` as `data-theme="ember"`.
+
+## Free plan limits
+Cloudflare KV allows about 1,000 writes a day. The site batches writes (bat XP, heartbeats, profiles); if you grow a lot, upgrade the Workers plan.
 
 ## Files
 | Path | Purpose |

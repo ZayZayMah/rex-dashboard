@@ -1,0 +1,44 @@
+/* Discord-style transcript viewer. Loaded only on /transcript. Intentionally keeps Discord's dark look in every theme. */
+.tx-wrap { max-width: 940px; margin: 0 auto; padding: 28px 16px 60px; }
+.tx-top { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.tx-top h1 { font-size: 1.35rem; margin: 0; }
+.tx-chat { background: #313338; color: #dbdee1; border-radius: 14px; padding: 10px 0 16px; border: 1px solid rgba(255,255,255,.06); font-family: "gg sans", "Segoe UI", system-ui, sans-serif; font-size: 15px; line-height: 1.4; box-shadow: 0 24px 60px -30px rgba(0,0,0,.7); }
+.tx-chat a { color: #00a8fc; text-decoration: none; }
+.tx-chat a:hover { text-decoration: underline; }
+.tx-day { display: flex; align-items: center; margin: 16px 16px 6px; color: #949ba4; font-size: 12px; font-weight: 600; }
+.tx-day::before, .tx-day::after { content: ""; flex: 1; border-top: 1px solid #3f4147; }
+.tx-day span { padding: 0 10px; }
+.tx-sys { margin: 6px 16px 6px 72px; color: #949ba4; font-size: 13px; }
+.tx-msg { position: relative; display: flex; gap: 16px; padding: 2px 16px 2px 16px; margin-top: 14px; }
+.tx-msg.cont { margin-top: 0; }
+.tx-msg:hover { background: rgba(2,2,2,.06); }
+.tx-av { flex: none; width: 40px; height: 40px; margin-top: 2px; }
+.tx-av img { width: 40px; height: 40px; border-radius: 50%; display: block; background: #1e1f22; }
+.tx-hover { flex: none; width: 40px; text-align: right; font-size: 10px; color: transparent; padding-top: 4px; }
+.tx-msg:hover .tx-hover { color: #949ba4; }
+.tx-body { min-width: 0; flex: 1; }
+.tx-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.tx-name { font-weight: 600; color: #f2f3f5; }
+.tx-time { font-size: 12px; color: #949ba4; }
+.tx-bot { background: #5865f2; color: #fff; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 5px; align-self: center; }
+.tx-text { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.tx-edited { font-size: 11px; color: #949ba4; margin-left: 4px; }
+.tx-reply { font-size: 13px; color: #b5bac1; margin-bottom: 2px; border-left: 2px solid #4e5058; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-mention { background: rgba(88,101,242,.3); color: #c9cdfb; border-radius: 3px; padding: 0 2px; font-weight: 500; }
+.tx-chat a.tx-mention:hover { background: #5865f2; color: #fff; text-decoration: none; }
+.tx-code { background: #2b2d31; border-radius: 4px; padding: 1px 5px; font-family: Consolas, monospace; font-size: 13px; }
+.tx-pre { background: #2b2d31; border: 1px solid #1e1f22; border-radius: 6px; padding: 8px 10px; margin: 4px 0; font-family: Consolas, monospace; font-size: 13px; white-space: pre-wrap; overflow-x: auto; }
+.tx-embed { background: #2b2d31; border-left: 4px solid #4f545c; border-radius: 4px; padding: 8px 14px 12px 12px; margin-top: 6px; max-width: 520px; }
+.tx-eauth { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.tx-etitle { font-weight: 700; color: #f2f3f5; margin-bottom: 4px; }
+.tx-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; font-size: 14px; }
+.tx-fields > div { grid-column: 1 / -1; }
+.tx-fields > div.in { grid-column: auto; }
+.tx-fields b { display: block; font-size: 13px; color: #f2f3f5; }
+.tx-efoot { font-size: 12px; color: #949ba4; margin-top: 8px; }
+.tx-eimg, .tx-img { display: block; max-width: 100%; max-height: 340px; border-radius: 6px; margin-top: 6px; }
+.tx-file { display: inline-flex; gap: 8px; align-items: center; background: #2b2d31; border: 1px solid #1e1f22; border-radius: 6px; padding: 8px 12px; margin-top: 6px; }
+@media (max-width: 560px) {
+  .tx-msg { gap: 10px; padding-inline: 10px; }
+  .tx-fields { grid-template-columns: 1fr 1fr; }
+}

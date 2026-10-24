@@ -49,7 +49,7 @@
   "summary": "Remove an active timeout from a member.",
   "example": "/un timeout user:@someone"
  },
- "mass-timeout": {
+ "masstimeout": {
   "category": "moderation",
   "summary": "Time out several members at once (Premium).",
   "example": "/mass-timeout users:@a @b minutes:30"
@@ -251,12 +251,5 @@
  "timezone": {
   "category": "utility",
   "summary": "Set your timezone preference for REX."
- },
- "custom-command": {
-  "category": "premium",
-  "summary": "Create server-specific slash commands that reply with text or embeds (Premium).",
-  "tips": [
-   "Custom commands only exist in your server, so they are not in this directory."
-  ]
  }
 }
