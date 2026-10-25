@@ -23,7 +23,7 @@
         p && p.account_premium ? tierBadge('premium') : null, data.is_owner ? h('span', { class: 'badge warn' }, 'Rex owner') : null)));
     body.replaceChildren();
     if (!p) {
-      body.append(h('div', { class: 'well center' }, h('span', { class: 'spin' }), h('p', { class: 'muted' }, 'Loading your stats from Rex...')));
+      body.append(h('div', { class: 'well center' }, h('span', { class: 'spin' }), h('p', { class: 'muted', style: 'margin:10px 0 0' }, !data.bot_online ? 'Rex looks offline right now. Your stats will appear as soon as it is back.' : tries > 25 ? 'Still fetching. Rex is busy, this can take a minute.' : 'Fetching your stats from Rex...')));
     } else {
       body.append(h('div', { class: 'stat-row' },
         h('div', { class: 'stat' }, h('b', {}, fmtNum(totalXp)), h('span', {}, 'Total XP')),
@@ -60,7 +60,7 @@
   async function load() {
     try { data = await api('/api/profile'); } catch (e) { return toast(e.message, 'bad'); }
     draw();
-    if (!data.profile && !fast) fast = setInterval(async () => { if (++tries > 20) { clearInterval(fast); fast = null; return; } await load(); }, 2000);
+    if (!data.profile && !fast) fast = setInterval(async () => { tries++; await load(); }, tries > 25 ? 5000 : 1500);
     else if (data.profile && fast) { clearInterval(fast); fast = null; }
   }
   await load();

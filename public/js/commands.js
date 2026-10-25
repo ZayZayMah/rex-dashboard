@@ -11,7 +11,7 @@
   CATEGORIES.forEach((c) => { counts[c.id] = cat.commands.filter((x) => x.category === c.id).length; });
 
   const search = h('input', { type: 'search', placeholder: 'Search commands', 'aria-label': 'Search commands', value: state.q, autocomplete: 'off' });
-  const accessSel = h('select', { 'aria-label': 'Who can use it' }, h('option', { value: 'all' }, 'Anyone can use'), h('option', { value: 'everyone' }, 'Everyone'), h('option', { value: 'staff' }, 'Server staff'));
+  const accessSel = h('select', { 'aria-label': 'Who can use it' }, h('option', { value: 'all' }, 'Everyone and staff'), h('option', { value: 'everyone' }, 'Everyone can use'), h('option', { value: 'staff' }, 'Server staff only'));
   const tierSel = h('select', { 'aria-label': 'Tier' }, h('option', { value: 'all' }, 'Any tier'), h('option', { value: 'free' }, 'No tier needed'), h('option', { value: 'premium' }, 'Premium'), h('option', { value: 'priority' }, 'Priority'), h('option', { value: 'ultra' }, 'Ultra'));
   accessSel.value = state.access; tierSel.value = state.tier;
   const chips = h('div', { class: 'cat-chips', role: 'group', 'aria-label': 'Categories' });

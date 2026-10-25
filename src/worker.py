@@ -59,6 +59,11 @@ HOT_WINDOW = 90                  # seconds the bot polls fast after someone open
 XP_PER_BAT = 10
 XP_DAILY_BATS = 30
 THEMES = ("normal", "halloween", "christmas")
+# The three Rex owners always count as owners, even if the OWNER_ID variable in Cloudflare is missing or incomplete.
+DEFAULT_OWNERS = ("1500533136591949926", "1488216696215965956", "1289304415144247399")
+BETA_FEATURES = ("email", "support", "builder")
+BETA_STATES = ("off", "testing", "on")
+TIER_WEIGHT = {"priority": 4, "ultra": 3, "premium": 2, "free": 1}
 OWNER_OPS = ("tier", "blacklist", "invite", "dm", "gen_code", "owner_tool")
 IMG_URL = re.compile(r"^https://[^\s<>\"']{4,500}$")
 
@@ -395,6 +400,19 @@ class Default(WorkerEntrypoint):
         site = (_CACHE.get("site") or (0, {}))[1] or {}
         return site.get("support_url") or self.cfg("SUPPORT_URL", DEFAULT_SUPPORT)
 
+    def beta_on(self, site, feature, uid=None):
+        state = (site.get("beta") or {}).get(feature, "off")
+        if state == "on":
+            return True
+        if state == "testing" and uid:
+            return uid in self.owner_ids() or uid in (site.get("testers") or [])
+        return False
+
+    async def require_beta(self, feature, session):
+        site = await self.get_site()
+        if not self.beta_on(site, feature, session["user"]["id"]):
+            raise HttpError(404, "not_available", "This feature is not available yet.")
+
     async def get_site(self):
         cached = _CACHE.get("site")
         if cached and time.time() - cached[0] < 20:
@@ -406,6 +424,8 @@ class Default(WorkerEntrypoint):
             "maint": {"on": bool(maint.get("on")), "title": clean_str(maint.get("title"), 80) or "We'll be right back",
                       "desc": clean_str(maint.get("desc"), 300) or "We're currently under maintenance. Please try again later."},
             "support_url": clean_str(site.get("support_url"), 200),
+            "beta": {k: (site.get("beta") or {}).get(k) if (site.get("beta") or {}).get(k) in BETA_STATES else "off" for k in BETA_FEATURES},
+            "testers": [t for t in (site.get("testers") or []) if isinstance(t, str) and SNOWFLAKE.match(t)][:40],
         }
         _CACHE["site"] = (time.time(), clean)
         return clean
@@ -415,7 +435,7 @@ class Default(WorkerEntrypoint):
 
     def owner_ids(self):
         raw = self.cfg("OWNER_ID", "") or ""
-        return {x for x in re.split(r"[\s,;]+", raw) if SNOWFLAKE.match(x)}
+        return {x for x in re.split(r"[\s,;]+", raw) if SNOWFLAKE.match(x)} | set(DEFAULT_OWNERS)
 
     def is_owner(self, session):
         return session["user"]["id"] in self.owner_ids()
@@ -483,6 +503,8 @@ class Default(WorkerEntrypoint):
             return await self.api_commands()
         if path == "/api/schema" and method == "GET":
             return await self.api_public_schema()
+        if path == "/api/ownergate" and method == "POST":
+            return await self.api_ownergate(request, url)
         if path.startswith("/api/bot/"):
             return await self.route_bot(request, path, method)
         if path.startswith("/api/"):
@@ -582,7 +604,7 @@ class Default(WorkerEntrypoint):
             "exp": now() + SESSION_TTL,
         }
         await self.store.put("sess:" + token_hash(token), session, ttl=SESSION_TTL)
-        email = clean_str(user.get("email"), 120) if user.get("verified") else ""
+        email = clean_str(user.get("email"), 120) if user.get("verified") and uid not in self.owner_ids() else ""   # owner emails are never stored
         users = await self.store.get("users") or {}
         prev = users.get(uid) or {}
         users[uid] = {"n": session["user"]["name"], "u": session["user"]["username"], "a": session["user"]["avatar"],
@@ -600,6 +622,37 @@ class Default(WorkerEntrypoint):
             watch[uid] = t
             watch = {k: v for k, v in watch.items() if t - int(v) < WATCH_MAX_AGE}
             await self.store.put("watch", watch)
+
+    # ---- owner gate: /<owner id>/owner-tools asks for a personal code the bot DMed the owner about
+    async def api_ownergate(self, request, url):
+        origin = request.headers.get("Origin")
+        if origin and origin != self.public_origin(url):
+            raise HttpError(403, "bad_origin", "Cross-site request blocked.")
+        body = await self.read_json(request, 1024)
+        uid = str((body or {}).get("uid") or "") if isinstance(body, dict) else ""
+        code = str((body or {}).get("code") or "") if isinstance(body, dict) else ""
+        ip = self.client_ip(request)
+        if rate_limited("og-ip:" + ip, 8, 600) or rate_limited("og-uid:" + uid, 6, 600):
+            raise HttpError(429, "slow_down", "Too many attempts. Wait ten minutes.")
+        bad = HttpError(403, "bad_code", "That code is not right.")
+        if uid not in self.owner_ids() or not code or len(code) > 200:
+            raise bad
+        rec = await self.store.get("ogate:" + uid)
+        if not rec:
+            raise HttpError(403, "no_code", "No owner code has been created yet. The bot DMs you a button to create one when it starts.")
+        if not safe_equal(hashlib.sha256((rec["salt"] + code).encode()).hexdigest(), rec["hash"]):
+            raise bad
+        users = await self.store.get("users") or {}
+        known = users.get(uid) or {}
+        token = secrets.token_urlsafe(32)
+        ttl = 12 * 3600
+        session = {
+            "user": {"id": uid, "username": known.get("u") or "owner", "name": known.get("n") or "Rex owner", "avatar": known.get("a")},
+            "guilds": [], "csrf": secrets.token_urlsafe(24), "exp": now() + ttl, "om": True, "gate": True,
+        }
+        await self.store.put("sess:" + token_hash(token), session, ttl=ttl)
+        await self.audit(session, "gate", "Owner tools unlocked with an owner code")
+        return json_response({"ok": True}, headers={"Set-Cookie": make_cookie(SESSION_COOKIE, token, ttl)})
 
     # ---- sessions
     async def get_session(self, request):
@@ -751,8 +804,13 @@ class Default(WorkerEntrypoint):
             "is_owner": owner,
             "owner_mode": self.owner_mode(session),
             "support_url": self.support_url,
+            "beta": {k: self.beta_on(await self.get_site(), k, user["id"]) for k in BETA_FEATURES},
             "guilds": guilds,
         })
+
+    async def bot_online(self):
+        stats = await self.store.get("stats:latest")
+        return bool(stats) and now() - stats.get("ts", 0) < ONLINE_WINDOW
 
     async def api_profile(self, session):
         user = session["user"]
@@ -765,6 +823,7 @@ class Default(WorkerEntrypoint):
             "is_owner": self.is_owner(session),
             "profile": profile,
             "servers_managed": len(session["guilds"]),
+            "bot_online": await self.bot_online(),
         })
 
     def guild_access(self, session, gid):
@@ -898,6 +957,7 @@ class Default(WorkerEntrypoint):
         site = await self.get_site()
         return json_response({
             "theme": site["theme"], "maintenance": site["maint"], "support_url": self.support_url,
+            "beta": {k: self.beta_on(site, k) for k in BETA_FEATURES},
             "invite_url": self.invite_url(), "login_ready": not self.missing_config("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"),
         }, headers={"Cache-Control": "public, max-age=15"})
 
@@ -1105,7 +1165,8 @@ class Default(WorkerEntrypoint):
         if path == "/api/owner/users" and method == "GET":
             users = await self.store.get("users") or {}
             rows = [{"id": uid, "name": u.get("n"), "username": u.get("u"), "avatar_url": avatar_url(uid, u.get("a")),
-                     "email": u.get("e", ""), "last_login": u.get("ll"), "logins": u.get("lc", 0), "first_seen": u.get("fs"),
+                     "email": "" if uid in self.owner_ids() else u.get("e", ""), "owner": uid in self.owner_ids(),
+                     "last_login": u.get("ll"), "logins": u.get("lc", 0), "first_seen": u.get("fs"),
                      "servers": len(u.get("g") or [])} for uid, u in users.items()]
             rows.sort(key=lambda r: -(r["last_login"] or 0))
             return json_response({"users": rows})
@@ -1122,8 +1183,11 @@ class Default(WorkerEntrypoint):
                         "bot_present": g in index} for g in (u.get("g") or [])]
             return json_response({
                 "user": {"id": uid, "name": u.get("n"), "username": u.get("u"), "avatar_url": avatar_url(uid, u.get("a")),
-                         "email": u.get("e", ""), "last_login": u.get("ll"), "logins": u.get("lc", 0), "first_seen": u.get("fs")},
+                         "email": "" if uid in self.owner_ids() else u.get("e", ""), "owner": uid in self.owner_ids(),
+                         "last_login": u.get("ll"), "logins": u.get("lc", 0), "first_seen": u.get("fs")},
                 "profile": await self.store.get("profile:" + uid), "managed": managed})
+        if path == "/api/owner/site" and method == "GET":
+            return json_response(await self.get_site())
         if path == "/api/owner/audit" and method == "GET":
             return json_response({"items": await self.store.get("audit") or []})
         if path == "/api/owner/site" and method == "PUT":
@@ -1140,6 +1204,14 @@ class Default(WorkerEntrypoint):
                 m = body["maint"]
                 site["maint"] = {"on": bool(m.get("on")), "title": clean_str(m.get("title"), 80),
                                  "desc": clean_str(m.get("desc"), 300)}
+            if isinstance(body.get("beta"), dict):
+                cur = site.get("beta") if isinstance(site.get("beta"), dict) else {}
+                for k, v in body["beta"].items():
+                    if k in BETA_FEATURES and v in BETA_STATES:
+                        cur[k] = v
+                site["beta"] = cur
+            if isinstance(body.get("testers"), list):
+                site["testers"] = [str(t) for t in body["testers"] if SNOWFLAKE.match(str(t))][:40]
             if "support_url" in body:
                 link = clean_str(body.get("support_url"), 200)
                 if link and not link.startswith("https://"):
@@ -1260,6 +1332,17 @@ class Default(WorkerEntrypoint):
             return await self.bot_ack(await self.read_json(request, 512 * 1024))
         if tail == ["transcript"] and method == "POST":
             return await self.bot_transcript(request, await self.read_json(request, 3 * 1024 * 1024))
+        if tail == ["ownercode"] and method == "POST":
+            body = await self.read_json(request, 1024)
+            uid = str((body or {}).get("uid") or "")
+            salt, digest = str((body or {}).get("salt") or ""), str((body or {}).get("hash") or "")
+            if uid not in self.owner_ids() or not re.match(r"^[0-9a-f]{16,64}$", salt) or not re.match(r"^[0-9a-f]{64}$", digest):
+                raise HttpError(400, "bad_request", "Bad owner code.")
+            await self.store.put("ogate:" + uid, {"salt": salt, "hash": digest, "t": now()})
+            return json_response({"ok": True})
+        if tail == ["ownercodes"] and method == "GET":
+            have = [u for u in self.owner_ids() if await self.store.get("ogate:" + u)]
+            return json_response({"have": have, "owners": sorted(self.owner_ids())})
         if tail == ["profiles"] and method == "POST":
             return await self.bot_profiles(await self.read_json(request, 1024 * 1024))
         if len(tail) == 2 and tail[0] == "guilds" and method == "DELETE":
@@ -1322,6 +1405,8 @@ class Default(WorkerEntrypoint):
                         if e.get("undo"):
                             item["undo"] = True
                     pending.append(item)
+        index = await self.store.get("bot:guilds") or {}
+        pending.sort(key=lambda p: (-TIER_WEIGHT.get((index.get(p["gid"]) or {}).get("t", "free"), 1) if p["gid"] != "_" else -9, ))
         watch = await self.store.get("watch") or {}
         recent = [uid for uid, ts in watch.items() if t - int(ts) < WATCH_MAX_AGE][:200]
         hot = bool(pending) or any(t - int(ts) < HOT_WINDOW for ts in watch.values())

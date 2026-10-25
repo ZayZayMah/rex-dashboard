@@ -1,34 +1,96 @@
-/* CHRISTMAS - separate winter layout. Loaded only while the owners switch the site theme to Christmas. */
+/* CHRISTMAS - "Winter lodge". A bright, snowy light theme with a floating glass dock, a tree scene, hanging baubles,
+   gift-box feature tiles, a pill dock for server sections and gift-tag server cards. Not a recolour of the dark site. */
 html[data-theme='christmas'] {
-  --ink: #06121a; --deep: #0a1c27; --plate: #0f2634; --plate2: #14324a; --edge: #1f5a50; --edge2: #2f8a74;
-  --volt: #d92f3f; --arc: #7ff0c0; --ice: #f4fbff; --steel: #a9c6cf; --dim: #6f919c; --glow: 217, 47, 63; --on-accent: #fff;
-  --gold: #ffd36a; --display: 'Fraunces', Georgia, serif; --body: 'Figtree', system-ui, sans-serif;
+  color-scheme: light;
+  --ink: #eaf4fa; --deep: #dcebf4; --plate: #ffffff; --plate2: #f3f9fd; --edge: #cfe0ea; --edge2: #9fc0d2;
+  --volt: #c8263b; --arc: #1b6b4c; --ice: #15303a; --steel: #46636e; --dim: #7a97a3; --glow: 200, 38, 59; --on-accent: #fff;
+  --ok: #1f9d63; --warn: #b9770e; --bad: #c8263b; --gold: #b8860b; --prio: #2a6fb7; --ultra: #7a4bd0;
+  --display: 'Fraunces', Georgia, serif; --body: 'Figtree', system-ui, sans-serif; --nav-h: 96px; --head-big: 104px;
 }
-html[data-theme='christmas'] body { background:
-  radial-gradient(700px 400px at 50% -80px, rgba(127, 240, 192, .16), transparent 70%),
-  radial-gradient(800px 500px at 100% 100%, rgba(217, 47, 63, .14), transparent 65%), var(--ink); }
-html[data-theme='christmas'] h1, html[data-theme='christmas'] h2, html[data-theme='christmas'] h3 { font-weight: 700; }
-html[data-theme='christmas'] .hero h1 { background: linear-gradient(180deg, #fff, #bff7e0 60%, #ff7f8a); -webkit-background-clip: text; background-clip: text; }
-html[data-theme='christmas'] .nav { background: rgba(6, 18, 26, .9); border-bottom: 3px solid transparent; border-image: repeating-linear-gradient(90deg, #d92f3f 0 22px, #fff 22px 44px, #2f8a74 44px 66px) 1; }
-html[data-theme='christmas'] .brand .mark { background: linear-gradient(#fff, #ff7f8a); }
-html[data-theme='christmas'] .btn { background: linear-gradient(180deg, #ef4b5b, #b81f2f); border-radius: 999px; }
-html[data-theme='christmas'] .btn.ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--edge2); }
-html[data-theme='christmas'] .btn.gold { background: linear-gradient(180deg, #ffe08a, #e0a93a); }
-html[data-theme='christmas'] .plate { clip-path: none; border-radius: 24px; border: 2px solid var(--edge2); }
-html[data-theme='christmas'] .slab { border-radius: 24px; border-left: 0; border-top: 6px solid var(--volt); }
-html[data-theme='christmas'] .frame { border-radius: 22px; background-image: none; border: 2px dashed var(--edge2); }
-html[data-theme='christmas'] .well { border-radius: 22px; }
-html[data-theme='christmas'] .badge { border-radius: 999px; }
-html[data-theme='christmas'] .srv-head { border-bottom: 3px solid var(--edge2); }
-html[data-theme='christmas'] .srv-side a { border-left: 0; border-radius: 999px; }
-html[data-theme='christmas'] .srv-side a.active { background: linear-gradient(90deg, #d92f3f, #a41727); color: #fff; }
-html[data-theme='christmas'] .subnav a.active { background: var(--volt); color: #fff; }
+html[data-theme='christmas'] body { color: var(--ice); background: radial-gradient(800px 500px at 50% -100px, #ffffff, transparent 70%), linear-gradient(#eaf4fa, #d4e6f1 60%, #c5dcea); background-attachment: fixed; }
+html[data-theme='christmas'] code, html[data-theme='christmas'] .mono { color: #1b6b4c; }
+html[data-theme='christmas'] a { color: #1b6b4c; }
+html[data-theme='christmas'] .muted { color: var(--steel); }
 
+/* ---- floating dock */
+html[data-theme='christmas'] .nav { background: transparent; border: 0; backdrop-filter: none; position: sticky; pointer-events: none; }
+.xm-dock { pointer-events: auto; margin-top: 14px; height: 66px; display: flex; align-items: center; gap: 18px; padding: 0 14px 0 22px; border-radius: 999px; background: rgba(255, 255, 255, .82); backdrop-filter: blur(16px); border: 1px solid #fff; box-shadow: 0 14px 40px rgba(31, 80, 110, .22), inset 0 0 0 1px rgba(159, 192, 210, .5); }
+.xm-dock .brand { color: #15303a; } .xm-dock .mark { background: linear-gradient(#e23b4e, #9d1228); }
+.xm-pills { display: flex; gap: 4px; margin: 0 auto; padding: 5px; border-radius: 999px; background: #eaf4fa; }
+.xm-pills a { padding: 8px 18px; border-radius: 999px; color: var(--steel); font-weight: 600; font-size: 14px; } .xm-pills a:hover { text-decoration: none; color: var(--ice); }
+.xm-pills a.active { background: #c8263b; color: #fff; box-shadow: 0 4px 12px rgba(200, 38, 59, .4); }
+.xm-dock .nav-end { margin: 0; } .xm-dock .avatar-btn { background: #fff; border-color: #c8263b; width: 42px; height: 42px; }
+html[data-theme='christmas'] .menu, html[data-theme='christmas'] .dd-menu { background: #fff; color: var(--ice); box-shadow: 0 18px 40px rgba(31, 80, 110, .25); } html[data-theme='christmas'] .menu a, html[data-theme='christmas'] .menu button { color: var(--ice); }
+html[data-theme='christmas'] .owner-strip { background: #fff3d6; color: #8a5a00; border-color: #e8c97a; } html[data-theme='christmas'] .owner-strip a { color: #1b6b4c; }
+
+/* ---- surfaces: rounded, bright, ribbon-trimmed */
+html[data-theme='christmas'] .btn { border-radius: 999px; background: linear-gradient(180deg, #e23b4e, #b81f2f); color: #fff; box-shadow: 0 8px 20px rgba(200, 38, 59, .32); }
+html[data-theme='christmas'] .btn.ghost { background: #fff; color: #15303a; border: 1px solid var(--edge2); box-shadow: none; } html[data-theme='christmas'] .btn.ghost:hover { background: #eaf4fa; border-color: #c8263b; }
+html[data-theme='christmas'] .btn.discord { background: #5865f2; color: #fff; } html[data-theme='christmas'] .btn.danger { background: #c8263b; color: #fff; } html[data-theme='christmas'] .btn.gold { background: #f0c04a; color: #3a2a00; }
+html[data-theme='christmas'] .plate, html[data-theme='christmas'] .slab, html[data-theme='christmas'] .frame, html[data-theme='christmas'] .panel { clip-path: none; background: #fff; border: 1px solid var(--edge); border-radius: 26px; box-shadow: 0 12px 30px rgba(31, 80, 110, .12); background-image: none; }
+html[data-theme='christmas'] .slab { border-left: 1px solid var(--edge); border-top: 6px solid #c8263b; } html[data-theme='christmas'] .frame { border: 2px dashed var(--edge2); background: #fff; }
+html[data-theme='christmas'] .well { background: #f3f9fd; border: 1px solid var(--edge); box-shadow: none; border-radius: 20px; }
+html[data-theme='christmas'] .badge { border-radius: 999px; } html[data-theme='christmas'] .badge.tier-premium { background: #fff3d6; color: #8a5a00; } html[data-theme='christmas'] .badge.tier-priority { background: #dbeaff; color: #1f5fa6; } html[data-theme='christmas'] .badge.tier-ultra { background: #ece0ff; color: #6a3fc0; box-shadow: none; } html[data-theme='christmas'] .badge.tier-free { background: #e6eef3; color: var(--steel); }
+html[data-theme='christmas'] input, html[data-theme='christmas'] select, html[data-theme='christmas'] textarea, html[data-theme='christmas'] .combo-btn, html[data-theme='christmas'] .stepper, html[data-theme='christmas'] .seg { background: #fff; color: var(--ice); border-color: var(--edge2); }
+html[data-theme='christmas'] .rocker { background: #dfe9ef; border-color: var(--edge2); } html[data-theme='christmas'] .rocker::after { background: #fff; box-shadow: 0 2px 4px rgba(0, 0, 0, .25); } html[data-theme='christmas'] .rocker[aria-checked='true'] { background: #1f9d63; }
+html[data-theme='christmas'] .seg button { color: var(--steel); } html[data-theme='christmas'] .seg button[aria-checked='true'] { background: #c8263b; color: #fff; }
+html[data-theme='christmas'] .switch-card { background: #fff; border-color: var(--edge); } html[data-theme='christmas'] .switch-card.on { border-color: #1f9d63; background: #eefaf3; }
+html[data-theme='christmas'] .subnav { background: #fff; border-color: var(--edge); } html[data-theme='christmas'] .subnav a.active { background: #c8263b; color: #fff; }
+html[data-theme='christmas'] .stat-strip { background: #fff; }
+html[data-theme='christmas'] .modal, html[data-theme='christmas'] .combo-list, html[data-theme='christmas'] .toast { background: #fff; color: var(--ice); }
+html[data-theme='christmas'] .console-bar, html[data-theme='christmas'] .console-body { background: #fff; color: var(--steel); border-color: var(--edge2); }
+html[data-theme='christmas'] .savebar { background: #fff; border-color: #c8263b; color: var(--ice); }
+
+/* ---- home */
+.xm-hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: center; padding: 30px 0 10px; }
+.xm-ribbon { display: inline-block; padding: 5px 20px; background: #c8263b; color: #fff; font: 700 12px var(--body); letter-spacing: .16em; text-transform: uppercase; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%, 10px 50%); }
+.xm-copy h1 { font-size: clamp(76px, 12vw, 140px); line-height: .9; margin: 14px 0 10px; color: #14573b; letter-spacing: .04em; text-shadow: 0 4px 0 #fff, 0 10px 24px rgba(20, 87, 59, .2); }
+.xm-tag { font: 700 24px var(--display); color: #c8263b; margin: 0 0 10px; } .xm-lead { color: var(--steel); font-size: 18px; max-width: 50ch; }
+.xm-cta { display: flex; gap: 12px; flex-wrap: wrap; margin: 22px 0; }
+.xm-scene { display: grid; place-items: center; } .xm-wreath { position: relative; width: min(440px, 92%); aspect-ratio: 1; } .xm-wreath-svg { width: 100%; height: 100%; display: block; }
+.xm-wreath .mark { position: absolute; left: 31%; top: 31%; width: 38%; height: 38%; background: linear-gradient(160deg, #d9a02a, #b8860b); filter: drop-shadow(0 6px 10px rgba(120, 80, 0, .35)); }
+.xm-baubles { display: flex; justify-content: space-around; gap: 16px; flex-wrap: wrap; padding: 60px 0 10px; position: relative; }
+.xm-baubles::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 40px; border-bottom: 3px solid #1b6b4c; border-radius: 0 0 50% 50% / 0 0 100% 100%; opacity: .5; }
+.bauble { position: relative; width: 150px; height: 150px; border-radius: 50%; display: grid; place-content: center; text-align: center; color: #fff; box-shadow: inset -10px -14px 28px rgba(0, 0, 0, .25), inset 10px 10px 22px rgba(255, 255, 255, .35), 0 14px 26px rgba(31, 80, 110, .25); }
+.bauble::before { content: ""; position: absolute; top: -40px; left: 50%; width: 2px; height: 40px; background: #1b6b4c; } .bauble::after { content: ""; position: absolute; top: -12px; left: 50%; width: 26px; height: 14px; transform: translateX(-50%); background: #d9b24c; border-radius: 4px 4px 0 0; }
+.bauble b { font: 700 28px var(--display); } .bauble span { font-size: 13px; opacity: .9; letter-spacing: .06em; }
+.bauble.b1 { background: radial-gradient(circle at 35% 30%, #ff7a8a, #c8263b 60%, #8e1325); margin-top: 20px; } .bauble.b2 { background: radial-gradient(circle at 35% 30%, #5fd9a2, #1f9d63 60%, #146b42); margin-top: 52px; }
+.bauble.b3 { background: radial-gradient(circle at 35% 30%, #8cc4ff, #2a6fb7 60%, #1a4a80); margin-top: 8px; } .bauble.b4 { background: radial-gradient(circle at 35% 30%, #ffe08a, #e0a93a 60%, #a8741a); margin-top: 40px; }
+.xm-gifts { margin-top: 70px; text-align: center; } .xm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; margin-top: 26px; text-align: left; }
+.gift { position: relative; padding: 30px 30px 28px 36px; background: #fff; border-radius: 18px; border: 1px solid var(--edge); box-shadow: 0 12px 28px rgba(31, 80, 110, .12); overflow: hidden; }
+.gift::before { content: ""; position: absolute; top: 0; bottom: 0; right: 36px; width: 18px; background: var(--rib, #c8263b); opacity: .9; } .gift::after { content: ""; position: absolute; left: 0; right: 0; bottom: 34px; height: 14px; background: var(--rib, #c8263b); opacity: .12; }
+.gift.g0 { --rib: #c8263b; } .gift.g1 { --rib: #1f9d63; } .gift.g2 { --rib: #2a6fb7; } .gift.g3 { --rib: #d9a02a; }
+.gift h3 { color: var(--rib); margin: 0 0 6px; } .gift p { margin: 0 50px 0 0; color: var(--steel); }
+.xm-cabin { margin: 70px 0 20px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; padding: 34px 40px; background: linear-gradient(135deg, #14573b, #1b6b4c); color: #fff; border-radius: 30px; box-shadow: 0 18px 40px rgba(20, 87, 59, .35); }
+.xm-cabin h2 { color: #fff; } .xm-cabin p { margin: 0; color: #d5f2e3; } .xm-cabin .btn.ghost { background: transparent; color: #fff; border-color: #9fe0bf; } .xm-cabin .btn:not(.ghost) { background: #fff; color: #14573b; box-shadow: none; }
+.xm-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* ---- dashboard: server cards become gift tags in a grid, ultra gets a bow */
+html[data-theme='christmas'] .srv-card { border-radius: 8px 26px 26px 8px !important; border: 1px solid var(--edge) !important; border-left: 10px solid #1f9d63 !important; background: #fff !important; padding: 20px 22px; position: relative; }
+html[data-theme='christmas'] .srv-card::after { content: ""; position: absolute; right: 16px; top: 16px; width: 12px; height: 12px; border-radius: 50%; border: 3px solid var(--edge2); background: #eaf4fa; }
+html[data-theme='christmas'] .srv-card.frame { border-left-color: #7a4bd0 !important; } html[data-theme='christmas'] .srv-card.plate { border-left-color: #d9a02a !important; }
+html[data-theme='christmas'] .srv-card:hover { transform: rotate(-1deg) translateY(-3px); }
+
+/* ---- server page: header is a centred banner, sections live in a pill dock on the RIGHT */
+html[data-theme='christmas'] .srv-head { background: rgba(255, 255, 255, .9); border-bottom: 3px solid transparent; border-image: repeating-linear-gradient(90deg, #c8263b 0 24px, #fff 24px 48px, #1f9d63 48px 72px) 1; }
+html[data-theme='christmas'] .srv-head .in { justify-content: center; } html[data-theme='christmas'] .srv-head .console { margin-left: 0; }
+html[data-theme='christmas'] .srv-layout { grid-template-columns: 1fr 230px; }
+html[data-theme='christmas'] .srv-main { grid-column: 1; grid-row: 1; }
+html[data-theme='christmas'] .srv-side { grid-column: 2; right: max(16px, calc((100vw - 1180px) / 2)); left: auto; width: 230px; padding: 10px; border-radius: 26px; background: #fff; border: 1px solid var(--edge); box-shadow: 0 14px 34px rgba(31, 80, 110, .16); gap: 3px; }
+html[data-theme='christmas'] .srv-side a { border-left: 0; border-radius: 999px; color: var(--steel); } html[data-theme='christmas'] .srv-side a:hover { background: #eaf4fa; color: var(--ice); }
+html[data-theme='christmas'] .srv-side a.active { background: #c8263b; color: #fff; } html[data-theme='christmas'] .srv-side hr { border-color: var(--edge); } html[data-theme='christmas'] .srv-side .gold a { color: #8a5a00; }
+html[data-theme='christmas'] .sec-head h2 { color: #14573b; }
+
+/* ---- scenery from fx.js */
 .xm-garland { position: relative; }
-.xm-garland::before { content: ""; position: absolute; left: 0; right: 0; bottom: -18px; height: 18px; pointer-events: none; z-index: 41;
-  background: radial-gradient(circle 5px at 12px 8px, #ff5a6a 98%, transparent) 0 0 / 56px 18px repeat-x, radial-gradient(circle 5px at 40px 12px, #ffd36a 98%, transparent) 0 0 / 56px 18px repeat-x,
-    radial-gradient(circle 5px at 26px 8px, #7ff0c0 98%, transparent) 0 0 / 56px 18px repeat-x; animation: xm-twinkle 2.4s steps(2) infinite; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .5)); }
-@keyframes xm-twinkle { 50% { filter: drop-shadow(0 0 4px rgba(255, 255, 255, .5)) brightness(.6); } }
 .xm-snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
 .xm-drift { display: block; width: 100%; height: 54px; margin-bottom: -1px; }
-@media (prefers-reduced-motion: reduce) { .xm-garland::before { animation: none; } }
+html[data-theme='christmas'] .foot { color: var(--steel); } html[data-theme='christmas'] .foot-links a { color: var(--steel); }
+@media (max-width: 960px) {
+  html[data-theme='christmas'] { --nav-h: 90px; }
+  .xm-hero, .xm-cabin { grid-template-columns: 1fr; } .xm-grid { grid-template-columns: 1fr; }
+  .xm-dock { gap: 8px; padding: 0 10px; } .xm-pills { overflow-x: auto; max-width: 56vw; } .xm-pills a { padding: 7px 12px; white-space: nowrap; }
+  html[data-theme='christmas'] .srv-layout { grid-template-columns: 1fr; }
+  html[data-theme='christmas'] .srv-side { position: static !important; width: 100%; right: auto; border-radius: 22px; }
+}
+@media (prefers-reduced-motion: reduce) { .xm-garland { animation: none; } }

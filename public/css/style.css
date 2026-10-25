@@ -496,3 +496,25 @@ button.tr-item { width: 100%; text-align: left; background: none; border: 0; bor
 .theme-card.t-halloween { background: linear-gradient(135deg, #1b0f2e, #3a1500); border-radius: 4px 22px 4px 22px; }
 .theme-card.t-christmas { background: linear-gradient(135deg, #0f2634, #3a1018); border-radius: 22px; }
 .theme-card.on { border-color: var(--arc); box-shadow: 0 0 0 3px rgba(var(--glow), .25); }
+
+/* ------------------------------------------------------------------ owner gate, consistency fixes */
+.gate { min-height: 70vh; display: grid; place-items: center; }
+.gate-card { width: min(420px, 100%); display: grid; gap: 14px; justify-items: center; text-align: center; padding: 36px 30px; background: var(--plate); border: 1px solid var(--edge2); border-radius: 22px; box-shadow: 0 24px 60px rgba(0, 0, 0, .45); }
+.gate-card .mark { width: 64px; height: 64px; } .gate-card h1 { font-size: 28px; margin: 0; } .gate-card p { margin: 0; } .gate-card input { text-align: center; }
+.gate-msg { color: var(--bad); min-height: 1.4em; font-size: 14px; }
+/* One alignment rule: hero blocks may be two-column, every other block is centred, including its buttons. */
+main .cta, .closing .cta, .centered-sections .cta, .about-end .cta { justify-content: center; }
+.hero .cta { justify-content: flex-start; }
+.closing, .closing > * { text-align: center; }
+.page-head, .page-head p { text-align: center; }
+select, option { color-scheme: dark; }
+option { background: #0c1729; color: #eaf5ff; }
+html[data-theme='christmas'] select, html[data-theme='christmas'] option { color-scheme: light; background: #fff; color: #15303a; }
+body.page-server #footer { display: none; }
+.toast { text-align: left; }
+.beta-list { display: grid; gap: 12px; margin-top: 14px; } .beta-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--edge); border-radius: 12px; background: rgba(0, 0, 0, .18); }
+.tabs button { background: transparent; border: 1px solid var(--edge); color: var(--steel); font: 600 14px var(--body); padding: 9px 20px; border-radius: 999px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.tabs button:hover { color: var(--ice); border-color: var(--edge2); }
+.tabs button.active, .tabs button[aria-selected='true'] { background: var(--volt); border-color: var(--volt); color: #fff; }
+html[data-theme='halloween'] .tabs button { border-radius: 2px; font-family: var(--display); letter-spacing: .06em; }
+html[data-theme='christmas'] .tabs button { background: #fff; color: var(--steel); } html[data-theme='christmas'] .tabs button[aria-selected='true'] { background: #c8263b; color: #fff; }

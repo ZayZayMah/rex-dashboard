@@ -59,6 +59,7 @@ BODY = """<body class="page-{script}">
 <footer id="footer"></footer>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <script src="/js/app.js"></script>
+<script src="/js/layouts.js"></script>
 <script src="/js/fx.js"></script>
 {extra}<script src="/js/{script}.js"></script>
 </body>

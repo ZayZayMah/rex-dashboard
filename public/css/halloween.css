@@ -1,71 +1,115 @@
-/* HALLOWEEN - a separate layout, not a recolour. Loaded only while the owners switch the site theme to Halloween. */
+/* HALLOWEEN - "Haunted manor". A different structure, not a recolour:
+   centred masthead nav, tombstone stat row, zig-zag ledger, a tab-bar server page and crypt-door server list.
+   Loaded only while the owners switch the site theme to Halloween. */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Eagle+Lake&display=swap');
 html[data-theme='halloween'] {
   --ink: #07040d; --deep: #0d0715; --plate: #140b1f; --plate2: #1b1029; --edge: #3a1f57; --edge2: #5f2f8a;
   --volt: #ff6a00; --arc: #ffb347; --ice: #f6ead8; --steel: #b8a6c8; --dim: #7d6b92; --glow: 255, 122, 0; --on-accent: #1a0900;
   --gold: #ffcf5c; --prio: #8fb4ff; --ultra: #d49bff;
-  --display: 'Cinzel', 'Georgia', serif; --body: 'Eagle Lake', Georgia, serif;
-  --radius: 4px;
+  --display: 'Cinzel', Georgia, serif; --body: 'Eagle Lake', Georgia, serif;
+  --nav-h: 112px; --head-big: 96px;
 }
-html[data-theme='halloween'] body { background:
-  radial-gradient(520px 520px at 50% -140px, rgba(255, 150, 40, .20), transparent 70%),
-  radial-gradient(900px 500px at 10% 110%, rgba(120, 40, 190, .22), transparent 65%), var(--ink); }
+html[data-theme='halloween'] body { background: radial-gradient(560px 560px at 50% -180px, rgba(255, 150, 40, .22), transparent 70%), radial-gradient(900px 500px at 10% 110%, rgba(120, 40, 190, .22), transparent 65%), var(--ink); }
 html[data-theme='halloween'] body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .7)); }
-html[data-theme='halloween'] h1, html[data-theme='halloween'] h2, html[data-theme='halloween'] h3 { letter-spacing: .04em; text-shadow: 0 2px 0 rgba(0, 0, 0, .6); }
-html[data-theme='halloween'] .hero h1 { background: linear-gradient(180deg, #ffe7b0, #ff9a2e 55%, #b8410b); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 18px rgba(255, 106, 0, .45)); }
+html[data-theme='halloween'] h1, html[data-theme='halloween'] h2, html[data-theme='halloween'] h3 { letter-spacing: .05em; text-shadow: 0 2px 0 rgba(0, 0, 0, .6); }
 
-/* navigation: links left, brand in the middle like a crest, account on the right */
-html[data-theme='halloween'] { --nav-h: 84px; }
-html[data-theme='halloween'] .nav { background: linear-gradient(180deg, rgba(10, 5, 18, .96), rgba(10, 5, 18, .84)); border-bottom: 0; }
+/* ---- masthead */
+html[data-theme='halloween'] .nav { height: var(--nav-h); background: linear-gradient(#06030c, #0c0616); border-bottom: 0; backdrop-filter: none; }
 html[data-theme='halloween'] .nav::after { content: ""; position: absolute; left: 0; right: 0; bottom: -14px; height: 14px; pointer-events: none;
-  background: radial-gradient(circle at 10px 0, #0a0512 9px, transparent 10px) 0 0 / 40px 14px repeat-x, radial-gradient(circle at 30px 0, #0a0512 6px, transparent 7px) 0 0 / 40px 14px repeat-x; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .6)); }
-html[data-theme='halloween'] .nav-in { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; }
-html[data-theme='halloween'] .brand { grid-column: 2; grid-row: 1; flex-direction: column; gap: 0; font-size: 22px; text-align: center; color: var(--arc); }
-html[data-theme='halloween'] .brand .mark { width: 40px; height: 40px; background: linear-gradient(#ffe7b0, #ff7a14); filter: drop-shadow(0 0 10px rgba(255, 122, 0, .7)); }
-html[data-theme='halloween'] .nav-links { grid-column: 1; grid-row: 1; justify-self: start; }
-html[data-theme='halloween'] .nav-end { grid-column: 3; grid-row: 1; justify-self: end; margin: 0; }
-html[data-theme='halloween'] .nav-links > a, html[data-theme='halloween'] .dd > button { font-family: var(--display); letter-spacing: .08em; text-transform: uppercase; font-size: 13px; border-radius: 0; }
-html[data-theme='halloween'] .nav-links > a.active, html[data-theme='halloween'] .dd.active > button { background: none; color: var(--arc); box-shadow: inset 0 -2px 0 var(--arc); }
-html[data-theme='halloween'] .avatar-btn { border-radius: 50% 50% 8px 8px; border-color: var(--volt); }
+  background: radial-gradient(circle at 10px 0, #0c0616 9px, transparent 10px) 0 0 / 40px 14px repeat-x, radial-gradient(circle at 30px 0, #0c0616 6px, transparent 7px) 0 0 / 40px 14px repeat-x; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .6)); }
+.hw-strip { height: 34px; border-bottom: 1px solid #2a1442; font: 12px var(--display); color: var(--dim); letter-spacing: .2em; text-transform: uppercase; }
+.hw-strip .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; }
+.hw-strip .nav-end { gap: 10px; margin: 0; }
+.hw-strip .btn.sm { padding: 3px 14px; font-size: 11px; }
+.hw-strip .avatar-btn { width: 26px; height: 26px; border-width: 1px; box-shadow: none; border-radius: 50% 50% 4px 4px; }
+.hw-mast { height: 78px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; }
+.hw-flank { display: flex; gap: 8px; }
+.hw-flank.l { justify-content: flex-end; } .hw-flank.r { justify-content: flex-start; }
+.hw-flank a { font: 500 14px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--steel); padding: 8px 14px; position: relative; }
+.hw-flank a:hover { color: var(--arc); text-decoration: none; }
+.hw-flank a.active { color: var(--arc); }
+.hw-flank a.active::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 6px; height: 6px; background: var(--volt); transform: translateX(-50%) rotate(45deg); box-shadow: 0 0 10px var(--volt); }
+.hw-crest { display: flex; flex-direction: column; align-items: center; color: var(--arc); font: 700 20px var(--display); letter-spacing: .3em; padding: 0 24px; position: relative; }
+.hw-crest:hover { text-decoration: none; }
+.hw-crest .mark { width: 40px; height: 40px; background: linear-gradient(#ffe7b0, #ff7a14); filter: drop-shadow(0 0 12px rgba(255, 122, 0, .7)); }
+.hw-crest::before, .hw-crest::after { content: none; }
 
-/* buttons: cut like wax seals / banners */
-html[data-theme='halloween'] .btn { border-radius: 2px; font-family: var(--display); letter-spacing: .08em; text-transform: uppercase; font-size: 13px;
-  background: linear-gradient(180deg, #ff8a1f, #c24a00); color: #1a0900; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%); padding: 12px 28px; box-shadow: none; }
+/* ---- surfaces: iron-bound, torn, arched */
+html[data-theme='halloween'] .btn { border-radius: 2px; font-family: var(--display); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; background: linear-gradient(180deg, #ff8a1f, #c24a00); color: #1a0900; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%); padding: 12px 28px; box-shadow: none; }
 html[data-theme='halloween'] .btn:hover { filter: brightness(1.15) drop-shadow(0 0 10px rgba(255, 122, 0, .7)); transform: none; }
-html[data-theme='halloween'] .btn.ghost { background: rgba(255, 122, 0, .08); color: var(--arc); border: 0; box-shadow: inset 0 0 0 1px var(--volt); }
+html[data-theme='halloween'] .btn.ghost { background: rgba(255, 122, 0, .08); color: var(--arc); box-shadow: inset 0 0 0 1px var(--volt); }
 html[data-theme='halloween'] .btn.danger { background: linear-gradient(180deg, #ff4d5f, #a3122a); color: #fff; }
+html[data-theme='halloween'] .btn.discord { background: linear-gradient(180deg, #7a6bff, #4a3fc4); color: #fff; }
 html[data-theme='halloween'] .btn.sm { padding: 8px 18px; }
-
-/* surfaces: torn parchment, iron-bound, gravestone */
 html[data-theme='halloween'] .plate { clip-path: polygon(0 4%, 3% 0, 12% 2%, 24% 0, 40% 3%, 58% 0, 76% 2%, 92% 0, 100% 3%, 100% 96%, 94% 100%, 80% 98%, 60% 100%, 40% 97%, 22% 100%, 8% 98%, 0 100%); border: 0; background: linear-gradient(170deg, #241438, #130a20); }
 html[data-theme='halloween'] .slab { border-radius: 90px 90px 6px 6px / 40px 40px 6px 6px; border-left: 0; border-top: 3px solid var(--volt); padding-top: 34px; background: linear-gradient(#1c1030, #120a1e); }
 html[data-theme='halloween'] .frame { border-radius: 0; background: rgba(20, 11, 31, .8); background-image: none; border: 2px solid var(--edge2); outline: 1px dashed rgba(255, 179, 71, .4); outline-offset: -8px; }
-html[data-theme='halloween'] .well { border-radius: 2px; border: 1px solid var(--edge); background: rgba(0, 0, 0, .4); }
-html[data-theme='halloween'] .panel { border-radius: 2px 22px 2px 22px; }
+html[data-theme='halloween'] .well, html[data-theme='halloween'] .panel { border-radius: 2px; border: 1px solid var(--edge); background: rgba(0, 0, 0, .4); }
 html[data-theme='halloween'] .badge { border-radius: 2px; font-family: var(--display); letter-spacing: .05em; }
 html[data-theme='halloween'] .subnav { border-radius: 0; background: transparent; border: 0; border-bottom: 1px solid var(--edge); }
-html[data-theme='halloween'] .subnav a { border-radius: 0; }
-html[data-theme='halloween'] .subnav a.active { background: none; color: var(--arc); box-shadow: inset 0 -3px 0 var(--volt); }
+html[data-theme='halloween'] .subnav a { border-radius: 0; } html[data-theme='halloween'] .subnav a.active { background: none; color: var(--arc); box-shadow: inset 0 -3px 0 var(--volt); }
+html[data-theme='halloween'] input, html[data-theme='halloween'] select, html[data-theme='halloween'] textarea, html[data-theme='halloween'] .seg, html[data-theme='halloween'] .stepper, html[data-theme='halloween'] .combo-btn { border-radius: 2px; }
+html[data-theme='halloween'] .rocker { border-radius: 4px; } html[data-theme='halloween'] .rocker::after { border-radius: 2px; }
+html[data-theme='halloween'] .switch-card.on { border-color: var(--volt); box-shadow: 0 0 18px rgba(255, 122, 0, .25); }
+html[data-theme='halloween'] .console-bar, html[data-theme='halloween'] .savebar { border-radius: 2px; border-color: var(--volt); }
 
-/* server page: header like a mausoleum plaque, sidebar of tombstones */
+/* ---- home: centred haunted hero, tombstones, zig-zag ledger */
+.hw-hero { position: relative; text-align: center; padding: 60px 0 40px; display: grid; justify-items: center; }
+.hw-moonbed { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); z-index: 0; opacity: .9; pointer-events: none; width: 340px; }
+.hw-hero > *:not(.hw-moonbed) { position: relative; z-index: 1; }
+.hw-title { display: flex; align-items: center; gap: 26px; margin-top: 90px; }
+.hw-title h1 { margin: 0; font-size: clamp(76px, 13vw, 150px); letter-spacing: .12em; padding-left: .12em; background: linear-gradient(180deg, #ffe7b0, #ff9a2e 55%, #b8410b); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 24px rgba(255, 106, 0, .45)); }
+.hw-rule { width: clamp(30px, 10vw, 150px); height: 2px; background: linear-gradient(90deg, transparent, var(--arc)); position: relative; } .hw-rule:last-child { transform: scaleX(-1); }
+.hw-rule::after { content: ""; position: absolute; right: -4px; top: -3px; width: 8px; height: 8px; background: var(--volt); transform: rotate(45deg); }
+.hw-tag { font: italic 500 22px var(--body); color: var(--arc); margin: 6px 0 14px; }
+.hw-lead { max-width: 52ch; color: var(--steel); font-size: 18px; }
+.hw-cta { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 20px 0; }
+.hw-stones { display: flex; justify-content: center; align-items: flex-end; gap: 18px; padding: 30px 0 10px; flex-wrap: wrap; }
+.stone { width: 190px; text-align: center; padding: 38px 14px 22px; border: 2px solid var(--edge2); border-bottom: 0; border-radius: 95px 95px 0 0; background: linear-gradient(#241438, #0f0818); box-shadow: inset 0 0 30px rgba(0, 0, 0, .6), 0 -4px 30px rgba(255, 106, 0, .08); }
+.stone b { display: block; font: 700 34px var(--display); color: var(--arc); } .stone span { color: var(--dim); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; }
+.stone.s1 { height: 190px; } .stone.s2 { height: 220px; } .stone.s3 { height: 170px; } .stone.s4 { height: 205px; }
+.hw-ledger { max-width: 860px; margin: 80px auto 0; } .hw-ledger h2 { text-align: center; margin-bottom: 30px; }
+.hw-ledger ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+.hw-ledger li { display: flex; gap: 22px; align-items: center; width: 78%; padding: 20px 26px; background: linear-gradient(170deg, #211232, #130a20); border: 1px solid var(--edge); border-left: 4px solid var(--volt); }
+.hw-ledger li.r { margin-left: auto; flex-direction: row-reverse; text-align: right; border-left: 1px solid var(--edge); border-right: 4px solid var(--volt); }
+.hw-ledger .num { font: 700 44px var(--display); color: var(--volt); opacity: .8; min-width: 64px; text-align: center; }
+.hw-ledger h3 { margin: 0 0 4px; color: var(--arc); } .hw-ledger p { margin: 0; color: var(--steel); }
+.hw-seance { margin: 80px auto 20px; max-width: 760px; text-align: center; padding: 46px 30px; border: 2px solid var(--edge2); outline: 1px dashed rgba(255, 179, 71, .4); outline-offset: -10px; background: radial-gradient(400px 200px at 50% 0, rgba(255, 106, 0, .12), transparent), rgba(20, 11, 31, .8); }
+.hw-seance p { color: var(--steel); }
+
+/* ---- dashboard: server list becomes a column of crypt doors */
+html[data-theme='halloween'] .srv-grid { grid-template-columns: 1fr; max-width: 720px; margin-inline: auto; }
+html[data-theme='halloween'] .srv-card { clip-path: none !important; border-radius: 80px 80px 4px 4px / 40px 40px 4px 4px !important; border: 2px solid var(--edge2) !important; background: linear-gradient(#1f1130, #120a1e) !important; padding: 26px 30px 22px 36px; outline: 0 !important; }
+html[data-theme='halloween'] .srv-card:hover { border-color: var(--volt) !important; box-shadow: 0 0 26px rgba(255, 106, 0, .25); }
+
+/* ---- server page: the sidebar becomes an arched tab bar under the header, content sits on one parchment */
 html[data-theme='halloween'] .srv-head { background: linear-gradient(180deg, #0f0819, #0a0512); border-bottom: 2px solid var(--edge2); }
 html[data-theme='halloween'] .srv-head .gicon { border-radius: 50% 50% 8px 8px; }
-html[data-theme='halloween'] .srv-side { gap: 8px; }
-html[data-theme='halloween'] .srv-side a { border-left: 0; border-radius: 40px 40px 4px 4px / 22px 22px 4px 4px; background: #171025; border: 1px solid var(--edge); padding: 9px 12px 9px 14px; text-transform: none; }
-html[data-theme='halloween'] .srv-side a.active { background: linear-gradient(#2a1745, #1b0f2e); border-color: var(--volt); color: var(--arc); box-shadow: 0 0 14px rgba(255, 122, 0, .28); }
-html[data-theme='halloween'] .rocker { border-radius: 4px; }
-html[data-theme='halloween'] .rocker::after { border-radius: 2px; }
-html[data-theme='halloween'] .switch-card.on { border-color: var(--volt); box-shadow: 0 0 18px rgba(255, 122, 0, .25); }
-html[data-theme='halloween'] .seg, html[data-theme='halloween'] .seg button, html[data-theme='halloween'] .stepper, html[data-theme='halloween'] input, html[data-theme='halloween'] select, html[data-theme='halloween'] textarea { border-radius: 2px; }
-html[data-theme='halloween'] .console-bar { border-radius: 2px; border-color: var(--volt); }
-html[data-theme='halloween'] .savebar { border-radius: 2px; border: 1px solid var(--volt); }
+html[data-theme='halloween'] .srv-spacer { height: calc(var(--head-big) + 58px); transition: height .25s; }
+html[data-theme='halloween'] body.cond .srv-spacer { height: calc(var(--head-small) + 58px); }
+html[data-theme='halloween'] .srv-layout { grid-template-columns: 1fr; padding-top: 0; }
+html[data-theme='halloween'] .srv-side { position: fixed; z-index: 34; left: 0; right: 0; width: auto; top: calc(var(--nav-h) + var(--head-big)); display: flex; gap: 8px; align-items: flex-end; padding: 10px max(16px, calc((100vw - 1180px) / 2)) 0; max-height: none; overflow-x: auto; overflow-y: hidden; background: #0a0512; border-bottom: 1px solid var(--edge); transition: top .25s; }
+html[data-theme='halloween'] body.cond .srv-side { top: calc(var(--nav-h) + var(--head-small)); max-height: none; }
+html[data-theme='halloween'] .srv-side a { flex: none; white-space: nowrap; border: 1px solid var(--edge); border-bottom: 0; border-radius: 22px 22px 0 0; background: #160d24; padding: 9px 18px 8px; font-size: 13px; letter-spacing: .04em; }
+html[data-theme='halloween'] .srv-side a.active { background: #241438; color: var(--arc); border-color: var(--volt); box-shadow: 0 -6px 16px rgba(255, 106, 0, .22); padding-bottom: 12px; border-left: 1px solid var(--volt); }
+html[data-theme='halloween'] .srv-side hr { width: 1px; height: 24px; margin: 0 4px 6px; border: 0; background: var(--edge); align-self: flex-end; }
+html[data-theme='halloween'] .srv-main { grid-column: 1; margin-top: 20px; padding: 34px 40px; background: linear-gradient(170deg, rgba(36, 20, 56, .75), rgba(14, 8, 24, .85)); border: 1px solid var(--edge); outline: 1px dashed rgba(255, 179, 71, .25); outline-offset: -9px; }
+html[data-theme='halloween'] .sec-head { justify-content: center; border-bottom: 1px solid var(--edge); padding-bottom: 14px; } html[data-theme='halloween'] .sec-desc { text-align: center; margin-inline: auto; }
 
-/* scenery from fx.js */
-.hw-mist { position: fixed; left: -10%; right: -10%; bottom: 0; height: 38vh; pointer-events: none; z-index: 2; opacity: .5;
-  background: radial-gradient(60% 100% at 20% 100%, rgba(170, 120, 255, .22), transparent 70%), radial-gradient(60% 100% at 80% 100%, rgba(255, 140, 60, .14), transparent 70%); animation: hw-drift 18s ease-in-out infinite alternate; }
+/* ---- footer + scenery */
+html[data-theme='halloween'] .foot { justify-content: center; text-align: center; flex-direction: column; }
+.hw-mist { position: fixed; left: -10%; right: -10%; bottom: 0; height: 38vh; pointer-events: none; z-index: 2; opacity: .5; background: radial-gradient(60% 100% at 20% 100%, rgba(170, 120, 255, .22), transparent 70%), radial-gradient(60% 100% at 80% 100%, rgba(255, 140, 60, .14), transparent 70%); animation: hw-drift 18s ease-in-out infinite alternate; }
 @keyframes hw-drift { from { transform: translateX(-3%); } to { transform: translateX(3%); } }
-.hw-moon-wrap { display: flex; justify-content: center; }
-.hw-moon { width: min(200px, 60%); height: auto; filter: drop-shadow(0 0 40px rgba(255, 200, 110, .55)); animation: hw-float 7s ease-in-out infinite; }
+.hw-moon-wrap { display: flex; justify-content: center; } .hw-moon { width: 260px; height: auto; filter: drop-shadow(0 0 50px rgba(255, 200, 110, .55)); animation: hw-float 7s ease-in-out infinite; }
 @keyframes hw-float { 50% { transform: translateY(-8px); } }
 .hw-yard { display: block; width: 100%; height: 90px; margin-bottom: -1px; }
+@media (max-width: 960px) {
+  html[data-theme='halloween'] { --nav-h: 128px; }
+  .hw-mast { display: flex; flex-wrap: wrap; justify-content: center; height: 94px; gap: 0 4px; align-content: center; }
+  .hw-crest { width: 100%; flex-direction: row; justify-content: center; gap: 10px; padding: 0; } .hw-crest .mark { width: 28px; height: 28px; } .hw-crest::before, .hw-crest::after { display: none; }
+  .hw-flank, .hw-flank.l, .hw-flank.r { justify-content: center; } .hw-flank a { padding: 4px 8px; font-size: 11px; letter-spacing: .08em; }
+  .hw-strip .hw-motto { display: none; } .hw-strip .wrap { justify-content: flex-end; }
+  .hw-ledger li, .hw-ledger li.r { width: 100%; }
+  html[data-theme='halloween'] .srv-main { padding: 22px 16px; }
+}
 @media (prefers-reduced-motion: reduce) { .hw-mist, .hw-moon { animation: none; } }

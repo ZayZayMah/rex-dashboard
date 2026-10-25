@@ -56,7 +56,7 @@
 
   /* ---- website */
   function websiteTab(site) {
-    const maint = site.maintenance || {}, status = h('div', { class: 'hint', role: 'status' });
+    const maint = site.maint || site.maintenance || {}, status = h('div', { class: 'hint', role: 'status' });
     const themes = [['normal', 'Normal', 'The standard Rex look.'], ['halloween', 'Halloween', 'A completely separate spooky layout.'], ['christmas', 'Christmas', 'Snow, lights and a winter layout.']];
     let theme = site.theme || 'normal';
     const cards = h('div', { class: 'theme-grid' });
@@ -68,10 +68,18 @@
     mTitle.value = maint.title || ''; mDesc.value = maint.desc || '';
     const support = h('input', { type: 'url', maxlength: 200, placeholder: 'https://discord.gg/...' });
     support.value = site.support_url || '';
+    const BETAS = [['email', 'Email updates', 'Gmail emails with tags, unsubscribe and an email builder.'], ['support', 'Website support tickets', 'Automatic help chat that can escalate to a real ticket in the support server.'], ['builder', 'Custom commands and events', 'The block builder on every server dashboard.']];
+    const beta = Object.assign({ email: 'off', support: 'off', builder: 'off' }, site.beta || {});
+    const testers = h('textarea', { rows: 3, placeholder: 'Discord user IDs, one per line' }); testers.value = (site.testers || []).join('\n');
+    const betaBox = h('div', { class: 'beta-list' });
+    const paintBeta = () => betaBox.replaceChildren(...BETAS.map(([k, name, d]) => h('div', { class: 'beta-row' },
+      h('div', {}, h('b', {}, name), h('div', { class: 'muted small' }, d)),
+      h('div', { class: 'seg', role: 'radiogroup', 'aria-label': name }, ['off', 'testing', 'on'].map((st) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(beta[k] === st), onclick: () => { beta[k] = st; paintBeta(); } }, st[0].toUpperCase() + st.slice(1)))))));
+    paintBeta();
     const save = async () => {
       status.textContent = 'Saving...';
       try {
-        await api('/api/owner/site', { method: 'PUT', body: { theme, maint: { on: mOn.getAttribute('aria-checked') === 'true', title: mTitle.value, desc: mDesc.value }, support_url: support.value } });
+        await api('/api/owner/site', { method: 'PUT', body: { theme, beta, testers: testers.value.split(/[\s,]+/).filter(Boolean), maint: { on: mOn.getAttribute('aria-checked') === 'true', title: mTitle.value, desc: mDesc.value }, support_url: support.value } });
         try { await fetch('/api/site', { cache: 'reload' }); } catch (e) { /* ignore */ }
         status.textContent = 'Saved. Visitors see this within about 15 seconds.';
         try { localStorage.setItem('rex-site-theme', theme); } catch (e) { /* ignore */ }
@@ -82,6 +90,8 @@
       h('div', { class: 'frame' }, h('h3', {}, 'Website theme'), h('p', { class: 'muted small' }, 'Changes the look for everyone, with no code change.'), cards),
       h('div', { class: 'slab' }, h('div', { style: 'display:flex;gap:14px;align-items:center' }, mOn, h('div', {}, h('b', {}, 'Maintenance mode'), h('div', { class: 'muted small' }, 'Covers the whole site with the logo, a title and a message. Owners can still log in at /owner.'))),
         h('div', { class: 'row-1', style: 'margin-top:14px' }, field('Title', mTitle), field('Message', mDesc))),
+      h('div', { class: 'frame' }, h('h3', {}, 'Beta features'), h('p', { class: 'muted small' }, 'Off hides a feature. Testing shows it only to owners and the testers below. On shows it to everyone.'), betaBox,
+        h('label', { class: 'lbl', style: 'margin-top:14px' }, 'Testers'), testers),
       h('div', { class: 'well' }, h('h3', {}, 'Support server link'), h('p', { class: 'muted small' }, 'Where every "Join our support server" button goes on the website. Leave empty for the default. To change the link in the bot, use the owner tools tab.'), support),
       h('div', {}, h('button', { class: 'btn', type: 'button', onclick: save }, 'Save website settings'), status));
   }
@@ -123,7 +133,7 @@
         detail.replaceChildren(h('div', { class: 'frame stack' },
           h('div', { style: 'display:flex;gap:14px;align-items:center' }, h('img', { class: 'av', src: u.avatar_url, alt: '', width: 56, height: 56 }), h('div', {}, h('h3', { style: 'margin:0' }, u.name), h('div', { class: 'muted small' }, '@' + u.username + '  -  ' + u.id))),
           h('table', { class: 'tbl' }, h('tbody', {},
-            h('tr', {}, h('td', {}, 'Email'), h('td', {}, u.email || 'Not shared')), h('tr', {}, h('td', {}, 'First seen'), h('td', {}, fmtDate(u.first_seen))),
+            h('tr', {}, h('td', {}, 'Email'), h('td', {}, u.owner ? 'Hidden (Rex owner)' : u.email || 'Not shared')), h('tr', {}, h('td', {}, 'First seen'), h('td', {}, fmtDate(u.first_seen))),
             h('tr', {}, h('td', {}, 'Last login'), h('td', {}, timeAgo(u.last_login) + ' (' + u.logins + ' logins)')),
             h('tr', {}, h('td', {}, 'Website XP'), h('td', {}, p ? fmtNum(p.web_xp || 0) : 'Not loaded yet')),
             h('tr', {}, h('td', {}, 'Total XP'), h('td', {}, p ? fmtNum(p.servers.reduce((a, s) => a + s.xp, 0)) : 'Not loaded yet')))),
@@ -164,7 +174,7 @@
     try {
       let node;
       if (tab === 'tools') node = toolsTab();
-      else if (tab === 'website') node = websiteTab(await api('/api/site'));
+      else if (tab === 'website') node = websiteTab(await api('/api/owner/site'));
       else if (tab === 'servers') node = await serversTab();
       else if (tab === 'users') node = await usersTab();
       else if (tab === 'audit') node = await auditTab();

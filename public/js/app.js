@@ -211,7 +211,9 @@ async function mountNav(active) {
         h('a', { href: '/live' }, 'Live stats', h('small', {}, 'Status and growth')))),
     h('a', { href: '/dashboard', class: active === 'dashboard' ? 'active' : '' }, 'Dashboard'));
 
-  host.replaceChildren(h('div', { class: 'wrap nav-in' },
+  const themed = window.rexLayout && window.rexLayout.nav[document.documentElement.getAttribute('data-theme')];
+  if (themed) themed(host, { active, end });
+  else host.replaceChildren(h('div', { class: 'wrap nav-in' },
     h('a', { href: '/', class: 'brand', 'aria-label': 'Rex home' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('span', { class: 'w' }, 'REX')),
     links, end));
 
@@ -247,6 +249,9 @@ async function mountNav(active) {
   }
   if (site && site.maintenance && site.maintenance.on && me && me.is_owner) {
     host.after(h('div', { class: 'owner-strip' }, h('div', { class: 'wrap' }, h('span', {}, 'Maintenance mode is ON - visitors see the maintenance page.'), h('a', { href: '/owner#website' }, 'Change'))));
+  }
+  if (me) {   // warm the profile in the background so the profile page opens with data already there
+    try { if (Date.now() - Number(sessionStorage.getItem('rex-warm') || 0) > 120000) { sessionStorage.setItem('rex-warm', String(Date.now())); api('/api/profile').catch(() => {}); } } catch (e) { /* ignore */ }
   }
   document.dispatchEvent(new CustomEvent('rex:ready', { detail: { me, site } }));
   return me;

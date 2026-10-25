@@ -7,7 +7,7 @@ Home (live status) / About (with sub pages Commands, Premium, Live stats) / Dash
 
 ## Update steps
 1. Replace the repo contents with this folder (keep hidden files) and commit. Cloudflare redeploys.
-2. Cloudflare -> Settings -> Variables and Secrets: set `OWNER_ID` to `1500533136591949926,1488216696215965956,1289304415144247399`. Keep `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `BOT_API_KEY`.
+2. Cloudflare -> Settings -> Variables and Secrets: `OWNER_ID` is optional now (the 3 owners are built in). Keep `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `BOT_API_KEY`.
 3. Upload the bot files (see the bot zip) and restart the bot.
 4. Log out and back in once so Discord asks for the `email` permission (Users tab in owner mode shows emails).
 5. Profile -> Enter Owner Mode.
@@ -39,7 +39,7 @@ Cloudflare KV allows about 1,000 writes a day. The site batches writes (bat XP, 
 | `DISCORD_CLIENT_ID` | application client ID |
 | `DISCORD_CLIENT_SECRET` | client secret (Secret) |
 | `BOT_API_KEY` | long random string (Secret) — same value goes in Ryft as `REX_BOT_API_KEY` |
-| `OWNER_ID` | your Discord ID(s), comma separated — unlocks `/admin`, lets you open every server |
+| `OWNER_ID` | optional now: the 3 Rex owner IDs are built in; extra IDs may be added comma separated |
 | `SUPPORT_URL` | optional, defaults to `https://discord.gg/rexsupport` |
 
 4. Install the bot link on Ryft: see `INSTALL.md` in the bot-update download.
@@ -50,3 +50,9 @@ Cloudflare KV allows about 1,000 writes a day. The site batches writes (bat XP, 
 - Adding a setting: add one `S(...)` line to `SECTIONS` in the bot's `rex_dashboard.py`; the website picks it up automatically.
 - Optional artwork: `public/img/avatar.png` appears in the home hero.
 - Never commit secrets. This repo contains none.
+
+
+## Owner gate and beta features
+- `/<owner id>/owner-tools` asks for the owner code you set via the bot DM, then opens Owner mode (12h session).
+- Owner mode > Website > Beta: Gmail email builder, support tickets and the command/event builder each have Off / Testing / On. Testing shows the feature only to owners and the testers list.
+- Owner emails are never stored or shown, not even to other owners.

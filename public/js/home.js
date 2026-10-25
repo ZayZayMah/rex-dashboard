@@ -9,7 +9,9 @@
   const stat = (id, label) => h('div', { class: 'stat' }, h('b', { id }, '-'), h('span', {}, label));
   const feature = (name, text) => h('div', {}, h('b', {}, name), h('span', {}, text));
 
-  app.replaceChildren(
+  const themedHome = window.rexLayout && window.rexLayout.home[document.documentElement.getAttribute('data-theme')];
+  if (themedHome) app.replaceChildren(...themedHome({ inviteUrl, pill }));
+  else app.replaceChildren(
     h('section', { class: 'hero' },
       h('div', {},
         h('h1', {}, 'REX'),
