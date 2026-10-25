@@ -71,6 +71,8 @@ for file, title, desc, script, _home, robots in PAGES:
     extra = ""
     if script in ("commands", "command", "about", "premium", "live"):
         extra = '<script src="/js/catalog.js"></script>\n' if script in ("commands", "command") else ""
+    if script == "server":
+        extra = '<script src="/js/builder.js"></script>\n'
     html = HEAD.format(title=title, desc=desc, origin=ORIGIN, path=path,
                        robots=f'<meta name="robots" content="{robots}">\n' if robots else "")
     if script == "transcript":

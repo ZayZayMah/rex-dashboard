@@ -4,12 +4,13 @@ The schema itself lives in the BOT (bot/rex_dashboard.py -> SECTIONS) and is pus
 the website, so adding a setting never needs a website change. This module only
 validates what the browser sends, using that pushed schema.
 """
+import json
 import re
 
 SNOWFLAKE = re.compile(r"^\d{15,25}$")
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 TIERS = ("free", "premium", "priority", "ultra")
-TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes")
+TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes", "roles", "builder")
 TEXT_KINDS = ("text", "announcement")
 
 
@@ -37,6 +38,8 @@ def sanitize_schema(raw):
             "perm": "admin" if section.get("perm") == "admin" else "manage",
             "settings": [],
         }
+        if section.get("beta") in ("email", "support", "builder"):
+            sec["beta"] = section["beta"]
         for setting in (section.get("settings") or [])[:60]:
             if not isinstance(setting, dict) or setting.get("type") not in TYPES:
                 continue
@@ -55,7 +58,9 @@ def sanitize_schema(raw):
             }
             if setting.get("group"):
                 spec["group"] = clean_str(setting["group"], 60)
-            for flag in ("multiline", "blank_default", "blank_ok", "blank_clears"):
+            if setting.get("kind") in ("command", "event"):
+                spec["kind"] = setting["kind"]
+            for flag in ("multiline", "blank_default", "blank_ok", "blank_clears", "upload"):
                 if setting.get(flag):
                     spec[flag] = True
             for num in ("min", "max", "maxlen", "maxitems"):
@@ -144,6 +149,25 @@ def validate_value(spec, raw, guild):
                 out.append(value)
         return out
 
+    if kind == "builder":
+        if not isinstance(raw, list) or len(raw) > int(spec.get("maxitems", 50)):
+            raise ValueError(f"{label}: too many entries.")
+        if len(json.dumps(raw, separators=(",", ":"))) > 40000:
+            raise ValueError(f"{label} is too large.")
+        return raw
+
+    if kind == "roles":
+        if not isinstance(raw, list) or len(raw) > int(spec.get("maxitems", 20)):
+            raise ValueError(f"{label} can have at most {spec.get('maxitems', 20)} roles.")
+        ids = {r["id"] for r in guild.get("roles", [])}
+        out = []
+        for item in raw:
+            if not isinstance(item, str) or not SNOWFLAKE.match(item) or item not in ids:
+                raise ValueError(f"{label}: a chosen role was not found.")
+            if item not in out:
+                out.append(item)
+        return out
+
     if kind == "tickettypes":
         if not isinstance(raw, list) or len(raw) > 5:
             raise ValueError(f"{label} can have at most 5 types.")
@@ -157,8 +181,14 @@ def validate_value(spec, raw, guild):
             if name.lower() in seen:
                 raise ValueError(f"{label}: two buttons are called '{name}'.")
             seen.add(name.lower())
+            action = item.get("action") if item.get("action") in ("form", "channel", "dm", "link") else "form"
             qs = [clean_str(q, 45) for q in (item.get("questions") or []) if isinstance(q, str)]
-            out.append({"label": name, "questions": [q for q in qs if q][:2]})
+            mo = item.get("max_open", 1)
+            out.append({"label": name, "emoji": clean_str(item.get("emoji"), 8), "action": action,
+                        "url": clean_str(item.get("url"), 300), "category_id": clean_str(item.get("category_id"), 25),
+                        "staff_role_id": clean_str(item.get("staff_role_id"), 25), "welcome": clean_str(item.get("welcome"), 500),
+                        "max_open": mo if isinstance(mo, int) and not isinstance(mo, bool) and 1 <= mo <= 5 else 1,
+                        "questions": [q for q in qs if q][:5]})
         return out
 
     if kind in ("channel", "role", "user"):

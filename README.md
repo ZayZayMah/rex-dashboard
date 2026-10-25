@@ -56,3 +56,8 @@ Cloudflare KV allows about 1,000 writes a day. The site batches writes (bat XP, 
 - `/<owner id>/owner-tools` asks for the owner code you set via the bot DM, then opens Owner mode (12h session).
 - Owner mode > Website > Beta: Gmail email builder, support tickets and the command/event builder each have Off / Testing / On. Testing shows the feature only to owners and the testers list.
 - Owner emails are never stored or shown, not even to other owners.
+
+## Phase 2
+- Image uploads: `/api/upload` stores images in KV (max 400 KB, resized in the browser) and serves them from `/api/img/<id>`.
+- New settings types `roles` and `builder`; sections can be hidden behind a beta flag (`beta: "builder"`).
+- `public/js/builder.js` is the block builder for custom commands and events.

@@ -47,6 +47,7 @@
       case 'role': return roleById[String(v)] ? '@' + roleById[String(v)].name : 'unknown role';
       case 'select': { const o = (spec.options || []).find((x) => String(x.value) === String(v)); return o ? o.label : String(v); }
       case 'tags': return v.join(', ').slice(0, 160);
+      case 'roles': return v.map((id) => (roleById[String(id)] ? '@' + roleById[String(id)].name : 'unknown role')).join(', ').slice(0, 160);
       case 'tickettypes': return v.map((t) => t.label).join(', ');
       case 'text': case 'url': { const s = String(v); return '"' + (s.length > 120 ? s.slice(0, 117) + '...' : s) + '"'; }
       default: return String(v);
@@ -123,23 +124,108 @@
     paint();
     return h('div', { class: 'tagbox' }, input, chipsEl);
   }
+  function rolesControl(spec, locked) {
+    const chosen = () => (Array.isArray(draft[spec.key]) ? draft[spec.key] : []);
+    const chips = h('div', { class: 'chips' });
+    const search = h('input', { type: 'search', placeholder: 'Search roles to add', 'aria-label': 'Search roles', disabled: locked ? true : null });
+    const opts = h('div', { class: 'combo-opts', style: 'max-height:200px;overflow:auto;display:none' });
+    const paint = () => {
+      chips.replaceChildren(...chosen().map((id) => { const r = roleById[id]; return h('button', { type: 'button', class: 'chip', title: 'Remove', disabled: locked ? true : null,
+        onclick: () => { set(spec.key, chosen().filter((x) => x !== id)); paint(); drawOpts(); } },
+        h('span', { class: 'dot', style: r && r.color ? 'background:#' + r.color.toString(16).padStart(6, '0') : '' }), r ? r.name : 'Unknown', h('span', { class: 'n' }, 'x')); }));
+      if (!chosen().length) chips.append(h('span', { class: 'muted small' }, 'No roles chosen'));
+    };
+    const drawOpts = () => {
+      const f = search.value.trim().toLowerCase();
+      const rows = guild.roles.filter((r) => !r.managed && !chosen().includes(r.id) && (!f || r.name.toLowerCase().includes(f))).slice(0, 80);
+      opts.style.display = f || document.activeElement === search ? 'block' : 'none';
+      opts.replaceChildren(...rows.map((r) => h('button', { type: 'button', onclick: () => { if (chosen().length >= (spec.maxitems || 20)) return; set(spec.key, chosen().concat([r.id])); search.value = ''; paint(); drawOpts(); } },
+        h('span', { class: 'dot', style: r.color ? 'background:#' + r.color.toString(16).padStart(6, '0') : '' }), r.name)));
+    };
+    search.addEventListener('input', drawOpts); search.addEventListener('focus', drawOpts);
+    search.addEventListener('blur', () => setTimeout(() => { opts.style.display = 'none'; }, 180));
+    paint();
+    return h('div', { class: 'tagbox' }, chips, search, opts);
+  }
+  const fileToImage = (file, maxW, maxH) => new Promise((resolve, reject) => {
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return reject(new Error('Choose a PNG, JPG, WebP or GIF image.'));
+    const rd = new FileReader();
+    rd.onerror = () => reject(new Error('Could not read that file.'));
+    rd.onload = () => {
+      if (file.type === 'image/gif' && file.size < 400 * 1024) return resolve(rd.result);
+      const img = new Image();
+      img.onerror = () => reject(new Error('That image could not be opened.'));
+      img.onload = () => {
+        const k = Math.min(1, maxW / img.width, maxH / img.height);
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        let out = c.toDataURL('image/webp', 0.9);
+        if (!out.startsWith('data:image/webp')) out = c.toDataURL('image/jpeg', 0.88);
+        let q = 0.8;
+        while (out.length * 0.75 > 400 * 1024 && q > 0.3) { out = c.toDataURL('image/jpeg', q); q -= 0.15; }
+        if (out.length * 0.75 > 400 * 1024) return reject(new Error('That image is too big even after shrinking.'));
+        resolve(out);
+      };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+  function uploadButton(spec, el, locked) {
+    const dims = /banner/.test(spec.key) ? [1100, 440] : /avatar/.test(spec.key) ? [512, 512] : [1024, 1024];
+    const input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', style: 'display:none' });
+    const status = h('span', { class: 'muted small' });
+    const thumb = h('img', { alt: '', style: 'height:40px;max-width:80px;border-radius:8px;object-fit:cover;display:none' });
+    const paintThumb = () => { const v = el.value; if (/^https?:/.test(v)) { thumb.src = v; thumb.style.display = ''; } else thumb.style.display = 'none'; };
+    input.addEventListener('change', async () => {
+      const f = input.files && input.files[0]; if (!f) return;
+      status.textContent = 'Uploading...';
+      try {
+        const dataUrl = await fileToImage(f, dims[0], dims[1]);
+        const r = await api('/api/upload', { method: 'POST', body: { data: dataUrl } });
+        el.value = r.url; set(spec.key, r.url); paintThumb(); status.textContent = 'Uploaded. Save to apply.';
+      } catch (e) { status.textContent = ''; toast(e.message, 'bad'); }
+      input.value = '';
+    });
+    el.addEventListener('input', paintThumb); paintThumb();
+    return h('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap' },
+      h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, onclick: () => input.click() }, icon('plus', 14), ' Upload a file'), thumb, status, input);
+  }
   function ticketTypes(spec, locked) {
     const box = h('div', { class: 'tt-list' });
-    let rows = (Array.isArray(draft[spec.key]) ? draft[spec.key] : []).map((t) => ({ label: t.label || '', questions: (t.questions || []).slice(0, 2) }));
-    const push = () => set(spec.key, rows.filter((r) => r.label.trim()).map((r) => ({ label: r.label.trim(), questions: r.questions.map((q) => q.trim()).filter(Boolean) })));
+    const cats = guild.channels.filter((c) => c.type === 'category');
+    const roles = guild.roles.filter((r) => !r.managed).sort((a, b) => b.position - a.position);
+    let rows = (Array.isArray(draft[spec.key]) ? draft[spec.key] : []).map((t) => Object.assign({ label: '', emoji: '', action: 'form', url: '', category_id: '', staff_role_id: '', welcome: '', max_open: 1, questions: [] }, t, { questions: (t.questions || []).slice(0, 5) }));
+    const push = () => set(spec.key, rows.filter((r) => r.label.trim()).map((r) => ({ label: r.label.trim(), emoji: r.emoji.trim(), action: r.action, url: r.url.trim(), category_id: r.category_id || '', staff_role_id: r.staff_role_id || '', welcome: r.welcome.trim(), max_open: r.max_open || 1, questions: r.questions.map((q) => q.trim()).filter(Boolean) })));
+    const dis = locked ? true : null;
+    const field = (label, el) => h('label', { class: 'tt-f' }, h('span', {}, label), el);
+    const sel = (opts, val, on) => { const e = h('select', { disabled: dis }, opts.map((o) => h('option', { value: o[0] }, o[1]))); e.value = String(val || ''); e.addEventListener('change', () => on(e.value)); return e; };
+    const ACTIONS = [['form', 'Form, then ticket'], ['channel', 'Ticket straight away'], ['dm', 'Ticket in DMs'], ['link', 'Open a link']];
     function paint() {
       box.replaceChildren(...rows.map((r, i) => h('div', { class: 'tt' },
-        h('input', { type: 'text', placeholder: 'Button name', maxlength: 45, value: r.label, disabled: locked ? true : null, 'aria-label': 'Button name', oninput: (e) => { r.label = e.target.value; push(); } }),
-        h('input', { type: 'text', placeholder: 'First question', maxlength: 45, value: r.questions[0] || '', disabled: locked ? true : null, 'aria-label': 'First question', oninput: (e) => { r.questions[0] = e.target.value; push(); } }),
-        h('input', { type: 'text', placeholder: 'Second question (optional)', maxlength: 45, value: r.questions[1] || '', disabled: locked ? true : null, 'aria-label': 'Second question', oninput: (e) => { r.questions[1] = e.target.value; push(); } }),
-        h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, 'aria-label': 'Remove', onclick: () => { rows.splice(i, 1); paint(); push(); } }, icon('trash', 16)))),
-        rows.length < (spec.maxitems || 5) ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, onclick: () => { rows.push({ label: '', questions: [''] }); paint(); } }, icon('plus', 14), ' Add a ticket type')) : null);
+        h('div', { class: 'tt-top' },
+          h('b', {}, 'Button ' + (i + 1)),
+          h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, 'aria-label': 'Remove button', onclick: () => { rows.splice(i, 1); paint(); push(); } }, icon('trash', 16))),
+        h('div', { class: 'tt-grid' },
+          field('Button name', h('input', { type: 'text', maxlength: 45, value: r.label, disabled: dis, placeholder: 'e.g. Report a player', oninput: (e) => { r.label = e.target.value; push(); } })),
+          field('Emoji (optional)', h('input', { type: 'text', maxlength: 8, value: r.emoji, disabled: dis, placeholder: '🎫', oninput: (e) => { r.emoji = e.target.value; push(); } })),
+          field('What the button does', sel(ACTIONS, r.action, (v) => { r.action = v; paint(); push(); })),
+          r.action === 'link' ? field('Link', h('input', { type: 'url', maxlength: 300, value: r.url, disabled: dis, placeholder: 'https://', oninput: (e) => { r.url = e.target.value; push(); } })) : null,
+          r.action !== 'link' ? field('Category for the ticket', sel([['', 'Use the default category']].concat(cats.map((c) => [c.id, c.name])), r.category_id, (v) => { r.category_id = v; push(); })) : null,
+          r.action !== 'link' ? field('Staff role', sel([['', 'Use the default staff role']].concat(roles.map((x) => [x.id, x.name])), r.staff_role_id, (v) => { r.staff_role_id = v; push(); })) : null,
+          r.action !== 'link' ? field('Tickets per person', sel([['1', '1'], ['2', '2'], ['3', '3'], ['5', '5']], r.max_open, (v) => { r.max_open = parseInt(v, 10); push(); })) : null),
+        r.action !== 'link' ? field('Welcome message (optional, use {user} and {server})', h('textarea', { maxlength: 500, disabled: dis, rows: 2, oninput: (e) => { r.welcome = e.target.value; push(); } }, r.welcome)) : null,
+        (r.action === 'form' || r.action === 'dm') ? h('div', { class: 'tt-q' }, h('span', { class: 'muted small' }, 'Questions (up to 5)'),
+          ...r.questions.map((q, qi) => h('div', { style: 'display:flex;gap:6px' },
+            h('input', { type: 'text', maxlength: 45, value: q, disabled: dis, placeholder: 'Question ' + (qi + 1), oninput: (e) => { r.questions[qi] = e.target.value; push(); } }),
+            h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { r.questions.splice(qi, 1); paint(); push(); } }, icon('trash', 14)))),
+          r.questions.length < 5 ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { r.questions.push(''); paint(); } }, icon('plus', 14), ' Add a question')) : null) : null)),
+        rows.length < (spec.maxitems || 5) ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { rows.push({ label: '', emoji: '', action: 'form', url: '', category_id: '', staff_role_id: '', welcome: '', max_open: 1, questions: [''] }); paint(); } }, icon('plus', 14), ' Add a ticket button')) : null);
     }
     paint();
     return box;
   }
   function textControl(spec, locked) {
-    const isColor = /_embed_color$/.test(spec.key);
+    const isColor = /embed_color$/.test(spec.key);
     const el = spec.multiline
       ? h('textarea', { id: 'f-' + spec.key, maxlength: spec.maxlen || 200, disabled: locked ? true : null })
       : h('input', { id: 'f-' + spec.key, type: spec.type === 'url' ? 'url' : 'text', maxlength: spec.maxlen || 200, disabled: locked ? true : null, placeholder: spec.blank_clears || spec.blank_ok ? 'Off' : '' });
@@ -152,6 +238,7 @@
       sw.addEventListener('input', () => { el.value = sw.value; set(spec.key, sw.value); });
       return h('div', { style: 'display:flex;gap:8px' }, el, sw);
     }
+    if (spec.type === 'url' && spec.upload) return h('div', {}, el, uploadButton(spec, el, locked));
     return el;
   }
   function control(spec, locked) {
@@ -170,6 +257,7 @@
       case 'user': { const el = h('input', { id: 'f-' + spec.key, type: 'text', inputmode: 'numeric', placeholder: 'Discord user ID', maxlength: 25, disabled: locked ? true : null, oninput: (e) => set(spec.key, e.target.value.trim()) }); el.value = draft[spec.key] ? String(draft[spec.key]) : ''; return el; }
       case 'tags': return tagControl(spec, locked);
       case 'tickettypes': return ticketTypes(spec, locked);
+      case 'roles': return rolesControl(spec, locked);
       default: return h('span', { class: 'muted' }, 'Unsupported setting');
     }
   }
@@ -178,11 +266,11 @@
     return '';
   }
   function nameLine(spec, sectionLock) {
-    return [spec.label, spec.tier !== 'free' && !sectionLock ? tierBadge(spec.tier) : null];
+    return [spec.label, spec.tier !== 'free' && !sectionLock && !tierOn(spec.tier) ? tierBadge(spec.tier) : null];
   }
   function settingRow(spec, sectionLock) {
     const reason = sectionLock || lockReason(spec), locked = !!reason;
-    const wide = spec.type === 'tickettypes' || (spec.type === 'text' && spec.multiline);
+    const wide = spec.type === 'tickettypes' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
     return h('div', { class: 'set-row' + (locked ? ' locked' : '') + (wide ? ' wide' : '') },
       h('div', {}, h('label', { class: 'name', for: 'f-' + spec.key }, nameLine(spec, sectionLock)), h('div', { class: 'desc' }, spec.description),
         hintFor(spec) ? h('div', { class: 'hint' }, hintFor(spec)) : null,
@@ -205,6 +293,10 @@
     if (secLock === 'tier') box.append(h('div', { class: 'tier-lock' }, h('span', {}, 'This section needs ' + TIER_LABEL[sec.tier] + ' on this server.'),
       h('a', { href: '#premium' }, 'Redeem a code'), h('a', { href: '/premium#' + sec.tier }, 'See what is included')));
     else if (secLock === 'perm') box.append(h('div', { class: 'tier-lock' }, 'Changing these settings needs the Administrator permission in Discord.'));
+    if (sec.settings.length === 1 && sec.settings[0].type === 'builder') {
+      box.append(rexBuilder.mount({ spec: sec.settings[0], draft, set, guild, errors, locked: !!secLock || !!lockReason(sec.settings[0]), unlimited: tierOn('ultra') || tierOn('priority') }));
+      return box;
+    }
     const groups = [];
     sec.settings.forEach((s) => {
       const name = s.group || '';
@@ -335,7 +427,7 @@
     const name = sec ? sec.name : pse ? pse.name : 'Owner';
     const desc = sec ? sec.description : id === 'premium' ? 'See which tiers this server has and redeem a code.' : id === 'transcripts' ? 'Ticket transcripts saved as web pages.' : 'Rex owner controls for this server.';
     const frame = [...banners(),
-      h('div', { class: 'sec-head' }, h('h2', {}, name), sec && sec.tier !== 'free' ? tierBadge(sec.tier) : null),
+      h('div', { class: 'sec-head' }, h('h2', {}, name), sec && sec.tier !== 'free' && !tierOn(sec.tier) ? tierBadge(sec.tier) : null),
       h('p', { class: 'sec-desc' }, desc)];
     main.replaceChildren(...frame, h('div', { id: 'sec-body' }));
     const body = document.getElementById('sec-body');

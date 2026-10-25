@@ -16,6 +16,7 @@ Variables / secrets (Cloudflare -> Workers & Pages -> rex -> Settings -> Variabl
 The BOT is the source of truth for settings. Website saves go into a queue; the bot picks them
 up, re-checks them (who you are in Discord, your permissions, the server's tier) and applies them.
 """
+import base64
 import hashlib
 import hmac
 import json
@@ -62,6 +63,7 @@ THEMES = ("normal", "halloween", "christmas")
 # The three Rex owners always count as owners, even if the OWNER_ID variable in Cloudflare is missing or incomplete.
 DEFAULT_OWNERS = ("1500533136591949926", "1488216696215965956", "1289304415144247399")
 BETA_FEATURES = ("email", "support", "builder")
+BETA_KEYS = {"builder_commands": "builder", "builder_events": "builder"}
 BETA_STATES = ("off", "testing", "on")
 TIER_WEIGHT = {"priority": 4, "ultra": 3, "premium": 2, "free": 1}
 OWNER_OPS = ("tier", "blacklist", "invite", "dm", "gen_code", "owner_tool")
@@ -505,6 +507,8 @@ class Default(WorkerEntrypoint):
             return await self.api_public_schema()
         if path == "/api/ownergate" and method == "POST":
             return await self.api_ownergate(request, url)
+        if path.startswith("/api/img/") and method == "GET":
+            return await self.api_img_get(path)
         if path.startswith("/api/bot/"):
             return await self.route_bot(request, path, method)
         if path.startswith("/api/"):
@@ -622,6 +626,48 @@ class Default(WorkerEntrypoint):
             watch[uid] = t
             watch = {k: v for k, v in watch.items() if t - int(v) < WATCH_MAX_AGE}
             await self.store.put("watch", watch)
+
+    # ---- image uploads (website -> hosted link the bot can use)
+    IMG_MAX = 420 * 1024
+
+    async def api_upload(self, request, url, session):
+        self.check_mutation(request, url, session)
+        uid = str(session.get("uid") or "")
+        if rate_limited("up:" + uid, 30, 3600):
+            raise HttpError(429, "slow_down", "Too many uploads. Try again later.")
+        body = await self.read_json(request, 700 * 1024)
+        raw = str((body or {}).get("data") or "") if isinstance(body, dict) else ""
+        m = re.match(r"^data:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$", raw)
+        if not m:
+            raise HttpError(400, "bad_image", "Upload a PNG, JPG, WebP or GIF image.")
+        try:
+            blob = base64.b64decode(m.group(2), validate=True)
+        except ValueError:
+            raise HttpError(400, "bad_image", "That image could not be read.")
+        if len(blob) > self.IMG_MAX:
+            raise HttpError(413, "too_large", "Image is too big. Keep it under 400 KB.")
+        magic = {"image/png": b"\x89PNG", "image/jpeg": b"\xff\xd8\xff", "image/gif": b"GIF8", "image/webp": b"RIFF"}[m.group(1)]
+        if not blob.startswith(magic):
+            raise HttpError(400, "bad_image", "That file is not really that kind of image.")
+        img_id = secrets.token_urlsafe(14).replace("-", "a").replace("_", "b")
+        await self.store.put("img:" + img_id, {"ct": m.group(1), "b64": m.group(2), "by": uid, "at": int(time.time())})
+        return json_response({"url": self.public_origin(url) + "/api/img/" + img_id})
+
+    async def api_img_get(self, path):
+        img_id = path.rsplit("/", 1)[-1]
+        if not ASSET_HASH.match(img_id):
+            raise HttpError(404, "not_found", "Not found.")
+        rec = await self.store.get("img:" + img_id)
+        if not rec:
+            raise HttpError(404, "not_found", "Not found.")
+        blob = base64.b64decode(rec["b64"])
+        headers = {"Content-Type": rec["ct"], "Cache-Control": "public, max-age=31536000, immutable",
+                   "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
+                   "Access-Control-Allow-Origin": "*"}
+        try:
+            return Response(blob, status=200, headers=headers)
+        except TypeError:
+            return Response(to_js(blob), status=200, headers=headers)
 
     # ---- owner gate: /<owner id>/owner-tools asks for a personal code the bot DMed the owner about
     async def api_ownergate(self, request, url):
@@ -751,6 +797,8 @@ class Default(WorkerEntrypoint):
             return await self.api_result(session, url)
         if path == "/api/me/delete" and method == "POST":
             return await self.api_delete_me(request, url, session)
+        if path == "/api/upload" and method == "POST":
+            return await self.api_upload(request, url, session)
         if path == "/api/transcript" and method == "DELETE":
             return await self.api_transcript_delete(request, url, session)
         if path.startswith("/api/owner/"):
@@ -863,13 +911,22 @@ class Default(WorkerEntrypoint):
                 "member_count": guild.get("member_count", 0), "tiers": public_tiers(guild.get("tiers") or {}),
                 "channels": guild.get("channels", []), "roles": guild.get("roles", []),
             },
-            "schema": await self.get_schema(),
+            "schema": await self.visible_schema(session),
             "can_admin": access["admin"],
             "owner_override": self.is_owner(session),
             "bot_online": bool(stats) and t - stats.get("ts", 0) < ONLINE_WINDOW,
             "support_url": self.support_url,
         })
         return json_response(body)
+
+    async def visible_schema(self, session):
+        schema = await self.get_schema()
+        if not schema:
+            return schema
+        site = await self.get_site()
+        uid = session["user"]["id"]
+        secs = [x for x in schema.get("sections", []) if not x.get("beta") or self.beta_on(site, x["beta"], uid)]
+        return dict(schema, sections=secs)
 
     async def api_guild_save(self, request, url, session, gid):
         self.check_mutation(request, url, session)
@@ -895,6 +952,9 @@ class Default(WorkerEntrypoint):
             spec = index.get(key)
             if spec is None:
                 errors[str(key)[:60]] = "Unknown setting."
+                continue
+            if key in BETA_KEYS and not self.beta_on(await self.get_site(), BETA_KEYS[key], user["id"]):
+                errors[key] = "This feature is not available yet."
                 continue
             if not owner and not tier_active(guild, spec["tier"]):
                 errors[key] = f"{spec['label']} needs REX {spec['tier'].title()} on this server."
