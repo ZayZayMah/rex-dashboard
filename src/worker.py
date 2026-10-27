@@ -16,6 +16,7 @@ Variables / secrets (Cloudflare -> Workers & Pages -> rex -> Settings -> Variabl
 The BOT is the source of truth for settings. Website saves go into a queue; the bot picks them
 up, re-checks them (who you are in Discord, your permissions, the server's tier) and applies them.
 """
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -30,6 +31,7 @@ from js import fetch as js_fetch
 from pyodide.ffi import to_js
 from workers import Response, WorkerEntrypoint
 
+import features
 from schema import (
     SNOWFLAKE,
     clean_str,
@@ -66,7 +68,7 @@ BETA_FEATURES = ("email", "support", "builder")
 BETA_KEYS = {"builder_commands": "builder", "builder_events": "builder"}
 BETA_STATES = ("off", "testing", "on")
 TIER_WEIGHT = {"priority": 4, "ultra": 3, "premium": 2, "free": 1}
-OWNER_OPS = ("tier", "blacklist", "invite", "dm", "gen_code", "owner_tool")
+OWNER_OPS = ("tier", "blacklist", "invite", "dm", "gen_code", "owner_tool", "register_code")
 IMG_URL = re.compile(r"^https://[^\s<>\"']{4,500}$")
 
 SECURITY_HEADERS = {
@@ -310,6 +312,16 @@ def sanitize_stats(raw):
         if value is not None:
             out[key] = value
     out["version"] = clean_str(raw.get("version"), 60)
+    out["uptime_reason"] = clean_str(raw.get("uptime_reason"), 60)
+    sc = raw.get("status_cfg")
+    if isinstance(sc, dict):
+        stat = sc.get("static") if isinstance(sc.get("static"), dict) else {}
+        out["status_cfg"] = {
+            "lines": [{"type": clean_str(x.get("type"), 12), "text": clean_str(x.get("text"), 128), "cat": clean_str(x.get("cat"), 12)} for x in (sc.get("lines") or [])[:60] if isinstance(x, dict)],
+            "rotate": bool(sc.get("rotate", True)), "interval": clean_int(sc.get("interval")) or 60,
+            "static": {"type": clean_str(stat.get("type"), 12), "text": clean_str(stat.get("text"), 128)},
+            "off_cats": [clean_str(c, 12) for c in (sc.get("off_cats") or [])[:10]],
+        }
     features = {}
     if isinstance(raw.get("features"), dict):
         for name, info in list(raw["features"].items())[:40]:
@@ -507,6 +519,8 @@ class Default(WorkerEntrypoint):
             return await self.api_public_schema()
         if path == "/api/ownergate" and method == "POST":
             return await self.api_ownergate(request, url)
+        if path == "/api/unsub" and method in ("GET", "POST"):
+            return await features.unsub_route(self, request, url, method)
         if path.startswith("/api/img/") and method == "GET":
             return await self.api_img_get(path)
         if path.startswith("/api/bot/"):
@@ -609,14 +623,61 @@ class Default(WorkerEntrypoint):
         }
         await self.store.put("sess:" + token_hash(token), session, ttl=SESSION_TTL)
         email = clean_str(user.get("email"), 120) if user.get("verified") and uid not in self.owner_ids() else ""   # owner emails are never stored
-        users = await self.store.get("users") or {}
-        prev = users.get(uid) or {}
-        users[uid] = {"n": session["user"]["name"], "u": session["user"]["username"], "a": session["user"]["avatar"],
-                      "e": email or prev.get("e", ""), "ll": now(), "lc": int(prev.get("lc", 0)) + 1,
-                      "fs": prev.get("fs") or now(), "g": [g["id"] for g in managed][:100]}
-        await self.store.put("users", users)
+        prev = await self.get_user(uid) or {}
+        rec = dict(prev)
+        rec.update({"n": session["user"]["name"], "u": session["user"]["username"], "a": session["user"]["avatar"],
+                    "e": email or prev.get("e", ""), "ll": now(), "lc": int(prev.get("lc", 0)) + 1,
+                    "fs": prev.get("fs") or now(), "g": [g["id"] for g in managed][:100]})
+        await self.put_user(uid, rec)
         await self.touch_watch(uid, force=True)
         return redirect("/dashboard", make_cookie(SESSION_COOKIE, token, SESSION_TTL))
+
+    # ---- users are spread over 16 shards so logins never overwrite each other
+    @staticmethod
+    def user_shard(uid):
+        return "users:" + hashlib.sha1(uid.encode()).hexdigest()[0]
+
+    async def get_user(self, uid):
+        rec = (await self.store.get(self.user_shard(uid)) or {}).get(uid)
+        if rec is None:
+            rec = (await self.store.get("users") or {}).get(uid)   # older single-key storage
+        return rec
+
+    async def put_user(self, uid, rec):
+        key = self.user_shard(uid)
+        shard = await self.store.get(key) or {}
+        shard[uid] = rec
+        await self.store.put(key, shard)
+
+    async def del_user(self, uid):
+        key = self.user_shard(uid)
+        shard = await self.store.get(key) or {}
+        if uid in shard:
+            del shard[uid]
+            await self.store.put(key, shard)
+        legacy = await self.store.get("users") or {}
+        if uid in legacy:
+            del legacy[uid]
+            await self.store.put("users", legacy)
+
+    async def all_users(self):
+        keys = ["users:" + c for c in "0123456789abcdef"]
+        parts = await asyncio.gather(*[self.store.get(k) for k in keys], self.store.get("users"))
+        merged = dict(parts[-1] or {})
+        for part in parts[:-1]:
+            merged.update(part or {})
+        return merged
+
+    async def note_user(self, session):
+        """Make sure everyone who is logged in shows up in the owner users list, even if they logged in before this existed."""
+        uid = session["user"]["id"]
+        if uid in _CACHE.setdefault("noted", set()):
+            return
+        _CACHE["noted"].add(uid)
+        if await self.get_user(uid) is None:
+            u = session["user"]
+            await self.put_user(uid, {"n": u["name"], "u": u["username"], "a": u["avatar"], "e": "", "ll": now(), "lc": 1, "fs": now(),
+                                      "g": [g["id"] for g in session.get("guilds", [])][:100]})
 
     async def touch_watch(self, uid, force=False):
         """Remember who is around so the bot keeps their profile fresh, and polls fast while they are here."""
@@ -688,8 +749,7 @@ class Default(WorkerEntrypoint):
             raise HttpError(403, "no_code", "No owner code has been created yet. The bot DMs you a button to create one when it starts.")
         if not safe_equal(hashlib.sha256((rec["salt"] + code).encode()).hexdigest(), rec["hash"]):
             raise bad
-        users = await self.store.get("users") or {}
-        known = users.get(uid) or {}
+        known = await self.get_user(uid) or {}
         token = secrets.token_urlsafe(32)
         ttl = 12 * 3600
         session = {
@@ -755,7 +815,7 @@ class Default(WorkerEntrypoint):
             "last_seen": stats.get("ts") if stats else None,
         }
         if stats:
-            for key in ("latency_ms", "uptime_s", "guild_count", "user_count", "command_count"):
+            for key in ("latency_ms", "uptime_s", "guild_count", "user_count", "command_count", "uptime_reason"):
                 body[key] = stats.get(key)
         return json_response(body, headers={"Cache-Control": "public, max-age=30"})
 
@@ -781,6 +841,7 @@ class Default(WorkerEntrypoint):
         session = await self.require_session(request)
 
         if path == "/api/me" and method == "GET":
+            await self.note_user(session)
             return await self.api_me(session)
         if path == "/api/profile" and method == "GET":
             return await self.api_profile(session)
@@ -803,6 +864,10 @@ class Default(WorkerEntrypoint):
             return await self.api_transcript_delete(request, url, session)
         if path.startswith("/api/owner/"):
             return await self.route_owner(request, url, path, method, session)
+        if path == "/api/email/prefs":
+            return await features.prefs_route(self, request, url, path, method, session)
+        if path == "/api/support" or path.startswith("/api/support/"):
+            return await features.route(self, request, url, path, method, session)
 
         parts = path.split("/")  # ['', 'api', 'guilds', '<id>', 'settings']
         if len(parts) in (4, 5) and parts[2] == "guilds":
@@ -822,7 +887,7 @@ class Default(WorkerEntrypoint):
 
     async def api_me(self, session):
         index = await self.store.get("bot:guilds") or {}
-        owner = self.is_owner(session)
+        owner = self.owner_mode(session)
         listed = set()
         guilds = []
         for g in session["guilds"]:
@@ -849,7 +914,7 @@ class Default(WorkerEntrypoint):
             "user": {"id": user["id"], "name": user["name"], "username": user["username"],
                      "avatar_url": avatar_url(user["id"], user["avatar"])},
             "csrf": session["csrf"],
-            "is_owner": owner,
+            "is_owner": self.is_owner(session),
             "owner_mode": self.owner_mode(session),
             "support_url": self.support_url,
             "beta": {k: self.beta_on(await self.get_site(), k, user["id"]) for k in BETA_FEATURES},
@@ -881,7 +946,7 @@ class Default(WorkerEntrypoint):
         for g in session["guilds"]:
             if g["id"] == gid:
                 return {"admin": bool(g.get("admin", g.get("owner")))}
-        if self.is_owner(session):
+        if self.owner_mode(session):
             return {"admin": True}
         raise HttpError(403, "forbidden", "You need Manage Server permission in that server.")
 
@@ -902,7 +967,7 @@ class Default(WorkerEntrypoint):
             body["owner_info"] = {"owner_id": guild.get("owner_id"), "owner_name": guild.get("owner_name"),
                                   "created": guild.get("created"), "blacklisted": guild.get("blacklisted")}
         me_owner = next((g.get("owner") for g in session["guilds"] if g["id"] == gid), False)
-        body["can_undo"] = bool(me_owner) or self.is_owner(session)
+        body["can_undo"] = bool(me_owner) or self.owner_mode(session)
         await self.touch_watch(session["user"]["id"])
         stats = await self.store.get("stats:latest")
         body.update({
@@ -913,7 +978,7 @@ class Default(WorkerEntrypoint):
             },
             "schema": await self.visible_schema(session),
             "can_admin": access["admin"],
-            "owner_override": self.is_owner(session),
+            "owner_override": self.owner_mode(session),
             "bot_online": bool(stats) and t - stats.get("ts", 0) < ONLINE_WINDOW,
             "support_url": self.support_url,
         })
@@ -946,7 +1011,7 @@ class Default(WorkerEntrypoint):
             raise HttpError(400, "bad_request", "Send a non-empty 'changes' object.")
 
         index = index_schema(schema)
-        owner = self.is_owner(session)
+        owner = self.owner_mode(session)
         errors, clean = {}, {}
         for key, raw in changes.items():
             spec = index.get(key)
@@ -985,7 +1050,7 @@ class Default(WorkerEntrypoint):
             raise HttpError(429, "queue_full", "Several changes are already waiting for REX. Try again shortly.")
         entry_id = secrets.token_hex(6)
         silent = bool(body.get("silent")) and self.owner_mode(session)
-        entries.append({"id": entry_id, "ts": t, "by": user["id"], "byname": user["name"], "changes": clean, "silent": silent})
+        entries.append({"id": entry_id, "ts": t, "by": user["id"], "byname": user["name"], "changes": clean, "silent": silent, "om": self.owner_mode(session)})
         await self.store.put("q:all", queue)
         return json_response({"queued": True, "id": entry_id, "keys": list(clean.keys())}, status=202)
 
@@ -1107,10 +1172,7 @@ class Default(WorkerEntrypoint):
     async def api_delete_me(self, request, url, session):
         self.check_mutation(request, url, session)
         uid = session["user"]["id"]
-        users = await self.store.get("users") or {}
-        if uid in users:
-            del users[uid]
-            await self.store.put("users", users)
+        await self.del_user(uid)
         watch = await self.store.get("watch") or {}
         if uid in watch:
             del watch[uid]
@@ -1126,7 +1188,7 @@ class Default(WorkerEntrypoint):
         self.check_mutation(request, url, session)
         user = session["user"]
         me_owner = next((g.get("owner") for g in session["guilds"] if g["id"] == gid), False)
-        if not me_owner and not self.is_owner(session):
+        if not me_owner and not self.owner_mode(session):
             raise HttpError(403, "forbidden", "Only the server owner can undo changes.")
         if rate_limited("undo:" + user["id"], 10, 60):
             raise HttpError(429, "slow_down", "Slow down.")
@@ -1223,7 +1285,7 @@ class Default(WorkerEntrypoint):
             rows.sort(key=lambda r: (r["name"] or "").lower())
             return json_response({"servers": rows})
         if path == "/api/owner/users" and method == "GET":
-            users = await self.store.get("users") or {}
+            users = await self.all_users()
             rows = [{"id": uid, "name": u.get("n"), "username": u.get("u"), "avatar_url": avatar_url(uid, u.get("a")),
                      "email": "" if uid in self.owner_ids() else u.get("e", ""), "owner": uid in self.owner_ids(),
                      "last_login": u.get("ll"), "logins": u.get("lc", 0), "first_seen": u.get("fs"),
@@ -1234,8 +1296,7 @@ class Default(WorkerEntrypoint):
             uid = (parse_qs(url.query).get("id") or [""])[0]
             if not SNOWFLAKE.match(uid):
                 raise HttpError(400, "bad_request", "Bad user id.")
-            users = await self.store.get("users") or {}
-            u = users.get(uid)
+            u = await self.get_user(uid)
             if not u:
                 raise HttpError(404, "not_found", "No such user.")
             index = await self.store.get("bot:guilds") or {}
@@ -1281,6 +1342,15 @@ class Default(WorkerEntrypoint):
             _CACHE.pop("site", None)
             await self.audit(session, "site", "Website settings changed")
             return json_response(await self.get_site())
+        if path == "/api/owner/email" or path.startswith("/api/owner/email/"):
+            return await features.owner_email_route(self, request, url, path, method, session)
+        if path == "/api/owner/support" or path.startswith("/api/owner/support/"):
+            return await features.owner_route(self, request, url, path, method, session)
+        if path == "/api/owner/status" and method == "GET":
+            stats = await self.store.get("stats:latest") or {}
+            return json_response({"status": stats.get("status_cfg"), "reason": stats.get("uptime_reason", "")})
+        if path == "/api/owner/tools" and method == "GET":
+            return json_response(await self.store.get("ownertools") or {"categories": [], "tools": []})
         if path == "/api/owner/op" and method == "POST":
             return await self.owner_op(request, url, session)
         raise HttpError(404, "not_found", "Not found.")
@@ -1327,17 +1397,27 @@ class Default(WorkerEntrypoint):
             summary = f"Sent a DM to {uid}"
             gid = ""
         elif op == "gen_code":
+            # instant: the website invents the code, shows it straight away, and the bot just registers it
             tier = a.get("tier")
             if tier not in TIER_NAMES:
                 raise HttpError(400, "bad_request", "Unknown tier.")
-            args = {"tier": tier, "duration": clean_str(a.get("duration"), 20), "limit": clean_int(a.get("limit"), 1, 1000) or 1}
-            summary = f"Generated a {tier} code ({args['duration']})"
-            gid = ""
+            duration = clean_str(a.get("duration"), 20)
+            limit = clean_int(a.get("limit"), 1, 1000) or 1
+            alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+            code = "REX-" + tier.upper() + "-" + "".join(secrets.choice(alphabet) for _ in range(16))
+            rid = secrets.token_hex(6)
+            await self.enqueue("_", {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "op": "register_code",
+                                     "args": {"code": code, "tier": tier, "duration": duration, "limit": limit}, "gid": "_"})
+            await self.audit(session, "gen_code", f"Generated a {tier} code ({duration})")
+            return json_response({"queued": True, "id": rid, "code": code, "tier": tier, "duration": duration, "limit": limit}, status=202)
         elif op == "owner_tool":
-            args = {k: clean_str(a.get(k), 500) for k in ("action", "target", "value", "reason")}
-            if not args["action"]:
-                raise HttpError(400, "bad_request", "Pick an action.")
-            summary = f"Owner tool: {args['action']}"
+            reg = await self.store.get("ownertools") or {}
+            tool = clean_str(a.get("tool"), 40)
+            if tool not in {t.get("id") for t in reg.get("tools", [])}:
+                raise HttpError(400, "bad_request", "Unknown tool. Wait a moment for the bot to sync, then reload.")
+            f = a.get("f") if isinstance(a.get("f"), dict) else {}
+            args = {"tool": tool, "f": {clean_str(k, 20): clean_str(v, 500) for k, v in list(f.items())[:8]}}
+            summary = f"Owner tool: {tool}"
             gid = ""
         rid = secrets.token_hex(6)
         await self.enqueue(gid or "_", {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "op": op, "args": args,
@@ -1368,6 +1448,22 @@ class Default(WorkerEntrypoint):
                          stats.get("errors_last_hour")])
             stats["hist"] = hist[-96:]
             await self.store.put("stats:latest", stats)
+            return json_response({"ok": True})
+        if tail[:1] == ["support"] and method == "POST":
+            return await features.bot_route(self, tail[1:], method, await self.read_json(request, 64 * 1024))
+        if tail == ["ownertools"] and method == "POST":
+            raw = await self.read_json(request, 64 * 1024)
+            tools = []
+            for t in (raw.get("tools") or [])[:80]:
+                fields = []
+                for f in (t.get("fields") or [])[:5]:
+                    fields.append({"key": clean_str(f.get("key"), 20), "label": clean_str(f.get("label"), 60), "type": clean_str(f.get("type"), 10),
+                                   "placeholder": clean_str(f.get("placeholder"), 100), "required": bool(f.get("required")),
+                                   "options": [clean_str(o, 30) for o in (f.get("options") or [])[:12]]})
+                tools.append({"id": clean_str(t.get("id"), 40), "cat": clean_str(t.get("cat"), 20), "label": clean_str(t.get("label"), 60),
+                              "desc": clean_str(t.get("desc"), 200), "danger": bool(t.get("danger")), "fields": fields})
+            cats = [{k: clean_str(c.get(k), 80) for k in ("id", "icon", "label", "desc")} for c in (raw.get("categories") or [])[:12]]
+            await self.store.put("ownertools", {"categories": cats, "tools": tools})
             return json_response({"ok": True})
         if tail == ["schema"] and method == "POST":
             try:
@@ -1658,3 +1754,6 @@ class Default(WorkerEntrypoint):
             await self.store.put("profile:" + str(uid), profile, ttl=WATCH_MAX_AGE + 86400)
             stored += 1
         return json_response({"ok": True, "stored": stored})
+
+
+features.bind(globals())

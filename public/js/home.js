@@ -53,7 +53,7 @@
       set('s-guilds', s.online ? fmtNum(s.guild_count) : '-');
       set('s-users', s.online ? fmtNum(s.user_count) : '-');
       set('s-ping', s.online && s.latency_ms != null ? s.latency_ms + ' ms' : '-');
-      set('s-up', s.online ? fmtDuration(s.uptime_s) : '-');
+      set('s-up', s.online ? fmtDuration(s.uptime_s) + (s.uptime_reason ? ' (' + s.uptime_reason + ')' : '') : '-');
     } catch (e) { pill.textContent = 'Unknown'; }
   }
   status();

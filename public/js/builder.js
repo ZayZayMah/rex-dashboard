@@ -2,24 +2,30 @@
 /* Block builder for custom commands and events. Mounted by server.js: rexBuilder.mount({...}) */
 window.rexBuilder = (function () {
   const VARS = [
-    ['{user}', 'Mention of the person who ran it / joined / left'], ['{user.name}', 'Their display name'], ['{user.id}', 'Their Discord ID'],
-    ['{target}', 'Mention of the picked user (or the banned user)'], ['{target.name}', 'Picked user name'], ['{target.id}', 'Picked user ID'],
-    ['{server}', 'Server name'], ['{server.id}', 'Server ID'], ['{server.members}', 'Member count'],
-    ['{channel}', 'Channel mention'], ['{channel.name}', 'Channel name'], ['{channel.id}', 'Channel ID'],
+    ['{user}', 'Mention of the person who ran it / joined / left'], ['{user.name}', 'Their display name'], ['{user.username}', 'Their username'], ['{user.tag}', 'Their tag'], ['{user.id}', 'Their Discord ID'],
+    ['{user_icon}', 'Their avatar (picture link)'], ['{user.created}', 'Account created date'], ['{user.joined}', 'Joined the server date'], ['{user.top_role}', 'Their highest role'], ['{user.roles}', 'How many roles they have'],
+    ['{target}', 'Mention of the picked user (or the banned user)'], ['{target.name}', 'Picked user name'], ['{target.id}', 'Picked user ID'], ['{target_icon}', 'Picked user avatar'], ['{target.tag}', 'Picked user tag'],
+    ['{server}', 'Server name'], ['{server.id}', 'Server ID'], ['{server.members}', 'Member count'], ['{member_number}', 'Member count with commas (1,234)'], ['{server_icon}', 'Server icon (picture link)'],
+    ['{server.owner}', 'Mention of the server owner'], ['{server.boosts}', 'Boost count'], ['{server.channels}', 'Channel count'], ['{server.roles}', 'Role count'],
+    ['{channel}', 'Channel mention'], ['{channel.name}', 'Channel name'], ['{channel.id}', 'Channel ID'], ['{channel.topic}', 'Channel topic'],
     ['{staff_roles}', 'Mentions of your staff roles'], ['{text}', 'Text typed into the command'],
     ['{answer.1}', 'Answer to form question 1 (up to 5)'], ['{ticket}', 'The ticket channel (ticket events)'],
     ['{setting}', 'Setting name (setting events)'], ['{old}', 'Old value (setting events)'], ['{new}', 'New value (setting events)'],
-    ['{command}', 'Name of this command or event'], ['{date}', 'Today, UTC'], ['{time}', 'Now, UTC'], ['{random}', 'Random number 1 to 100'],
+    ['{command}', 'Name of this command or event'], ['{date}', 'Today, UTC'], ['{date.iso}', 'Today as 2027-01-31'], ['{weekday}', 'Day of the week'], ['{time}', 'Now, UTC'],
+    ['{timestamp}', 'Full Discord date and time'], ['{timestamp.relative}', '"5 minutes ago" style time'], ['{random}', 'Random number 1 to 100'], ['{dice}', 'Dice roll 1 to 6'], ['{coin}', 'Heads or Tails'],
+    ['{var.name}', 'A variable you set with "Set a variable" or "Pick at random"'], ['{counter.name}', 'A server counter'], ['{ucount.name}', 'The person\'s own counter'],
   ];
   const TOGGLES = [['anti_ping_enabled', 'Anti-ping'], ['anti_spam', 'Anti-spam'], ['anti_link', 'Anti-link'], ['anti_swear', 'Anti-swear'], ['automod', 'AutoMod'],
     ['anti_alt', 'Anti-alt'], ['welcome_embed', 'Welcome embed'], ['leave_embed', 'Leave embed'], ['levels_enabled', 'Levels'], ['economy_enabled', 'Economy'], ['games_enabled', 'Games']];
   const COND = [['has_role', 'Person has role'], ['is_staff', 'Person is staff'], ['is_admin', 'Person is an admin'], ['channel_is', 'Used in channel'],
-    ['contains', 'Text or answers contain'], ['random', 'Random chance (%)'], ['account_younger_days', 'Account younger than (days)'], ['target_is_bot', 'Picked user is a bot']];
+    ['contains', 'Text or answers contain'], ['random', 'Random chance (%)'], ['account_younger_days', 'Account younger than (days)'], ['target_is_bot', 'Picked user is a bot'], ['var_equals', 'A variable equals'], ['counter_gte', 'A counter is at least']];
   const TRIGGERS = [['member_join', 'Someone joins'], ['member_leave', 'Someone leaves'], ['member_ban', 'Someone is banned'], ['ticket_create', 'A ticket is created'],
     ['settings_change', 'A server setting changes'], ['interval', 'Every so often'], ['daily', 'Every day at a time']];
   const GROUPS = [
-    ['Messages', ['message', 'embed', 'dm']],
-    ['Server', ['add_role', 'remove_role', 'create_role', 'create_channel']],
+    ['Messages', ['message', 'embed', 'image_card', 'poll', 'dm']],
+    ['Edit messages', ['edit_message', 'delete_message', 'pin', 'react', 'thread']],
+    ['Memory', ['set_var', 'pick', 'counter']],
+    ['Server', ['add_role', 'remove_role', 'create_role', 'create_channel', 'set_nick', 'slowmode']],
     ['Moderation', ['kick', 'ban', 'timeout']],
     ['Rex', ['send_form', 'create_ticket', 'set_toggle', 'log']],
     ['Flow', ['wait', 'branch']],
@@ -27,8 +33,20 @@ window.rexBuilder = (function () {
   const F = (k, t, l, extra) => Object.assign({ k, t, l }, extra || {});
   const WHO = [['user', 'The person who ran it'], ['target', 'The picked user']];
   const BLOCKS = {
-    message: { i: '💬', n: 'Send message', d: 'Post a message.', f: [F('text', 'area', 'Message', { vars: 1 }), F('channel', 'channel', 'Channel (empty = reply here)')] },
-    embed: { i: '🖼️', n: 'Send embed', d: 'A styled card.', f: [F('title', 'text', 'Title', { vars: 1 }), F('description', 'area', 'Description', { vars: 1 }), F('color', 'color', 'Colour'), F('image', 'text', 'Image link'), F('footer', 'text', 'Footer'), F('channel', 'channel', 'Channel (empty = reply here)')] },
+    message: { i: '💬', n: 'Send message', d: 'Post a message.', f: [F('text', 'area', 'Message', { vars: 1 }), F('channel', 'channel', 'Channel (empty = reply here)'), F('name', 'label', 'Label (to edit this later)'), F('buttons', 'components', 'Buttons and menu')] },
+    embed: { i: '🖼️', n: 'Send embed', d: 'A styled card.', f: [F('title', 'text', 'Title', { vars: 1 }), F('description', 'area', 'Description', { vars: 1 }), F('color', 'color', 'Colour'), F('image', 'text', 'Image link'), F('footer', 'text', 'Footer'), F('channel', 'channel', 'Channel (empty = reply here)'), F('name', 'label', 'Label (to edit this later)'), F('buttons', 'components', 'Buttons and menu')] },
+    image_card: { i: '🎴', n: 'Send image card', d: 'A picture made from text and avatars.', f: [F('card', 'card', 'Card design'), F('text', 'area', 'Message above the card (optional)', { vars: 1 }), F('channel', 'channel', 'Channel (empty = reply here)'), F('name', 'label', 'Label (to edit this later)'), F('buttons', 'components', 'Buttons and menu')] },
+    poll: { i: '📊', n: 'Poll', d: 'Reaction poll with 2-5 options.', f: [F('question', 'text', 'Question', { vars: 1 }), F('options', 'strlist', 'Options', { max: 5, min: 2, ph: 'Option', len: 100 }), F('channel', 'channel', 'Channel (empty = reply here)'), F('name', 'label', 'Label (to edit this later)')] },
+    edit_message: { i: '✏️', n: 'Edit a message', d: 'Change a message sent earlier in this flow.', f: [F('ref', 'ref', 'Which message'), F('text', 'area', 'New text', { vars: 1 }), F('title', 'text', 'New embed title (embeds)', { vars: 1 }), F('description', 'area', 'New embed description (embeds)', { vars: 1 })] },
+    delete_message: { i: '🗑️', n: 'Delete a message', d: 'Remove an earlier message, now or after a while.', f: [F('ref', 'ref', 'Which message'), F('after', 'num', 'After (seconds, 0 = now)', { min: 0, max: 60 })] },
+    pin: { i: '📌', n: 'Pin a message', d: '', f: [F('ref', 'ref', 'Which message')] },
+    react: { i: '😀', n: 'Add a reaction', d: '', f: [F('ref', 'ref', 'Which message'), F('emoji', 'text', 'Emoji')] },
+    thread: { i: '🧵', n: 'Start a thread', d: 'On an earlier message.', f: [F('ref', 'ref', 'Which message'), F('title', 'text', 'Thread name', { vars: 1 })] },
+    set_var: { i: '🧮', n: 'Set a variable', d: 'Use it later as {var.name}.', f: [F('name', 'text', 'Variable name (a-z, 0-9, _)'), F('value', 'text', 'Value', { vars: 1 })] },
+    pick: { i: '🎲', n: 'Pick at random', d: 'Choose one option into {var.name}.', f: [F('name', 'text', 'Variable name'), F('options', 'strlist', 'Options', { max: 10, min: 2, ph: 'Option', len: 200 })] },
+    counter: { i: '🔢', n: 'Counter', d: 'Count things. Read with {counter.name} or {ucount.name}.', f: [F('name', 'text', 'Counter name'), F('scope', 'select', 'Counts', { o: [['server', 'For the whole server'], ['user', 'For each person']] }), F('op', 'select', 'Do', { o: [['add', 'Add'], ['subtract', 'Subtract'], ['set', 'Set to'], ['reset', 'Reset to 0']] }), F('amount', 'num', 'Amount', { min: -1000000, max: 1000000 })] },
+    set_nick: { i: '🪪', n: 'Change a nickname', d: 'Leave empty to clear it.', f: [F('to', 'select', 'Whose', { o: WHO }), F('nick', 'text', 'New nickname', { vars: 1 })] },
+    slowmode: { i: '🐢', n: 'Set slowmode', d: '0 turns it off.', f: [F('channel', 'channel', 'Channel (empty = here)'), F('seconds', 'num', 'Seconds', { min: 0, max: 21600 })] },
     dm: { i: '✉️', n: 'Send a DM', d: 'Private message.', f: [F('text', 'area', 'Message', { vars: 1 }), F('to', 'select', 'Send to', { o: WHO })] },
     add_role: { i: '🏷️', n: 'Give a role', d: '', f: [F('role', 'role', 'Role'), F('to', 'select', 'Give it to', { o: WHO })] },
     remove_role: { i: '🧹', n: 'Remove a role', d: '', f: [F('role', 'role', 'Role'), F('to', 'select', 'Take it from', { o: WHO })] },
@@ -45,11 +63,14 @@ window.rexBuilder = (function () {
     branch: { i: '🔀', n: 'If / else', d: 'Do different things depending on a condition.', f: [] },
   };
   const DEF = {
-    message: { text: '' }, embed: { title: '', description: '', color: '', image: '', footer: '', channel: '' }, dm: { text: '', to: 'user' },
+    message: { text: '', name: '' }, embed: { title: '', description: '', color: '', image: '', footer: '', channel: '', name: '' }, dm: { text: '', to: 'user' },
     add_role: { role: '', to: 'user' }, remove_role: { role: '', to: 'user' }, create_role: { name: '', color: '' }, create_channel: { name: '', kind: 'text', category: '', private: false },
     kick: { to: 'target', reason: '' }, ban: { to: 'target', reason: '' }, timeout: { to: 'target', minutes: 10, reason: '' }, send_form: { title: 'Form', questions: [''], channel: '' },
     create_ticket: { ticket_type: '' }, set_toggle: { key: 'anti_ping_enabled', mode: 'toggle' }, wait: { seconds: 2 }, log: { text: '' },
     branch: { if: { kind: 'is_staff', value: '' }, then: [], else: [] },
+    image_card: { card: null, text: '', channel: '', name: '' }, poll: { question: '', options: ['', ''], channel: '', name: '' }, edit_message: { ref: 'last', text: '', title: '', description: '' },
+    delete_message: { ref: 'last', after: 0 }, pin: { ref: 'last' }, react: { ref: 'last', emoji: '👍' }, thread: { ref: 'last', title: 'Discussion' }, set_var: { name: '', value: '' },
+    pick: { name: '', options: ['', ''] }, counter: { name: '', scope: 'server', op: 'add', amount: 1 }, set_nick: { to: 'user', nick: '' }, slowmode: { channel: '', seconds: 5 },
   };
   const uid = () => Math.random().toString(36).slice(2, 10);
   const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -89,7 +110,7 @@ window.rexBuilder = (function () {
       switch (f.t) {
         case 'text': el = h('input', { type: 'text', value: v || '', maxlength: 500, disabled: dis, oninput: (e) => set1(e.target.value) }); break;
         case 'area': el = h('textarea', { rows: 3, maxlength: 2000, disabled: dis, oninput: (e) => set1(e.target.value) }, v || ''); break;
-        case 'num': el = h('input', { type: 'number', min: f.min, max: f.max, value: v, disabled: dis, oninput: (e) => set1(parseInt(e.target.value, 10) || f.min) }); break;
+        case 'num': el = h('input', { type: 'number', min: f.min, max: f.max, value: v, disabled: dis, oninput: (e) => { const n = parseInt(e.target.value, 10); set1(isNaN(n) ? (f.min || 0) : n); } }); break;
         case 'color': { const txt = h('input', { type: 'text', value: v || '', placeholder: '#2EE6B6', maxlength: 7, disabled: dis });
           const pick = h('input', { type: 'color', value: /^#?[0-9a-f]{6}$/i.test(v || '') ? '#' + (v || '').replace('#', '') : '#2ee6b6', disabled: dis, style: 'width:46px;padding:2px;flex:none' });
           txt.addEventListener('input', () => set1(txt.value.replace('#', ''))); pick.addEventListener('input', () => { txt.value = pick.value; set1(pick.value.replace('#', '')); });
@@ -100,6 +121,46 @@ window.rexBuilder = (function () {
         case 'category': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'No category'), cats.map((c) => h('option', { value: c.id }, c.name))); el.value = v || ''; break;
         case 'role': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'Choose a role'), roles.map((r) => h('option', { value: r.id }, r.name))); el.value = v || ''; break;
         case 'tickettype': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'Default ticket'), ttypes().filter((t) => t.action !== 'link').map((t) => h('option', { value: t.label }, t.label))); el.value = v || ''; break;
+        case 'label': el = h('input', { type: 'text', value: v || '', maxlength: 20, placeholder: 'e.g. welcome', disabled: dis, oninput: (e) => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''); set1(e.target.value); } }); break;
+        case 'ref': { const names = []; (function walk(bs) { (bs || []).forEach((x) => { if (x.name && ['message', 'embed', 'image_card', 'poll'].includes(x.type)) names.push(x.name); if (x.type === 'branch') { walk(x.then); walk(x.else); } }); })(list[editing] ? list[editing].blocks : []);
+          el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: 'last' }, 'The last message sent'), [...new Set(names)].map((n) => h('option', { value: n }, 'Label: ' + n))); el.value = v || 'last'; break; }
+        case 'strlist': {
+          const box = h('div', { class: 'tt-q' });
+          const paint = () => box.replaceChildren(...block[f.k].map((q, qi) => h('div', { style: 'display:flex;gap:6px' },
+            h('input', { type: 'text', maxlength: f.len || 100, value: q, placeholder: (f.ph || 'Item') + ' ' + (qi + 1), disabled: dis, oninput: (e) => { block[f.k][qi] = e.target.value; commit(); } }),
+            block[f.k].length > (f.min || 1) ? h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { block[f.k].splice(qi, 1); paint(); commit(); } }, '✕') : null)),
+            block[f.k].length < (f.max || 5) ? h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { block[f.k].push(''); paint(); } }, '+ Add') : null);
+          paint(); el = box; break; }
+        case 'card': {
+          const host = h('div', {});
+          const open = () => { if (!window.rexCard) return host.replaceChildren(h('p', { class: 'muted' }, 'The card editor is still loading, try again in a second.')); host.replaceChildren(window.rexCard.editor(block.card, { dis, onchange: (c) => { block.card = c; commit(); } })); };
+          host.append(h('button', { type: 'button', class: 'btn ghost sm', onclick: open }, block.card ? 'Edit card design' : 'Design the card')); if (block.card) open();
+          el = host; break; }
+        case 'components': {
+          const box = h('div', { class: 'bld-comps' });
+          const ACTS = [['reply', 'Reply privately'], ['dm', 'Send a DM'], ['add_role', 'Give a role'], ['remove_role', 'Remove a role'], ['toggle_role', 'Toggle a role'], ['link', 'Open a link']];
+          const actVal = (o, linkOk) => {
+            if (['add_role', 'remove_role', 'toggle_role'].includes(o.action)) return field(o, F('value', 'role', 'Role'), () => {});
+            if (o.action === 'link') return field(o, F('value', 'text', 'Link (https://...)'), () => {});
+            return field(o, F('value', 'area', 'What Rex says', { vars: 1 }), () => {});
+          };
+          const actSel = (o, linkOk, redo) => { const s = h('select', { disabled: dis, onchange: (e) => { o.action = e.target.value; o.value = ''; commit(); redo(); } }, ACTS.filter((a) => linkOk || a[0] !== 'link').map(([a, b]) => h('option', { value: a }, b))); s.value = o.action; return h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'When clicked'), s); };
+          const paint = () => {
+            const btns = block.buttons || [], sel = block.select;
+            box.replaceChildren(
+              ...btns.map((x, i) => h('div', { class: 'bld-comp' }, h('div', { class: 'bld-ch' }, h('b', {}, '🔘 Button ' + (i + 1)), h('span', { class: 'grow' }), h('button', { type: 'button', class: 'bld-mini bad', disabled: dis, onclick: () => { block.buttons.splice(i, 1); if (!block.buttons.length) delete block.buttons; commit(); paint(); } }, '✕')),
+                field(x, F('label', 'text', 'Label'), () => {}), field(x, F('emoji', 'text', 'Emoji (optional)'), () => {}),
+                field(x, F('style', 'select', 'Colour', { o: [['primary', 'Blue'], ['secondary', 'Grey'], ['success', 'Green'], ['danger', 'Red']] }), () => {}),
+                actSel(x, true, paint), actVal(x))),
+              (block.buttons || []).length < 5 ? h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { (block.buttons = block.buttons || []).push({ label: 'Click me', style: 'secondary', emoji: '', action: 'reply', value: '' }); commit(); paint(); } }, '+ Add a button') : null,
+              sel ? h('div', { class: 'bld-comp' }, h('div', { class: 'bld-ch' }, h('b', {}, '📋 Select menu'), h('span', { class: 'grow' }), h('button', { type: 'button', class: 'bld-mini bad', disabled: dis, onclick: () => { delete block.select; commit(); paint(); } }, '✕')),
+                field(sel, F('placeholder', 'text', 'Placeholder'), () => {}),
+                ...sel.options.map((o, i) => h('div', { class: 'bld-comp inner' }, h('div', { class: 'bld-ch' }, h('b', {}, 'Option ' + (i + 1)), h('span', { class: 'grow' }), sel.options.length > 1 ? h('button', { type: 'button', class: 'bld-mini bad', disabled: dis, onclick: () => { sel.options.splice(i, 1); commit(); paint(); } }, '✕') : null),
+                  field(o, F('label', 'text', 'Label'), () => {}), field(o, F('description', 'text', 'Description (optional)'), () => {}), actSel(o, false, paint), actVal(o))),
+                sel.options.length < 10 ? h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { sel.options.push({ label: 'Option', description: '', action: 'reply', value: '' }); commit(); paint(); } }, '+ Add an option') : null)
+                : h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { block.select = { placeholder: 'Choose one', options: [{ label: 'Option', description: '', action: 'reply', value: '' }] }; commit(); paint(); } }, '+ Add a select menu'));
+          };
+          paint(); el = box; break; }
         case 'list': {
           const box = h('div', { class: 'tt-q' });
           const paint = () => box.replaceChildren(...block[f.k].map((q, qi) => h('div', { style: 'display:flex;gap:6px' },
@@ -146,6 +207,8 @@ window.rexBuilder = (function () {
             if (c.kind === 'channel_is') return field(c, F('value', 'channel', 'Channel'), rerender);
             if (c.kind === 'contains') return field(c, F('value', 'text', 'Word to look for'), rerender);
             if (c.kind === 'random') return field(c, F('value', 'num', 'Chance (1-99)', { min: 1, max: 99 }), rerender);
+            if (c.kind === 'var_equals') return field(c, F('value', 'text', 'Check, like  mood = happy'), rerender);
+            if (c.kind === 'counter_gte') return field(c, F('value', 'text', 'Check, like  points >= 10'), rerender);
             if (c.kind === 'account_younger_days') return field(c, F('value', 'num', 'Days', { min: 1, max: 3650 }), rerender);
             return null;
           })();
@@ -174,7 +237,7 @@ window.rexBuilder = (function () {
             isCmd ? h('span', { class: 'chip' }, c.visibility && c.visibility.mode === 'staff' ? 'Staff only' : c.visibility && c.visibility.mode === 'roles' ? 'Some roles' : 'Everyone') : null,
             h('span', { class: 'grow' }),
             h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { editing = i; paint(); } }, locked ? 'View' : 'Edit'),
-            h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, 'aria-label': 'Delete', onclick: () => { if (!confirm('Delete ' + (isCmd ? '/' + c.name : c.name) + '?')) return; list.splice(i, 1); commit(); paint(); } }, '🗑'))));
+            h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, 'aria-label': 'Delete', onclick: async () => { if (!(await rexDialog.confirm('Delete ' + (isCmd ? '/' + c.name : c.name) + '?', 'This removes it from your server. You can build it again later.', 'Delete', true))) return; list.splice(i, 1); commit(); paint(); } }, '🗑'))));
       });
       const full = list.length >= limit;
       grid.append(h('button', { type: 'button', class: 'bld-new', disabled: locked || full ? true : null, onclick: () => {

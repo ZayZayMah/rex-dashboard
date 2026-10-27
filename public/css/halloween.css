@@ -35,9 +35,9 @@ html[data-theme='halloween'] .nav::after { content: ""; position: absolute; left
 .hw-crest::before, .hw-crest::after { content: none; }
 
 /* ---- surfaces: iron-bound, torn, arched */
-html[data-theme='halloween'] .btn { border-radius: 2px; font-family: var(--display); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; background: linear-gradient(180deg, #ff8a1f, #c24a00); color: #1a0900; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%); padding: 12px 28px; box-shadow: none; }
+html[data-theme='halloween'] .btn { border-radius: 10px; border: 1px solid rgba(255, 190, 120, .35); line-height: 1.2; white-space: nowrap; font-family: var(--display); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; background: linear-gradient(180deg, #ff8a1f, #c24a00); color: #1a0900; clip-path: none; padding: 12px 28px; box-shadow: none; }
 html[data-theme='halloween'] .btn:hover { filter: brightness(1.15) drop-shadow(0 0 10px rgba(255, 122, 0, .7)); transform: none; }
-html[data-theme='halloween'] .btn.ghost { background: rgba(255, 122, 0, .08); color: var(--arc); box-shadow: inset 0 0 0 1px var(--volt); }
+html[data-theme='halloween'] .btn.ghost { background: rgba(255, 122, 0, .08); color: var(--arc); border: 1px solid var(--volt); box-shadow: none; }
 html[data-theme='halloween'] .btn.danger { background: linear-gradient(180deg, #ff4d5f, #a3122a); color: #fff; }
 html[data-theme='halloween'] .btn.discord { background: linear-gradient(180deg, #7a6bff, #4a3fc4); color: #fff; }
 html[data-theme='halloween'] .btn.sm { padding: 8px 18px; }
@@ -88,8 +88,8 @@ html[data-theme='halloween'] .srv-head .gicon { border-radius: 50% 50% 8px 8px; 
 html[data-theme='halloween'] .srv-spacer { height: calc(var(--head-big) + 58px); transition: height .25s; }
 html[data-theme='halloween'] body.cond .srv-spacer { height: calc(var(--head-small) + 58px); }
 html[data-theme='halloween'] .srv-layout { grid-template-columns: 1fr; padding-top: 0; }
-html[data-theme='halloween'] .srv-side { position: fixed; z-index: 34; left: 0; right: 0; width: auto; top: calc(var(--nav-h) + var(--head-big)); display: flex; gap: 8px; align-items: flex-end; padding: 10px max(16px, calc((100vw - 1180px) / 2)) 0; max-height: none; overflow-x: auto; overflow-y: hidden; background: #0a0512; border-bottom: 1px solid var(--edge); transition: top .25s; }
-html[data-theme='halloween'] body.cond .srv-side { top: calc(var(--nav-h) + var(--head-small)); max-height: none; }
+html[data-theme='halloween'] .srv-side { position: fixed; z-index: 34; left: 0; right: 0; width: auto; top: calc(var(--top) + var(--head-big)); display: flex; gap: 8px; align-items: flex-end; padding: 10px max(16px, calc((100vw - 1180px) / 2)) 0; max-height: none; overflow-x: auto; overflow-y: hidden; background: #0a0512; border-bottom: 1px solid var(--edge); transition: top .25s; }
+html[data-theme='halloween'] body.cond .srv-side { top: calc(var(--top) + var(--head-small)); max-height: none; }
 html[data-theme='halloween'] .srv-side a { flex: none; white-space: nowrap; border: 1px solid var(--edge); border-bottom: 0; border-radius: 22px 22px 0 0; background: #160d24; padding: 9px 18px 8px; font-size: 13px; letter-spacing: .04em; }
 html[data-theme='halloween'] .srv-side a.active { background: #241438; color: var(--arc); border-color: var(--volt); box-shadow: 0 -6px 16px rgba(255, 106, 0, .22); padding-bottom: 12px; border-left: 1px solid var(--volt); }
 html[data-theme='halloween'] .srv-side hr { width: 1px; height: 24px; margin: 0 4px 6px; border: 0; background: var(--edge); align-self: flex-end; }
@@ -113,3 +113,13 @@ html[data-theme='halloween'] .foot { justify-content: center; text-align: center
   html[data-theme='halloween'] .srv-main { padding: 22px 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .hw-mist, .hw-moon { animation: none; } }
+
+/* ---- small screens: keep the mood, drop the clutter */
+@media (max-width: 760px) {
+  .hw-web, .hw-spider, .hw-mist { display: none !important; }
+  html[data-theme='halloween'] .hw-moon-wrap { opacity: .85; transform: scale(.8); }
+  html[data-theme='halloween'] .plate, html[data-theme='halloween'] .frame { clip-path: none; border-radius: 14px; }
+  html[data-theme='halloween'] .bat { display: none; }
+}
+html[data-theme='halloween'] body.focus-mode .srv-spacer { height: calc(var(--head-big) + 8px); }
+html[data-theme='halloween'] body.focus-mode.cond .srv-spacer { height: calc(var(--head-small) + 8px); }

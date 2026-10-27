@@ -81,7 +81,7 @@
       h('div', { class: 'grow' }, h('h1', {}, '#' + tr.channel), h('div', { class: 'muted small' }, tr.guild.name + '  -  ' + tr.messages.length + ' messages  -  opened ' + time(tr.opened) + '  -  closed by ' + tr.closed_by.name)),
       tr.tier === 'ultra' ? tierBadge('ultra') : tierBadge(tr.tier),
       canDelete ? h('button', { class: 'btn danger sm', type: 'button', onclick: async () => {
-        if (!confirm('Delete this transcript? The link will stop working.')) return;
+        if (!(await rexDialog.confirm('Delete this transcript?', 'The link will stop working.', 'Delete', true))) return;
         try { await api('/api/transcript?id=' + encodeURIComponent(id), { method: 'DELETE' }); location.href = '/'; } catch (e) { toast(e.message, 'bad'); }
       } }, icon('trash', 15), ' Delete') : null),
     h('div', { class: 'tx-chat' }, list),

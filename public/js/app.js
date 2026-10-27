@@ -178,9 +178,20 @@ async function loadSite() {
   try {
     REX.site = await api('/api/site');
     if (REX.site.support_url) REX.support = REX.site.support_url;
-    if (window.rexApplyTheme) window.rexApplyTheme(REX.site.theme);
+    if (window.rexApplyTheme && window.rexApplyTheme(REX.site.theme)) {
+      // the theme changed since this visitor's last visit: rebuild the page from scratch so nothing is left half-styled
+      let again = false;
+      try { again = sessionStorage.getItem('rex-theme-reload') === REX.site.theme; sessionStorage.setItem('rex-theme-reload', REX.site.theme); } catch (e) { /* ignore */ }
+      if (!again) { location.reload(); await new Promise(() => {}); }
+    }
   } catch (e) { REX.site = null; }
   return REX.site;
+}
+
+function addStrip(node) {
+  let box = document.querySelector('.strips');
+  if (!box) { box = h('div', { class: 'strips' }); document.getElementById('nav').after(box); }
+  box.append(node);
 }
 
 async function mountNav(active) {
@@ -209,7 +220,8 @@ async function mountNav(active) {
         h('a', { href: '/commands' }, 'Commands', h('small', {}, 'Every command, explained')),
         h('a', { href: '/premium' }, 'Premium', h('small', {}, 'Tiers and codes')),
         h('a', { href: '/live' }, 'Live stats', h('small', {}, 'Status and growth')))),
-    h('a', { href: '/dashboard', class: active === 'dashboard' ? 'active' : '' }, 'Dashboard'));
+    h('a', { href: '/dashboard', class: active === 'dashboard' ? 'active' : '' }, 'Dashboard'),
+    me && me.beta && me.beta.support ? h('a', { href: '/support', class: active === 'support' ? 'active' : '' }, 'Support') : null);
 
   const themed = window.rexLayout && window.rexLayout.nav[document.documentElement.getAttribute('data-theme')];
   if (themed) themed(host, { active, end });
@@ -242,17 +254,19 @@ async function mountNav(active) {
       const strip = h('div', { class: 'owner-strip' }, h('div', { class: 'wrap' },
         h('span', {}, 'Owner mode is on'), h('a', { href: '/owner' }, 'Open owner tools'),
         h('button', { type: 'button', onclick: async () => { await api('/api/owner/mode', { method: 'POST', body: { on: false } }); location.href = '/profile'; } }, 'Exit')));
-      host.after(strip);
+      addStrip(strip);
     }
   } else {
     end.append(h('a', { class: 'btn sm', href: '/auth/login' }, 'Log in'));
   }
   if (site && site.maintenance && site.maintenance.on && me && me.is_owner) {
-    host.after(h('div', { class: 'owner-strip' }, h('div', { class: 'wrap' }, h('span', {}, 'Maintenance mode is ON - visitors see the maintenance page.'), h('a', { href: '/owner#website' }, 'Change'))));
+    addStrip(h('div', { class: 'owner-strip' }, h('div', { class: 'wrap' }, h('span', {}, 'The site is under maintenance - visitors see the maintenance page.'), h('a', { href: '/owner#website' }, 'Change'))));
   }
   if (me) {   // warm the profile in the background so the profile page opens with data already there
     try { if (Date.now() - Number(sessionStorage.getItem('rex-warm') || 0) > 120000) { sessionStorage.setItem('rex-warm', String(Date.now())); api('/api/profile').catch(() => {}); } } catch (e) { /* ignore */ }
   }
+  const measure = () => { let t = 0; const b = document.querySelector('.strips'); t = b ? b.offsetHeight : 0;; document.documentElement.style.setProperty('--strip-h', t + 'px'); };
+  measure(); addEventListener('resize', measure); setTimeout(measure, 400);
   document.dispatchEvent(new CustomEvent('rex:ready', { detail: { me, site } }));
   return me;
 }
@@ -263,8 +277,8 @@ function stateScreen(title, text, actions) {
 
 /* ------------------------------------------------------------------ polling a queued operation (redeem, owner ops) */
 async function waitForResult(id, onTick) {
-  for (let i = 0; i < 40; i++) {
-    await new Promise((r) => setTimeout(r, i < 3 ? 1200 : 2000));
+  for (let i = 0; i < 70; i++) {
+    await new Promise((r) => setTimeout(r, i < 6 ? 500 : 1500));
     try {
       const r = await api('/api/result?id=' + encodeURIComponent(id));
       if (r.done) return r;

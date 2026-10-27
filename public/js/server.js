@@ -49,6 +49,7 @@
       case 'tags': return v.join(', ').slice(0, 160);
       case 'roles': return v.map((id) => (roleById[String(id)] ? '@' + roleById[String(id)].name : 'unknown role')).join(', ').slice(0, 160);
       case 'tickettypes': return v.map((t) => t.label).join(', ');
+      case 'card': return v && v.layers && v.layers.length ? 'Image card on' : 'Off';
       case 'text': case 'url': { const s = String(v); return '"' + (s.length > 120 ? s.slice(0, 117) + '...' : s) + '"'; }
       default: return String(v);
     }
@@ -258,8 +259,23 @@
       case 'tags': return tagControl(spec, locked);
       case 'tickettypes': return ticketTypes(spec, locked);
       case 'roles': return rolesControl(spec, locked);
+      case 'card': return cardControl(spec, locked);
       default: return h('span', { class: 'muted' }, 'Unsupported setting');
     }
+  }
+  function cardControl(spec, locked) {
+    const host = h('div', {});
+    const on = () => draft[spec.key] && draft[spec.key].layers && draft[spec.key].layers.length;
+    const paint = () => {
+      if (!on() && !host.dataset.open) {
+        host.replaceChildren(h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, onclick: () => { host.dataset.open = '1'; paint(); } }, 'Design an image card'));
+        return;
+      }
+      host.dataset.open = '1';
+      const ed = window.rexCard.editor(JSON.parse(JSON.stringify(draft[spec.key] || {})), { dis: locked, onchange: (c) => set(spec.key, JSON.parse(JSON.stringify(c))) });
+      host.replaceChildren(ed, h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, onclick: () => { set(spec.key, {}); delete host.dataset.open; paint(); } }, 'Remove the card'));
+    };
+    paint(); return host;
   }
   function hintFor(spec) {
     if (spec.type === 'url' || ((spec.type === 'text') && (spec.blank_clears || spec.blank_ok))) return 'Leave empty to turn this off.';
@@ -270,7 +286,7 @@
   }
   function settingRow(spec, sectionLock) {
     const reason = sectionLock || lockReason(spec), locked = !!reason;
-    const wide = spec.type === 'tickettypes' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
+    const wide = spec.type === 'tickettypes' || spec.type === 'card' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
     return h('div', { class: 'set-row' + (locked ? ' locked' : '') + (wide ? ' wide' : '') },
       h('div', {}, h('label', { class: 'name', for: 'f-' + spec.key }, nameLine(spec, sectionLock)), h('div', { class: 'desc' }, spec.description),
         hintFor(spec) ? h('div', { class: 'hint' }, hintFor(spec)) : null,
@@ -345,7 +361,7 @@
         h('a', { class: 'btn ghost sm', href: '/transcript?id=' + encodeURIComponent(it.id), target: '_blank', rel: 'noopener' }, 'Open'),
         h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(origin + '/transcript?id=' + it.id); toast('Link copied.', 'good'); } catch (e) { toast(origin + '/transcript?id=' + it.id); } } }, icon('link', 15), ' Copy link'),
         canAdmin ? h('button', { class: 'btn danger sm', type: 'button', onclick: async () => {
-          if (!confirm('Delete this transcript? The link will stop working.')) return;
+          if (!(await rexDialog.confirm('Delete this transcript?', 'The link will stop working.', 'Delete', true))) return;
           try { await api('/api/transcript?id=' + encodeURIComponent(it.id), { method: 'DELETE' }); toast('Transcript deleted.', 'good'); show(current, true); } catch (e) { toast(e.message, 'bad'); }
         } }, icon('trash', 15)) : null))));
     return box;
@@ -386,7 +402,7 @@
       h('div', { class: 'slab', style: 'border-left-color:var(--bad)' }, h('h3', {}, 'Blacklist'), h('p', { class: 'muted small' }, 'Rex leaves the server and leaves again if it is re-added.'),
         reason, h('div', { style: 'display:flex;gap:8px;margin-top:10px' },
           info.blacklisted ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => run('blacklist', { remove: true }, 'Removed from the blacklist.') }, 'Remove from blacklist')
-            : h('button', { class: 'btn danger sm', type: 'button', onclick: () => { if (confirm('Blacklist this server and make Rex leave?')) run('blacklist', { reason: reason.value }, 'Blacklisted.'); } }, 'Blacklist and leave'))),
+            : h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Blacklist this server?', 'Rex will leave and cannot be added back.', 'Blacklist and leave', true)) run('blacklist', { reason: reason.value }, 'Blacklisted.'); } }, 'Blacklist and leave'))),
       h('div', { class: 'well' }, h('div', { style: 'display:flex;gap:14px;align-items:center' }, hide, h('div', {}, h('b', {}, 'Hide my setting changes from the activity log'), h('div', { class: 'muted small' }, 'Applies to changes you save on this page while in owner mode.')))),
       out);
   }
@@ -398,6 +414,8 @@
   let current = (location.hash || '').slice(1);
   if (!allIds().includes(current)) current = schema.sections[0].id;
 
+  const FOCUS = new URLSearchParams(location.search).get('focus');
+  if (FOCUS) document.body.classList.add('focus-mode');
   const head = h('div', { class: 'srv-head' });
   const side = h('nav', { class: 'srv-side', 'aria-label': 'Sections' });
   const main = h('div', { class: 'srv-main' });
@@ -413,11 +431,39 @@
       consoleHost));
     drawConsole();
   }
+  function builderLauncher(sec) {
+    const locked = sec.tier !== 'free' && !tierOn(sec.tier);
+    return h('div', { class: 'well launch' }, h('h3', {}, sec.id === 'commands' ? 'The command builder' : 'The event builder'),
+      h('p', { class: 'muted' }, 'The builder needs room, so it opens on its own page. Everything you build is saved to this server.'),
+      locked ? h('p', { class: 'muted small' }, 'Needs ' + TIER_LABEL[sec.tier] + ' on this server.') : null,
+      h('a', { class: 'btn', href: '/server?id=' + encodeURIComponent(gid) + '&focus=' + sec.id + '#' + sec.id }, 'Open the builder'));
+  }
+  const GROUPS = [
+    ['Welcome & logs', ['welcome', 'logs']],
+    ['Help & safety', ['tickets', 'appeals', 'verification', 'protection', 'ultra', 'staff']],
+    ['Community', ['levels', 'community']],
+    ['Build', ['commands', 'events']],
+    ['Insights & plan', ['analytics', 'priority', 'branding']],
+  ];
+  const groupOf = (id) => { const g = GROUPS.find((x) => x[1].includes(id)); return g ? g[0] : (id === 'premium' || id === 'transcripts' || id === 'owner') ? 'Account' : 'More'; };
+  const openGroups = new Set();
   function drawSide() {
     const link = (id, name, ic, extra) => h('a', { href: '#' + id, class: current === id ? 'active' : '', onclick: (e) => { e.preventDefault(); go(id); } }, icon(ic || 'star'), name, extra || null);
-    const items = schema.sections.map((s) => link(s.id, s.name, SECTION_ICON[s.icon], s.tier !== 'free' ? h('span', { class: 'badge tier-' + s.tier + ' tag' }, TIER_LABEL[s.tier]) : null));
-    side.replaceChildren(...items, h('hr'), ...pseudo.map((p) => link(p.id, p.name, p.icon)),
-      ...(ownerMode ? [h('hr'), h('div', { class: 'gold' }, link('owner', 'Owner', 'key'))] : []));
+    const mk = (s) => link(s.id, s.name, SECTION_ICON[s.icon], s.tier !== 'free' && !tierOn(s.tier) ? h('span', { class: 'badge tier-' + s.tier + ' tag' }, TIER_LABEL[s.tier]) : null);
+    const byId = Object.fromEntries(schema.sections.map((x) => [x.id, x]));
+    const placed = new Set();
+    const groups = GROUPS.map(([name, ids]) => ({ name, items: ids.filter((i) => byId[i]).map((i) => { placed.add(i); return mk(byId[i]); }), ids: ids.filter((i) => byId[i]) })).filter((g) => g.items.length);
+    const rest = schema.sections.filter((x) => !placed.has(x.id));
+    if (rest.length) groups.push({ name: 'More', items: rest.map(mk), ids: rest.map((x) => x.id) });
+    const acct = [link('premium', 'Premium', 'premium'), link('transcripts', 'Transcripts', 'scroll')].concat(ownerMode ? [h('div', { class: 'gold' }, link('owner', 'Owner', 'key'))] : []);
+    groups.push({ name: 'Account', items: acct, ids: ['premium', 'transcripts', 'owner'] });
+    const flat = innerWidth <= 960 || document.documentElement.getAttribute('data-theme') === 'halloween';
+    side.replaceChildren(...groups.map((g) => {
+      const here = g.ids.includes(current);
+      const d = h('details', { class: 'side-group' + (here ? ' here' : ''), open: flat || here || openGroups.has(g.name) }, h('summary', {}, g.name, h('span', { class: 'chev', 'aria-hidden': 'true' })), h('div', { class: 'side-items' }, g.items));
+      d.addEventListener('toggle', () => { if (d.open) openGroups.add(g.name); else openGroups.delete(g.name); });
+      return d;
+    }));
   }
   function go(id) { current = id; history.replaceState(null, '', '#' + id); drawSide(); show(id); window.scrollTo(0, 0); }
 
@@ -431,7 +477,8 @@
       h('p', { class: 'sec-desc' }, desc)];
     main.replaceChildren(...frame, h('div', { id: 'sec-body' }));
     const body = document.getElementById('sec-body');
-    if (sec) body.append(settingsSection(sec));
+    if (sec && (id === 'commands' || id === 'events') && !FOCUS) body.append(builderLauncher(sec));
+    else if (sec) body.append(settingsSection(sec));
     else if (id === 'premium') body.append(premiumSection());
     else if (id === 'transcripts') body.append(await transcriptsSection());
     else if (id === 'owner' && ownerMode) body.append(ownerSection());
@@ -462,7 +509,7 @@
       (r.notes || []).map((n) => h('div', { class: 'muted small' }, n)),
       canUndoEntry || (canUndo && r.byid && !r.undone && !isUndo && keys.length) ? h('div', { class: 'acts' },
         canUndoEntry ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => undo({ id: r.id }) }, icon('undo', 14), ' Undo this') : null,
-        r.byid ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { if (confirm('Undo everything ' + (r.by || 'this person') + ' changed that has not been changed again?')) undo({ user: r.byid }); } }, 'Undo everything from ' + (r.by || 'this person')) : null) : null);
+        r.byid ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Undo everything from ' + (r.by || 'this person') + '?', 'Only things that have not been changed again since.', 'Undo it all', true)) undo({ user: r.byid }); } }, 'Undo everything from ' + (r.by || 'this person')) : null) : null);
   }
   function drawConsole() {
     const last = results[0];
@@ -492,7 +539,13 @@
   const savebar = h('div', { class: 'savebar', role: 'region', 'aria-label': 'Unsaved changes' },
     h('span', { id: 'savecount' }, ''),
     h('button', { class: 'btn ghost sm', type: 'button', id: 'discard' }, 'Discard'), h('button', { class: 'btn sm', type: 'button', id: 'save' }, 'Save changes'));
+  let flashTimer = null;
+  function flashBar(text, kind, ms) {
+    clearTimeout(flashTimer); savebar.dataset.state = kind; savebar.querySelector('#savecount').textContent = text; savebar.classList.add('show');
+    if (ms) flashTimer = setTimeout(() => { delete savebar.dataset.state; refreshBar(); }, ms);
+  }
   function refreshBar() {
+    if (savebar.dataset.state) return;
     const n = dirtyKeys().length;
     savebar.querySelector('#savecount').textContent = n + (n === 1 ? ' unsaved change' : ' unsaved changes');
     savebar.classList.toggle('show', n > 0);
@@ -519,13 +572,13 @@
       Object.keys(server).forEach((k) => { if (inFlight.has(k)) return; if (eq(draft[k], original[k])) draft[k] = server[k]; original[k] = server[k]; });
       if (had && !pending.length) {
         const first = results[0];
-        if (first && Object.keys(first.errors || {}).length) toast('Rex rejected part of that change. Open the activity log.', 'bad'); else toast('Rex applied your changes.', 'good');
+        if (first && Object.keys(first.errors || {}).length) toast('Rex rejected part of that change. Open the activity log.', 'bad'); else { toast('Rex applied your changes.', 'good'); flashBar('Saved and applied', 'done', 2600); }
       }
       const y = window.scrollY; drawConsole(); if (had !== pending.length) { show(current, true); window.scrollTo(0, y); }
     } catch (e) { /* retry */ }
     if (!pending.length) { clearInterval(polling); polling = null; }
   }
-  function startPolling() { if (!polling) polling = setInterval(poll, 3000); }
+  function startPolling() { if (!polling) polling = setInterval(poll, 1000); }
   setInterval(() => { if (!document.hidden && !polling && !consoleOpen) poll().catch(() => {}); }, 45000);
 
   savebar.querySelector('#discard').addEventListener('click', () => { draft = Object.assign({}, original); errors = {}; show(current, true); });
@@ -533,13 +586,13 @@
     const btn = ev.currentTarget, changes = {};
     dirtyKeys().forEach((k) => { changes[k] = draft[k]; });
     if (!Object.keys(changes).length) return;
-    btn.disabled = true;
+    btn.disabled = true; flashBar('Saving...', 'saving');
     try {
       const res = await api('/api/guilds/' + encodeURIComponent(gid) + '/settings', { method: 'PUT', body: { changes, silent: ownerMode && hideLog } });
       if (res.queued) {
         pending = pending.concat([{ id: res.id, keys: res.keys }]);
         Object.keys(changes).forEach((k) => { original[k] = changes[k]; });
-        toast('Sent to Rex. It applies within seconds.', 'good'); startPolling();
+        flashBar('Sent to Rex. Applying...', 'saving'); startPolling();
       }
       show(current, true); drawConsole();
     } catch (e) {
@@ -549,7 +602,7 @@
         if (firstSec && firstSec.id !== current) go(firstSec.id); else show(current, true);
         toast('Some values were rejected. Check the highlighted settings.', 'bad');
       } else toast(e.message, 'bad');
-    } finally { btn.disabled = false; }
+    } finally { btn.disabled = false; if (savebar.dataset.state === 'saving' && !pending.length) { delete savebar.dataset.state; refreshBar(); } }
   });
   window.addEventListener('beforeunload', (e) => { if (dirtyKeys().length) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -561,9 +614,11 @@
     head.classList.toggle('condensed', cond); document.body.classList.toggle('cond', cond);
   };
   window.addEventListener('scroll', onScroll, { passive: true });
+  let wasNarrow = innerWidth <= 960; window.addEventListener('resize', () => { const n = innerWidth <= 960; if (n !== wasNarrow) { wasNarrow = n; drawSide(); } });
   window.addEventListener('hashchange', () => { const id = (location.hash || '').slice(1); if (allIds().includes(id) && id !== current) { current = id; drawSide(); show(id); } });
 
-  app.replaceChildren(h('div', { class: 'srv-spacer' }), h('div', { class: 'srv-layout' }, side, main));
+  const backBar = FOCUS ? h('div', { class: 'wrap focus-bar' }, h('a', { class: 'btn ghost sm', href: '/server?id=' + encodeURIComponent(gid) + '#' + FOCUS }, '< Back to ' + guild.name), h('b', {}, FOCUS === 'commands' ? 'Custom commands' : 'Events')) : null;
+  app.replaceChildren(FOCUS ? h('div', { class: 'srv-spacer' }) : h('div', { class: 'srv-spacer' }), backBar, h('div', { class: 'srv-layout' }, side, main));
   document.body.append(head, savebar);
   drawHead(); drawSide(); show(current);
   if (pending.length) startPolling();

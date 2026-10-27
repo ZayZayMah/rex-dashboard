@@ -10,7 +10,7 @@ import re
 SNOWFLAKE = re.compile(r"^\d{15,25}$")
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 TIERS = ("free", "premium", "priority", "ultra")
-TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes", "roles", "builder")
+TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes", "roles", "builder", "card")
 TEXT_KINDS = ("text", "announcement")
 
 
@@ -149,10 +149,17 @@ def validate_value(spec, raw, guild):
                 out.append(value)
         return out
 
+    if kind == "card":
+        if raw in (None, "", {}):
+            return {}
+        if not isinstance(raw, dict) or len(json.dumps(raw, separators=(",", ":"))) > 20000:
+            raise ValueError(f"{label} is too large or invalid.")
+        return raw
+
     if kind == "builder":
         if not isinstance(raw, list) or len(raw) > int(spec.get("maxitems", 50)):
             raise ValueError(f"{label}: too many entries.")
-        if len(json.dumps(raw, separators=(",", ":"))) > 40000:
+        if len(json.dumps(raw, separators=(",", ":"))) > 100000:
             raise ValueError(f"{label} is too large.")
         return raw
 

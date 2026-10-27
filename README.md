@@ -61,3 +61,10 @@ Cloudflare KV allows about 1,000 writes a day. The site batches writes (bat XP, 
 - Image uploads: `/api/upload` stores images in KV (max 400 KB, resized in the browser) and serves them from `/api/img/<id>`.
 - New settings types `roles` and `builder`; sections can be hidden behind a beta flag (`beta: "builder"`).
 - `public/js/builder.js` is the block builder for custom commands and events.
+
+
+## Phase 3 notes
+- New Worker file `src/features.py` (support chat + Gmail email). Deploy as usual (`wrangler deploy`).
+- Gmail email needs two new secrets: `GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET` (Google Cloud > OAuth client, type Desktop or Web with redirect `http://localhost`). In Owner mode > Email, press Connect, approve, and paste the `http://localhost/?code=...` address you land on. People only get email if they opt in on their profile; every email has an unsubscribe link. Daily cap 450.
+- New static files: `public/js/card.js` (image card designer), `public/js/dialog.js`, `public/js/support.js`. After editing anything in `tools/` run `cd tools && python3 build_pages.py`.
+- The builder lives on its own page; the status editor is at the top of Owner mode > Tools.

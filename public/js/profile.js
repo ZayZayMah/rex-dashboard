@@ -49,10 +49,27 @@
       h('h3', {}, 'Rex owner tools'), h('p', { class: 'muted small' }, 'Codes, servers, users and website settings.'),
       me.owner_mode ? h('a', { class: 'btn', href: '/owner' }, 'Open owner mode')
         : h('button', { class: 'btn', type: 'button', onclick: async () => { try { await api('/api/owner/mode', { method: 'POST', body: { on: true } }); location.href = '/owner'; } catch (e) { toast(e.message, 'bad'); } } }, 'Enter Owner Mode')));
+    if (me.beta && me.beta.email) {
+      const box = h('div', { class: 'well' }, h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Loading...'));
+      body.append(box);
+      api('/api/email/prefs').then((pr) => {
+        const row = (key, title, desc) => {
+          const sw = h('button', { type: 'button', class: 'rocker', role: 'switch', 'aria-checked': String(!!pr[key]), 'aria-label': title });
+          sw.addEventListener('click', async () => { const on = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', String(on)); try { await api('/api/email/prefs', { method: 'PUT', body: { [key]: on } }); toast(on ? 'Turned on' : 'Turned off', 'good'); } catch (e) { sw.setAttribute('aria-checked', String(!on)); toast(e.message, 'bad'); } });
+          return h('div', { class: 'beta-row' }, h('div', {}, h('b', {}, title), h('div', { class: 'muted small' }, desc)), sw);
+        };
+        if (pr.owner) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Rex owners never receive these emails.'));
+        if (!pr.has_email) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Your Discord account has no verified email, so there is nothing to send to.'));
+        if (!pr.can) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Emails are for people who manage a server with Rex. Add Rex to a server first.'));
+        box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Sent to ' + pr.email + '. Everything is off until you turn it on, and every email has an unsubscribe link.'),
+          row('update', 'Update emails', 'New features and fixes, now and then.'), row('push', 'Important notices', 'Maintenance, outages and anything that needs your attention.'));
+      }).catch((e) => box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, e.message)));
+    }
+    if (me.beta && me.beta.support) body.append(h('div', { class: 'well' }, h('h3', {}, 'Need help?'), h('p', { class: 'muted small' }, 'Chat with the Rex helper. If it cannot solve it, a real person joins.'), h('a', { class: 'btn', href: '/support' }, 'Open support chat')));
     body.append(h('div', { class: 'well' }, h('h3', {}, 'Your data'),
       h('p', { class: 'muted small' }, 'Rex keeps your Discord ID, name, avatar, email (if shared), the servers you can manage and your stats so the website can work. You can remove it at any time. Logging in again recreates a fresh record.'),
       h('button', { class: 'btn danger sm', type: 'button', onclick: async () => {
-        if (!confirm('Delete your website data and log out? Your XP in Discord servers is not affected.')) return;
+        if (!(await rexDialog.confirm('Delete your website data?', 'You will be logged out. Your XP in Discord servers is not affected.', 'Delete my data', true))) return;
         try { await api('/api/me/delete', { method: 'POST', body: {} }); location.href = '/'; } catch (e) { toast(e.message, 'bad'); }
       } }, 'Delete my website data')));
   }

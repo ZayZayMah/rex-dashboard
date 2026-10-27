@@ -19,6 +19,7 @@ PAGES = [
     ("dashboard.html", "Dashboard - Rex", "Pick a server and manage Rex there.", "dashboard", False, "noindex"),
     ("server.html", "Server - Rex", "Manage Rex in your server.", "server", False, "noindex"),
     ("profile.html", "Profile - Rex", "Your Rex profile, levels and XP.", "profile", False, "noindex"),
+    ("support.html", "Support - Rex", "Chat with the Rex helper or a real person.", "support", False, "noindex"),
     ("owner.html", "Owner mode - Rex", "Rex owner tools.", "owner", False, "noindex"),
     ("transcript.html", "Ticket transcript - Rex", "A saved Rex ticket transcript.", "transcript", False, "noindex,nofollow"),
     ("404.html", "Not found - Rex", "That page does not exist.", "404", False, "noindex"),
@@ -59,6 +60,7 @@ BODY = """<body class="page-{script}">
 <footer id="footer"></footer>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <script src="/js/app.js"></script>
+<script src="/js/dialog.js"></script>
 <script src="/js/layouts.js"></script>
 <script src="/js/fx.js"></script>
 {extra}<script src="/js/{script}.js"></script>
@@ -72,7 +74,7 @@ for file, title, desc, script, _home, robots in PAGES:
     if script in ("commands", "command", "about", "premium", "live"):
         extra = '<script src="/js/catalog.js"></script>\n' if script in ("commands", "command") else ""
     if script == "server":
-        extra = '<script src="/js/builder.js"></script>\n'
+        extra = '<script src="/js/card.js"></script>\n<script src="/js/builder.js"></script>\n'
     html = HEAD.format(title=title, desc=desc, origin=ORIGIN, path=path,
                        robots=f'<meta name="robots" content="{robots}">\n' if robots else "")
     if script == "transcript":

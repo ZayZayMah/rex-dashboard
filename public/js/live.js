@@ -47,7 +47,7 @@
     $('l-users').textContent = d.online ? fmtNum(s.user_count) : '-';
     $('l-cmds').textContent = fmtNum(s.command_count);
     $('l-ping').textContent = d.online && s.latency_ms != null ? s.latency_ms + ' ms' : '-';
-    $('l-up').textContent = d.online ? fmtDuration(s.uptime_s) : '-';
+    $('l-up').replaceChildren(d.online ? fmtDuration(s.uptime_s) : '-', ...(d.online && s.uptime_reason ? [' ', h('small', { class: 'up-why' }, '(' + s.uptime_reason + ')')] : []));
     $('l-errs').textContent = s.errors_last_hour != null ? s.errors_last_hour + ' command errors in the last hour' : '';
     const hist = d.hist || [];
     spark($('sp-ping'), hist.map((p) => p[1]), '#62cbff');

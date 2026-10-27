@@ -1,96 +1,77 @@
-/* CHRISTMAS - "Winter lodge". A bright, snowy light theme with a floating glass dock, a tree scene, hanging baubles,
-   gift-box feature tiles, a pill dock for server sections and gift-tag server cards. Not a recolour of the dark site. */
+/* CHRISTMAS - "Midwinter". A calm evergreen night with warm gold and cream type, thin gold rules and a very light snowfall.
+   Same dark structure as the normal site (so every page stays readable) with its own nav dock, home layout and accents. */
 html[data-theme='christmas'] {
-  color-scheme: light;
-  --ink: #eaf4fa; --deep: #dcebf4; --plate: #ffffff; --plate2: #f3f9fd; --edge: #cfe0ea; --edge2: #9fc0d2;
-  --volt: #c8263b; --arc: #1b6b4c; --ice: #15303a; --steel: #46636e; --dim: #7a97a3; --glow: 200, 38, 59; --on-accent: #fff;
-  --ok: #1f9d63; --warn: #b9770e; --bad: #c8263b; --gold: #b8860b; --prio: #2a6fb7; --ultra: #7a4bd0;
-  --display: 'Fraunces', Georgia, serif; --body: 'Figtree', system-ui, sans-serif; --nav-h: 96px; --head-big: 104px;
+  color-scheme: dark;
+  --ink: #07120d; --deep: #0a1812; --plate: #0f2219; --plate2: #132b20; --edge: #1f3d2f; --edge2: #35604a;
+  --volt: #d9b45f; --arc: #e9cf8c; --ice: #f5f0e2; --steel: #bac6b8; --dim: #84978b; --glow: 217, 180, 95; --on-accent: #1d1503;
+  --ok: #5fd39a; --warn: #e6b34e; --bad: #ef6a6a; --gold: #e9cf8c; --prio: #7fb2ee; --ultra: #b99af0;
+  --display: 'Fraunces', Georgia, serif; --body: 'Figtree', system-ui, sans-serif; --nav-h: 76px; --head-big: 104px; --radius: 12px;
 }
-html[data-theme='christmas'] body { color: var(--ice); background: radial-gradient(800px 500px at 50% -100px, #ffffff, transparent 70%), linear-gradient(#eaf4fa, #d4e6f1 60%, #c5dcea); background-attachment: fixed; }
-html[data-theme='christmas'] code, html[data-theme='christmas'] .mono { color: #1b6b4c; }
-html[data-theme='christmas'] a { color: #1b6b4c; }
-html[data-theme='christmas'] .muted { color: var(--steel); }
+html[data-theme='christmas'] body { color: var(--ice); background: radial-gradient(900px 520px at 50% -160px, rgba(217, 180, 95, .12), transparent 70%), linear-gradient(#0b1a13, #07120d 55%, #050d09); background-attachment: fixed; }
+html[data-theme='christmas'] a { color: var(--arc); } html[data-theme='christmas'] code, html[data-theme='christmas'] .mono { color: var(--arc); }
+html[data-theme='christmas'] h1, html[data-theme='christmas'] h2, html[data-theme='christmas'] h3 { font-family: var(--display); font-weight: 600; letter-spacing: .005em; }
+html[data-theme='christmas'] ::selection { background: rgba(217, 180, 95, .35); }
 
-/* ---- floating dock */
-html[data-theme='christmas'] .nav { background: transparent; border: 0; backdrop-filter: none; position: sticky; pointer-events: none; }
-.xm-dock { pointer-events: auto; margin-top: 14px; height: 66px; display: flex; align-items: center; gap: 18px; padding: 0 14px 0 22px; border-radius: 999px; background: rgba(255, 255, 255, .82); backdrop-filter: blur(16px); border: 1px solid #fff; box-shadow: 0 14px 40px rgba(31, 80, 110, .22), inset 0 0 0 1px rgba(159, 192, 210, .5); }
-.xm-dock .brand { color: #15303a; } .xm-dock .mark { background: linear-gradient(#e23b4e, #9d1228); }
-.xm-pills { display: flex; gap: 4px; margin: 0 auto; padding: 5px; border-radius: 999px; background: #eaf4fa; }
-.xm-pills a { padding: 8px 18px; border-radius: 999px; color: var(--steel); font-weight: 600; font-size: 14px; } .xm-pills a:hover { text-decoration: none; color: var(--ice); }
-.xm-pills a.active { background: #c8263b; color: #fff; box-shadow: 0 4px 12px rgba(200, 38, 59, .4); }
-.xm-dock .nav-end { margin: 0; } .xm-dock .avatar-btn { background: #fff; border-color: #c8263b; width: 42px; height: 42px; }
-html[data-theme='christmas'] .menu, html[data-theme='christmas'] .dd-menu { background: #fff; color: var(--ice); box-shadow: 0 18px 40px rgba(31, 80, 110, .25); } html[data-theme='christmas'] .menu a, html[data-theme='christmas'] .menu button { color: var(--ice); }
-html[data-theme='christmas'] .owner-strip { background: #fff3d6; color: #8a5a00; border-color: #e8c97a; } html[data-theme='christmas'] .owner-strip a { color: #1b6b4c; }
+/* ---- nav: one slim bar, links centred, account on the right */
+html[data-theme='christmas'] .nav { background: rgba(7, 18, 13, .86); backdrop-filter: blur(14px); border-bottom: 1px solid rgba(217, 180, 95, .28); }
+.xm-dock { height: var(--nav-h); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.xm-dock .brand { justify-self: start; color: var(--ice); } .xm-dock .mark { background: linear-gradient(160deg, #f0d897, #c79a3b); }
+.xm-pills { display: flex; gap: 2px; justify-self: center; }
+.xm-pills a { padding: 8px 16px; color: var(--steel); font: 600 14px var(--body); letter-spacing: .03em; border-bottom: 2px solid transparent; border-radius: 0; }
+.xm-pills a:hover { color: var(--ice); text-decoration: none; } .xm-pills a.active { color: var(--arc); border-bottom-color: var(--volt); }
+.xm-dock .nav-end { justify-self: end; margin: 0; } .xm-dock .avatar-btn { background: var(--plate); border-color: var(--edge2); }
+html[data-theme='christmas'] .menu, html[data-theme='christmas'] .dd-menu { background: var(--plate); border: 1px solid var(--edge2); box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
+html[data-theme='christmas'] .owner-strip { background: rgba(217, 180, 95, .12); color: var(--arc); border-color: rgba(217, 180, 95, .35); }
 
-/* ---- surfaces: rounded, bright, ribbon-trimmed */
-html[data-theme='christmas'] .btn { border-radius: 999px; background: linear-gradient(180deg, #e23b4e, #b81f2f); color: #fff; box-shadow: 0 8px 20px rgba(200, 38, 59, .32); }
-html[data-theme='christmas'] .btn.ghost { background: #fff; color: #15303a; border: 1px solid var(--edge2); box-shadow: none; } html[data-theme='christmas'] .btn.ghost:hover { background: #eaf4fa; border-color: #c8263b; }
-html[data-theme='christmas'] .btn.discord { background: #5865f2; color: #fff; } html[data-theme='christmas'] .btn.danger { background: #c8263b; color: #fff; } html[data-theme='christmas'] .btn.gold { background: #f0c04a; color: #3a2a00; }
-html[data-theme='christmas'] .plate, html[data-theme='christmas'] .slab, html[data-theme='christmas'] .frame, html[data-theme='christmas'] .panel { clip-path: none; background: #fff; border: 1px solid var(--edge); border-radius: 26px; box-shadow: 0 12px 30px rgba(31, 80, 110, .12); background-image: none; }
-html[data-theme='christmas'] .slab { border-left: 1px solid var(--edge); border-top: 6px solid #c8263b; } html[data-theme='christmas'] .frame { border: 2px dashed var(--edge2); background: #fff; }
-html[data-theme='christmas'] .well { background: #f3f9fd; border: 1px solid var(--edge); box-shadow: none; border-radius: 20px; }
-html[data-theme='christmas'] .badge { border-radius: 999px; } html[data-theme='christmas'] .badge.tier-premium { background: #fff3d6; color: #8a5a00; } html[data-theme='christmas'] .badge.tier-priority { background: #dbeaff; color: #1f5fa6; } html[data-theme='christmas'] .badge.tier-ultra { background: #ece0ff; color: #6a3fc0; box-shadow: none; } html[data-theme='christmas'] .badge.tier-free { background: #e6eef3; color: var(--steel); }
-html[data-theme='christmas'] input, html[data-theme='christmas'] select, html[data-theme='christmas'] textarea, html[data-theme='christmas'] .combo-btn, html[data-theme='christmas'] .stepper, html[data-theme='christmas'] .seg { background: #fff; color: var(--ice); border-color: var(--edge2); }
-html[data-theme='christmas'] .rocker { background: #dfe9ef; border-color: var(--edge2); } html[data-theme='christmas'] .rocker::after { background: #fff; box-shadow: 0 2px 4px rgba(0, 0, 0, .25); } html[data-theme='christmas'] .rocker[aria-checked='true'] { background: #1f9d63; }
-html[data-theme='christmas'] .seg button { color: var(--steel); } html[data-theme='christmas'] .seg button[aria-checked='true'] { background: #c8263b; color: #fff; }
-html[data-theme='christmas'] .switch-card { background: #fff; border-color: var(--edge); } html[data-theme='christmas'] .switch-card.on { border-color: #1f9d63; background: #eefaf3; }
-html[data-theme='christmas'] .subnav { background: #fff; border-color: var(--edge); } html[data-theme='christmas'] .subnav a.active { background: #c8263b; color: #fff; }
-html[data-theme='christmas'] .stat-strip { background: #fff; }
-html[data-theme='christmas'] .modal, html[data-theme='christmas'] .combo-list, html[data-theme='christmas'] .toast { background: #fff; color: var(--ice); }
-html[data-theme='christmas'] .console-bar, html[data-theme='christmas'] .console-body { background: #fff; color: var(--steel); border-color: var(--edge2); }
-html[data-theme='christmas'] .savebar { background: #fff; border-color: #c8263b; color: var(--ice); }
+/* ---- surfaces */
+html[data-theme='christmas'] .btn { border-radius: 10px; background: linear-gradient(180deg, #e9cf8c, #c79a3b); color: #1d1503; box-shadow: 0 6px 18px rgba(199, 154, 59, .22); font-weight: 700; border: 0; }
+html[data-theme='christmas'] .btn:hover { filter: brightness(1.06); }
+html[data-theme='christmas'] .btn.ghost { background: transparent; color: var(--arc); border: 1px solid rgba(217, 180, 95, .5); box-shadow: none; } html[data-theme='christmas'] .btn.ghost:hover { background: rgba(217, 180, 95, .1); }
+html[data-theme='christmas'] .btn.discord { background: #5865f2; color: #fff; box-shadow: none; } html[data-theme='christmas'] .btn.danger { background: #b94646; color: #fff; box-shadow: none; }
+html[data-theme='christmas'] .plate, html[data-theme='christmas'] .slab, html[data-theme='christmas'] .frame, html[data-theme='christmas'] .panel { clip-path: none; background: var(--plate); border: 1px solid var(--edge); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .3); }
+html[data-theme='christmas'] .frame::before, html[data-theme='christmas'] .frame::after { display: none; }
+html[data-theme='christmas'] .slab { border-top: 2px solid var(--volt); }
+html[data-theme='christmas'] .well { background: var(--plate2); border: 1px solid var(--edge); box-shadow: none; border-radius: 14px; }
+html[data-theme='christmas'] .badge { border-radius: 999px; }
+html[data-theme='christmas'] .rocker[aria-checked='true'] { background: var(--ok); }
+html[data-theme='christmas'] .seg button[aria-checked='true'], html[data-theme='christmas'] .subnav a.active { background: var(--volt); color: #1d1503; }
+html[data-theme='christmas'] .savebar { background: var(--plate); border-color: var(--volt); }
 
 /* ---- home */
-.xm-hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: center; padding: 30px 0 10px; }
-.xm-ribbon { display: inline-block; padding: 5px 20px; background: #c8263b; color: #fff; font: 700 12px var(--body); letter-spacing: .16em; text-transform: uppercase; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%, 10px 50%); }
-.xm-copy h1 { font-size: clamp(76px, 12vw, 140px); line-height: .9; margin: 14px 0 10px; color: #14573b; letter-spacing: .04em; text-shadow: 0 4px 0 #fff, 0 10px 24px rgba(20, 87, 59, .2); }
-.xm-tag { font: 700 24px var(--display); color: #c8263b; margin: 0 0 10px; } .xm-lead { color: var(--steel); font-size: 18px; max-width: 50ch; }
-.xm-cta { display: flex; gap: 12px; flex-wrap: wrap; margin: 22px 0; }
-.xm-scene { display: grid; place-items: center; } .xm-wreath { position: relative; width: min(440px, 92%); aspect-ratio: 1; } .xm-wreath-svg { width: 100%; height: 100%; display: block; }
-.xm-wreath .mark { position: absolute; left: 31%; top: 31%; width: 38%; height: 38%; background: linear-gradient(160deg, #d9a02a, #b8860b); filter: drop-shadow(0 6px 10px rgba(120, 80, 0, .35)); }
-.xm-baubles { display: flex; justify-content: space-around; gap: 16px; flex-wrap: wrap; padding: 60px 0 10px; position: relative; }
-.xm-baubles::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 40px; border-bottom: 3px solid #1b6b4c; border-radius: 0 0 50% 50% / 0 0 100% 100%; opacity: .5; }
-.bauble { position: relative; width: 150px; height: 150px; border-radius: 50%; display: grid; place-content: center; text-align: center; color: #fff; box-shadow: inset -10px -14px 28px rgba(0, 0, 0, .25), inset 10px 10px 22px rgba(255, 255, 255, .35), 0 14px 26px rgba(31, 80, 110, .25); }
-.bauble::before { content: ""; position: absolute; top: -40px; left: 50%; width: 2px; height: 40px; background: #1b6b4c; } .bauble::after { content: ""; position: absolute; top: -12px; left: 50%; width: 26px; height: 14px; transform: translateX(-50%); background: #d9b24c; border-radius: 4px 4px 0 0; }
-.bauble b { font: 700 28px var(--display); } .bauble span { font-size: 13px; opacity: .9; letter-spacing: .06em; }
-.bauble.b1 { background: radial-gradient(circle at 35% 30%, #ff7a8a, #c8263b 60%, #8e1325); margin-top: 20px; } .bauble.b2 { background: radial-gradient(circle at 35% 30%, #5fd9a2, #1f9d63 60%, #146b42); margin-top: 52px; }
-.bauble.b3 { background: radial-gradient(circle at 35% 30%, #8cc4ff, #2a6fb7 60%, #1a4a80); margin-top: 8px; } .bauble.b4 { background: radial-gradient(circle at 35% 30%, #ffe08a, #e0a93a 60%, #a8741a); margin-top: 40px; }
-.xm-gifts { margin-top: 70px; text-align: center; } .xm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; margin-top: 26px; text-align: left; }
-.gift { position: relative; padding: 30px 30px 28px 36px; background: #fff; border-radius: 18px; border: 1px solid var(--edge); box-shadow: 0 12px 28px rgba(31, 80, 110, .12); overflow: hidden; }
-.gift::before { content: ""; position: absolute; top: 0; bottom: 0; right: 36px; width: 18px; background: var(--rib, #c8263b); opacity: .9; } .gift::after { content: ""; position: absolute; left: 0; right: 0; bottom: 34px; height: 14px; background: var(--rib, #c8263b); opacity: .12; }
-.gift.g0 { --rib: #c8263b; } .gift.g1 { --rib: #1f9d63; } .gift.g2 { --rib: #2a6fb7; } .gift.g3 { --rib: #d9a02a; }
-.gift h3 { color: var(--rib); margin: 0 0 6px; } .gift p { margin: 0 50px 0 0; color: var(--steel); }
-.xm-cabin { margin: 70px 0 20px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; padding: 34px 40px; background: linear-gradient(135deg, #14573b, #1b6b4c); color: #fff; border-radius: 30px; box-shadow: 0 18px 40px rgba(20, 87, 59, .35); }
-.xm-cabin h2 { color: #fff; } .xm-cabin p { margin: 0; color: #d5f2e3; } .xm-cabin .btn.ghost { background: transparent; color: #fff; border-color: #9fe0bf; } .xm-cabin .btn:not(.ghost) { background: #fff; color: #14573b; box-shadow: none; }
-.xm-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.xm-hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 28px; align-items: center; padding: 56px 0 28px; }
+.xm-eyebrow { font: 600 12px var(--body); letter-spacing: .28em; text-transform: uppercase; color: var(--volt); }
+.xm-copy h1 { font-size: clamp(64px, 11vw, 120px); line-height: .95; margin: 12px 0 8px; color: var(--ice); letter-spacing: .05em; font-weight: 500; }
+.xm-tag { font: italic 400 24px var(--display); color: var(--arc); margin: 0 0 12px; } .xm-lead { color: var(--steel); font-size: 17px; max-width: 52ch; line-height: 1.6; }
+.xm-cta { display: flex; gap: 12px; flex-wrap: wrap; margin: 24px 0; }
+.xm-scene { display: grid; place-items: center; }
+.xm-emblem { position: relative; width: min(360px, 82%); aspect-ratio: 1; display: grid; place-items: center; }
+.xm-emblem::before, .xm-emblem::after { content: ""; position: absolute; border-radius: 50%; border: 1px solid rgba(217, 180, 95, .35); }
+.xm-emblem::before { inset: 0; } .xm-emblem::after { inset: 12%; border-color: rgba(217, 180, 95, .18); }
+.xm-emblem .mark { width: 44%; height: 44%; background: linear-gradient(160deg, #f4e0a2, #c79a3b); filter: drop-shadow(0 0 28px rgba(217, 180, 95, .35)); }
+.xm-stats { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--edge2); border-bottom: 1px solid var(--edge2); margin: 36px 0; }
+.xm-stat { padding: 22px 12px; text-align: center; border-left: 1px solid var(--edge); } .xm-stat:first-child { border-left: 0; }
+.xm-stat b { display: block; font: 500 30px var(--display); color: var(--arc); } .xm-stat span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.xm-gifts { margin-top: 56px; text-align: center; } .xm-gifts h2 { font-size: 30px; font-weight: 500; }
+.xm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 24px; text-align: left; }
+.gift { padding: 24px 26px; background: var(--plate); border: 1px solid var(--edge); border-top: 2px solid var(--volt); border-radius: 14px; }
+.gift h3 { margin: 0 0 6px; color: var(--arc); } .gift p { margin: 0; color: var(--steel); line-height: 1.55; }
+.xm-cabin { margin: 56px 0 20px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; padding: 30px 34px; border: 1px solid var(--edge2); border-radius: 16px; background: linear-gradient(135deg, #0f2a1d, #0b1d15); }
+.xm-cabin h2 { margin: 0 0 6px; font-weight: 500; } .xm-cabin p { margin: 0; color: var(--steel); }
 
-/* ---- dashboard: server cards become gift tags in a grid, ultra gets a bow */
-html[data-theme='christmas'] .srv-card { border-radius: 8px 26px 26px 8px !important; border: 1px solid var(--edge) !important; border-left: 10px solid #1f9d63 !important; background: #fff !important; padding: 20px 22px; position: relative; }
-html[data-theme='christmas'] .srv-card::after { content: ""; position: absolute; right: 16px; top: 16px; width: 12px; height: 12px; border-radius: 50%; border: 3px solid var(--edge2); background: #eaf4fa; }
-html[data-theme='christmas'] .srv-card.frame { border-left-color: #7a4bd0 !important; } html[data-theme='christmas'] .srv-card.plate { border-left-color: #d9a02a !important; }
-html[data-theme='christmas'] .srv-card:hover { transform: rotate(-1deg) translateY(-3px); }
+/* ---- dashboard + server pages: same structure as the normal site, in the winter palette */
+html[data-theme='christmas'] .srv-card { border-radius: 14px !important; border: 1px solid var(--edge) !important; background: var(--plate) !important; }
+html[data-theme='christmas'] .srv-card:hover { border-color: var(--volt) !important; transform: translateY(-2px); }
+html[data-theme='christmas'] .srv-head { background: rgba(7, 18, 13, .92); border-bottom: 1px solid rgba(217, 180, 95, .28); }
+html[data-theme='christmas'] .srv-side a.active { background: rgba(217, 180, 95, .14); color: var(--arc); border-left-color: var(--volt); }
+html[data-theme='christmas'] .sec-head h2 { color: var(--ice); }
 
-/* ---- server page: header is a centred banner, sections live in a pill dock on the RIGHT */
-html[data-theme='christmas'] .srv-head { background: rgba(255, 255, 255, .9); border-bottom: 3px solid transparent; border-image: repeating-linear-gradient(90deg, #c8263b 0 24px, #fff 24px 48px, #1f9d63 48px 72px) 1; }
-html[data-theme='christmas'] .srv-head .in { justify-content: center; } html[data-theme='christmas'] .srv-head .console { margin-left: 0; }
-html[data-theme='christmas'] .srv-layout { grid-template-columns: 1fr 230px; }
-html[data-theme='christmas'] .srv-main { grid-column: 1; grid-row: 1; }
-html[data-theme='christmas'] .srv-side { grid-column: 2; right: max(16px, calc((100vw - 1180px) / 2)); left: auto; width: 230px; padding: 10px; border-radius: 26px; background: #fff; border: 1px solid var(--edge); box-shadow: 0 14px 34px rgba(31, 80, 110, .16); gap: 3px; }
-html[data-theme='christmas'] .srv-side a { border-left: 0; border-radius: 999px; color: var(--steel); } html[data-theme='christmas'] .srv-side a:hover { background: #eaf4fa; color: var(--ice); }
-html[data-theme='christmas'] .srv-side a.active { background: #c8263b; color: #fff; } html[data-theme='christmas'] .srv-side hr { border-color: var(--edge); } html[data-theme='christmas'] .srv-side .gold a { color: #8a5a00; }
-html[data-theme='christmas'] .sec-head h2 { color: #14573b; }
-
-/* ---- scenery from fx.js */
-.xm-garland { position: relative; }
+/* ---- snow from fx.js */
 .xm-snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
-.xm-drift { display: block; width: 100%; height: 54px; margin-bottom: -1px; }
-html[data-theme='christmas'] .foot { color: var(--steel); } html[data-theme='christmas'] .foot-links a { color: var(--steel); }
-@media (max-width: 960px) {
-  html[data-theme='christmas'] { --nav-h: 90px; }
-  .xm-hero, .xm-cabin { grid-template-columns: 1fr; } .xm-grid { grid-template-columns: 1fr; }
-  .xm-dock { gap: 8px; padding: 0 10px; } .xm-pills { overflow-x: auto; max-width: 56vw; } .xm-pills a { padding: 7px 12px; white-space: nowrap; }
-  html[data-theme='christmas'] .srv-layout { grid-template-columns: 1fr; }
-  html[data-theme='christmas'] .srv-side { position: static !important; width: 100%; right: auto; border-radius: 22px; }
+html[data-theme='christmas'] .foot { color: var(--dim); } html[data-theme='christmas'] .foot-links a { color: var(--steel); }
+@media (max-width: 900px) {
+  html[data-theme='christmas'] { --nav-h: 64px; }
+  .xm-hero, .xm-cabin, .xm-grid { grid-template-columns: 1fr; } .xm-hero { padding-top: 28px; } .xm-scene { display: none; }
+  .xm-stats { grid-template-columns: repeat(2, 1fr); } .xm-stat:nth-child(3) { border-left: 0; } .xm-stat:nth-child(n+3) { border-top: 1px solid var(--edge); }
+  .xm-dock { grid-template-columns: auto 1fr auto; } .xm-pills { overflow-x: auto; justify-content: flex-start; scrollbar-width: none; max-width: 100%; } .xm-pills a { padding: 6px 10px; white-space: nowrap; font-size: 13px; }
+  .xm-dock .brand .w { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .xm-garland { animation: none; } }

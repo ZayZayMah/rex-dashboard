@@ -31,7 +31,7 @@
     const pop = h('div', { class: 'xp-pop', style: 'left:' + (x - 24) + 'px;top:' + (y - 20) + 'px' }, '+10 XP');
     host().append(pop);
     setTimeout(() => pop.remove(), 1200);
-    if (!window.REX || !REX.me) {
+    if (typeof REX === 'undefined' || !REX.me) {
       if (!toldLogin) { toldLogin = true; toast('Log in with Discord to keep the XP you catch.'); }
       return;
     }
@@ -107,7 +107,8 @@
       }
     }
     const el = parse(`<svg xmlns="${NS}" viewBox="0 0 ${R} ${R}" width="${R}" height="${R}"><path d="${d}" fill="none" stroke="rgba(235,225,255,.42)" stroke-width="1"/></svg>`);
-    el.style.cssText = 'position:fixed;top:var(--nav-h);' + (corner === 'l' ? 'left:0;' : 'right:0;transform:scaleX(-1);') + 'opacity:.8;';
+    el.classList.add('hw-web');
+    el.style.cssText = 'position:fixed;top:var(--top);' + (corner === 'l' ? 'left:0;' : 'right:0;transform:scaleX(-1);') + 'opacity:.8;';
     return el;
   }
   function spider() {
@@ -116,7 +117,8 @@
       <g transform="translate(20 ${len + 14})" stroke="#0b0614" stroke-width="1.6" fill="none" stroke-linecap="round">
       <path d="M-5 -2L-14 -9L-18 0M-5 0L-16 2L-17 10M-5 2L-13 10L-11 17M-4 4L-8 14L-6 20"/><path d="M5 -2L14 -9L18 0M5 0L16 2L17 10M5 2L13 10L11 17M4 4L8 14L6 20"/></g>
       <ellipse cx="20" cy="${len + 16}" rx="7" ry="9" fill="#150a24"/><circle cx="20" cy="${len + 6}" r="4.5" fill="#150a24"/><circle cx="18.5" cy="${len + 5}" r="1" fill="#ff8a3d"/><circle cx="21.5" cy="${len + 5}" r="1" fill="#ff8a3d"/></svg>`);
-    el.style.cssText = `position:fixed;top:calc(var(--nav-h) - 4px);left:${x}vw;transform-origin:50% 0;`;
+    el.classList.add('hw-spider');
+    el.style.cssText = `position:fixed;top:calc(var(--top) - 4px);left:${x}vw;transform-origin:50% 0;`;
     if (!reduce) el.animate([{ transform: 'rotate(-3deg)' }, { transform: 'rotate(3deg)' }], { duration: rnd(2800, 4200), direction: 'alternate', iterations: Infinity, easing: 'ease-in-out' });
     return el;
   }
@@ -169,12 +171,12 @@
     let w = 0, hh = 0;
     const resize = () => { w = cv.width = window.innerWidth; hh = cv.height = window.innerHeight; };
     resize(); window.addEventListener('resize', resize);
-    const flakes = Array.from({ length: 90 }, () => ({ x: Math.random() * w, y: Math.random() * hh, r: rnd(1, 3.2), v: rnd(.4, 1.4), s: rnd(0, 6) }));
+    const flakes = Array.from({ length: 46 }, () => ({ x: Math.random() * w, y: Math.random() * hh, r: rnd(.7, 2), v: rnd(.3, .9), s: rnd(0, 6) }));
     let raf = 0, on = true;
     (function tick() {
       if (!on) return;
       ctx.clearRect(0, 0, w, hh);
-      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.fillStyle = 'rgba(245,240,226,.6)';
       for (const f of flakes) {
         f.y += f.v; f.s += .012; f.x += Math.sin(f.s) * .5;
         if (f.y > hh + 4) { f.y = -4; f.x = Math.random() * w; }
@@ -186,11 +188,6 @@
   }
   function christmasFx() {
     snow();
-    const g = garland();
-    g.style.cssText = 'position:fixed;left:0;right:0;top:calc(var(--nav-h) - 2px);';
-    host().append(g);
-    const foot = document.getElementById('footer');
-    if (foot && !foot.querySelector('.xm-drift')) foot.prepend(parse(`<svg xmlns="${NS}" viewBox="0 0 1200 60" preserveAspectRatio="none" class="xm-drift"><path fill="#eaf4ff" d="M0 60V30c60-24 120 10 200-6s140-12 220 4 150 20 230 0 140-22 220-4 140 14 220-2 110-10 110-10v48z"/></svg>`));
     every(() => { const f = fly(STAR, 80, 24, { min: 3500, max: 5500, wobble: 8 }); if (f) f.classList.add('shoot'); }, 22000, 50000, 9000);
   }
 
