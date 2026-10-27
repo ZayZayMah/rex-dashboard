@@ -329,7 +329,7 @@
       } catch (e) { detail.replaceChildren(h('p', { class: 'muted' }, e.message)); }
     }
     q.addEventListener('input', draw); draw();
-    return h('div', { class: 'stack' }, h('div', { class: 'muted' }, d.users.length + ' people have logged in'), q, detail, list);
+    return h('div', { class: 'stack' }, h('div', { class: 'muted' }, (d.users.length === 1 ? '1 person has' : d.users.length + ' people have') + ' logged in'), q, detail, list);
   }
 
   /* ---- audit */

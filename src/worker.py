@@ -879,6 +879,8 @@ class Default(WorkerEntrypoint):
                 return await self.api_guild_save(request, url, session, gid)
             if len(parts) == 5 and parts[4] == "undo" and method == "POST":
                 return await self.api_undo(request, url, session, gid)
+            if len(parts) == 5 and parts[4] == "panel" and method == "POST":
+                return await self.api_panel(request, url, session, gid)
             if len(parts) == 5 and parts[4] == "redeem" and method == "POST":
                 return await self.api_redeem(request, url, session, gid)
             if len(parts) == 5 and parts[4] == "transcripts" and method == "GET":
@@ -1149,6 +1151,26 @@ class Default(WorkerEntrypoint):
             raise HttpError(429, "queue_full", "Several requests are already waiting for REX. Try again shortly.")
         entries.append(entry)
         await self.store.put("q:all", queue)
+
+    async def api_panel(self, request, url, session, gid):
+        self.check_mutation(request, url, session)
+        user = session["user"]
+        self.guild_access(session, gid)
+        if rate_limited("pn:" + user["id"], 10, 300):
+            raise HttpError(429, "slow_down", "Too many panels. Wait a few minutes.")
+        if not await self.store.get("guild:" + gid):
+            raise HttpError(404, "bot_not_in_server", "REX is not in that server yet.")
+        body = await self.read_json(request, 1024)
+        kind = body.get("kind") if isinstance(body, dict) else None
+        channel = body.get("channel") if isinstance(body, dict) else None
+        if kind in ("lockdown", "unlock"):
+            channel = "0"
+        if kind not in ("ticket", "verify", "lockdown", "unlock") or not isinstance(channel, str) or not (channel == "0" or SNOWFLAKE.match(channel)):
+            raise HttpError(400, "bad_request", "Choose a panel and a channel.")
+        rid = secrets.token_hex(6)
+        await self.enqueue(gid, {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "op": "publish_panel",
+                                 "args": {"kind": kind, "channel": channel, "reason": clean_str(body.get("reason"), 200)}})
+        return json_response({"queued": True, "id": rid}, status=202)
 
     async def api_redeem(self, request, url, session, gid):
         self.check_mutation(request, url, session)

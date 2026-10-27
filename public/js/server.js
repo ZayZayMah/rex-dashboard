@@ -49,6 +49,8 @@
       case 'tags': return v.join(', ').slice(0, 160);
       case 'roles': return v.map((id) => (roleById[String(id)] ? '@' + roleById[String(id)].name : 'unknown role')).join(', ').slice(0, 160);
       case 'tickettypes': return v.map((t) => t.label).join(', ');
+      case 'channels': return (v || []).length + ' channel(s)';
+      case 'levelroles': return (v || []).length + ' reward(s)';
       case 'card': return v && v.layers && v.layers.length ? 'Image card on' : 'Off';
       case 'text': case 'url': { const s = String(v); return '"' + (s.length > 120 ? s.slice(0, 117) + '...' : s) + '"'; }
       default: return String(v);
@@ -260,8 +262,32 @@
       case 'tickettypes': return ticketTypes(spec, locked);
       case 'roles': return rolesControl(spec, locked);
       case 'card': return cardControl(spec, locked);
+      case 'channels': return channelsControl(spec, locked);
+      case 'levelroles': return levelRolesControl(spec, locked);
       default: return h('span', { class: 'muted' }, 'Unsupported setting');
     }
+  }
+  function channelsControl(spec, locked) {
+    const chosen = () => (Array.isArray(draft[spec.key]) ? draft[spec.key] : []);
+    const chips = h('div', { class: 'chips' });
+    const pick = h('select', { disabled: locked ? true : null, onchange: (e) => { const v = e.target.value; e.target.value = ''; if (v && !chosen().includes(v) && chosen().length < (spec.maxitems || 25)) { set(spec.key, chosen().concat([v])); paint(); } } });
+    const paint = () => {
+      chips.replaceChildren(...chosen().map((id) => { const c = guild.channels.find((x) => x.id === id); return h('button', { type: 'button', class: 'chip', disabled: locked ? true : null, onclick: () => { set(spec.key, chosen().filter((x) => x !== id)); paint(); } }, '#' + (c ? c.name : 'unknown'), h('span', { class: 'n' }, 'x')); }));
+      if (!chosen().length) chips.append(h('span', { class: 'muted small' }, 'None chosen'));
+      pick.replaceChildren(h('option', { value: '' }, 'Add a channel...'), ...guild.channels.filter((c) => (c.type === 'text' || c.type === 'announcement') && !chosen().includes(c.id)).map((c) => h('option', { value: c.id }, '#' + c.name)));
+    };
+    paint(); return h('div', { class: 'stack' }, pick, chips);
+  }
+  function levelRolesControl(spec, locked) {
+    const rows = () => (Array.isArray(draft[spec.key]) ? draft[spec.key] : []);
+    const box = h('div', { class: 'stack' });
+    const roles = guild.roles.filter((r) => !r.managed).sort((a, b) => b.position - a.position);
+    const paint = () => box.replaceChildren(...rows().map((r, i) => h('div', { style: 'display:flex;gap:8px;align-items:center' },
+      h('span', { class: 'muted small' }, 'Level'), h('input', { type: 'number', min: 1, max: 1000, value: r.level, style: 'width:90px', disabled: locked ? true : null, oninput: (e) => { const n = parseInt(e.target.value, 10); const next = rows().map((x) => ({ ...x })); next[i].level = isNaN(n) ? 0 : n; set(spec.key, next); } }),
+      (() => { const el = h('select', { disabled: locked ? true : null, style: 'flex:1', onchange: (e) => { const next = rows().map((x) => ({ ...x })); next[i].role = e.target.value; set(spec.key, next); } }, h('option', { value: '' }, 'Choose a role'), roles.map((x) => h('option', { value: x.id }, x.name))); el.value = r.role || ''; return el; })(),
+      h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, onclick: () => { set(spec.key, rows().filter((_, j) => j !== i)); paint(); } }, 'x'))),
+      rows().length < (spec.maxitems || 25) ? h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, onclick: () => { const next = rows().concat([{ level: (rows().reduce((m, x) => Math.max(m, x.level || 0), 0) || 0) + 5, role: '' }]); set(spec.key, next); paint(); } }, '+ Add a reward') : null);
+    paint(); return box;
   }
   function cardControl(spec, locked) {
     const host = h('div', {});
@@ -286,7 +312,7 @@
   }
   function settingRow(spec, sectionLock) {
     const reason = sectionLock || lockReason(spec), locked = !!reason;
-    const wide = spec.type === 'tickettypes' || spec.type === 'card' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
+    const wide = spec.type === 'tickettypes' || spec.type === 'card' || spec.type === 'channels' || spec.type === 'levelroles' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
     return h('div', { class: 'set-row' + (locked ? ' locked' : '') + (wide ? ' wide' : '') },
       h('div', {}, h('label', { class: 'name', for: 'f-' + spec.key }, nameLine(spec, sectionLock)), h('div', { class: 'desc' }, spec.description),
         hintFor(spec) ? h('div', { class: 'hint' }, hintFor(spec)) : null,
@@ -328,7 +354,41 @@
       if (rest.length) node.append(h('div', { style: toggles.length ? 'margin-top:12px' : '' }, rest.map((s) => settingRow(s, secLock))));
       box.append(node);
     });
+    if (!secLock && (sec.id === 'tickets' || sec.id === 'verification')) box.append(panelCard(sec.id === 'tickets' ? 'ticket' : 'verify'));
+    if (!secLock && sec.id === 'protection') box.append(lockdownCard());
     return box;
+  }
+  function lockdownCard() {
+    const why = h('input', { type: 'text', maxlength: 200, placeholder: 'Reason (optional)' }), out = h('div', { class: 'hint', role: 'status' });
+    const go = async (kind) => {
+      if (kind === 'lockdown' && !(await rexDialog.confirm('Lock the whole server?', 'Every text channel will stop letting @everyone talk until you lift the lockdown.', 'Lock it down', true))) return;
+      out.textContent = 'Asking Rex...';
+      try {
+        const r = await api('/api/guilds/' + gid + '/panel', { method: 'POST', body: { kind, channel: '0', reason: why.value } });
+        const res = await waitForResult(r.id);
+        out.textContent = res.ok ? (res.notes && res.notes[0]) || 'Done.' : (Object.values(res.errors || {})[0] || 'Rex could not do that.');
+      } catch (e) { out.textContent = e.message; }
+    };
+    return h('div', { class: 'group frame', style: 'margin-top:16px' }, h('h3', {}, 'Emergency lockdown'), h('p', { class: 'muted small' }, 'Stops everyone talking in every channel, and lifts it again. Needs Rex to have Manage Channels.'),
+      h('div', { class: 'stack' }, why, h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, h('button', { type: 'button', class: 'btn danger', onclick: () => go('lockdown') }, 'Lock down'), h('button', { type: 'button', class: 'btn ghost', onclick: () => go('unlock') }, 'Lift lockdown')), out));
+  }
+  function panelCard(kind) {
+    const label = kind === 'ticket' ? 'ticket panel' : 'verification panel';
+    const chans = guild.channels.filter((c) => c.type === 'text' || c.type === 'announcement');
+    const sel = h('select', {}, h('option', { value: '' }, 'Choose a channel'), chans.map((c) => h('option', { value: c.id }, '#' + c.name)));
+    const out = h('div', { class: 'hint', role: 'status' });
+    const btn = h('button', { type: 'button', class: 'btn', onclick: async () => {
+      if (!sel.value) { out.textContent = 'Pick a channel first.'; return; }
+      if (dirtyKeys().length) { out.textContent = 'Save your changes first, so the panel uses them.'; return; }
+      btn.disabled = true; out.textContent = 'Asking Rex...';
+      try {
+        const r = await api('/api/guilds/' + gid + '/panel', { method: 'POST', body: { kind, channel: sel.value } });
+        const res = await waitForResult(r.id);
+        out.textContent = res.ok ? (res.notes && res.notes[0]) || 'Posted.' : (Object.values(res.errors || {})[0] || 'Rex could not post it.');
+      } catch (e) { out.textContent = e.message; }
+      btn.disabled = false;
+    } }, 'Post the ' + label);
+    return h('div', { class: 'group frame', style: 'margin-top:16px' }, h('h3', {}, 'Publish the ' + label), h('p', { class: 'muted small' }, 'Posts a fresh panel in the channel you pick, using the settings above.'), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, sel, btn), out);
   }
   function tierStatus() {
     return h('div', { class: 'tier-status' }, ['premium', 'priority', 'ultra'].map((t) => {
@@ -440,7 +500,7 @@
   }
   const GROUPS = [
     ['Welcome & logs', ['welcome', 'logs']],
-    ['Help & safety', ['tickets', 'appeals', 'verification', 'protection', 'ultra', 'staff']],
+    ['Help & safety', ['tickets', 'appeals', 'modapps', 'verification', 'protection', 'ultra', 'staff']],
     ['Community', ['levels', 'community']],
     ['Build', ['commands', 'events']],
     ['Insights & plan', ['analytics', 'priority', 'branding']],

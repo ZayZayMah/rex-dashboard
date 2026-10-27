@@ -10,7 +10,7 @@ import re
 SNOWFLAKE = re.compile(r"^\d{15,25}$")
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 TIERS = ("free", "premium", "priority", "ultra")
-TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes", "roles", "builder", "card")
+TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes", "roles", "builder", "card", "channels", "levelroles")
 TEXT_KINDS = ("text", "announcement")
 
 
@@ -148,6 +148,25 @@ def validate_value(spec, raw, guild):
                 seen.add(value)
                 out.append(value)
         return out
+
+    if kind == "channels":
+        ids = {c["id"] for c in guild.get("channels", []) if c.get("type") in ("text", "announcement")}
+        if not isinstance(raw, list) or len(raw) > int(spec.get("maxitems", 25)) or any(not isinstance(x, str) or x not in ids for x in raw):
+            raise ValueError(f"{label}: pick existing text channels (up to {spec.get('maxitems', 25)}).")
+        return list(dict.fromkeys(raw))
+
+    if kind == "levelroles":
+        ids = {r["id"] for r in guild.get("roles", [])}
+        if not isinstance(raw, list) or len(raw) > int(spec.get("maxitems", 25)):
+            raise ValueError(f"{label} can have at most {spec.get('maxitems', 25)} rewards.")
+        out, seen = [], set()
+        for item in raw:
+            lvl = item.get("level") if isinstance(item, dict) else None
+            if isinstance(lvl, bool) or not isinstance(lvl, int) or not 1 <= lvl <= 1000 or lvl in seen or item.get("role") not in ids:
+                raise ValueError(f"{label}: each reward needs a unique level (1-1000) and a role.")
+            seen.add(lvl)
+            out.append({"level": lvl, "role": item["role"]})
+        return sorted(out, key=lambda x: x["level"])
 
     if kind == "card":
         if raw in (None, "", {}):

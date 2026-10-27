@@ -103,7 +103,7 @@ main.wrap { padding: 28px 0 90px; min-height: 70vh; }
 .subnav a { padding: 8px 18px; border-radius: 999px; color: var(--steel); font-weight: 500; white-space: nowrap; }
 .subnav a:hover { color: var(--ice); text-decoration: none; }
 .subnav a.active { background: var(--volt); color: var(--on-accent); font-weight: 700; }
-.strips { position: sticky; top: var(--nav-h); z-index: 38; }
+.strips { background: rgba(5, 10, 20, .97); backdrop-filter: blur(14px); position: sticky; top: var(--nav-h); z-index: 38; }
 .owner-strip { background: linear-gradient(90deg, rgba(244, 192, 78, .18), rgba(244, 192, 78, .05)); color: var(--gold); font-size: 13px; padding: 6px 0; border-bottom: 1px solid rgba(244, 192, 78, .3); }
 .owner-strip .wrap { display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
 .owner-strip button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 999px; padding: 2px 12px; font: inherit; cursor: pointer; }

@@ -72,6 +72,6 @@ html[data-theme='christmas'] .foot { color: var(--dim); } html[data-theme='chris
   html[data-theme='christmas'] { --nav-h: 64px; }
   .xm-hero, .xm-cabin, .xm-grid { grid-template-columns: 1fr; } .xm-hero { padding-top: 28px; } .xm-scene { display: none; }
   .xm-stats { grid-template-columns: repeat(2, 1fr); } .xm-stat:nth-child(3) { border-left: 0; } .xm-stat:nth-child(n+3) { border-top: 1px solid var(--edge); }
-  .xm-dock { grid-template-columns: auto 1fr auto; } .xm-pills { overflow-x: auto; justify-content: flex-start; scrollbar-width: none; max-width: 100%; } .xm-pills a { padding: 6px 10px; white-space: nowrap; font-size: 13px; }
+  .xm-dock { grid-template-columns: auto 1fr auto; } .xm-pills { overflow-x: auto; -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent); mask-image: linear-gradient(90deg, #000 82%, transparent); padding-right: 18px; justify-content: flex-start; scrollbar-width: none; max-width: 100%; } .xm-pills a { padding: 6px 10px; white-space: nowrap; font-size: 13px; }
   .xm-dock .brand .w { display: none; }
 }
