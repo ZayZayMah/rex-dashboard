@@ -693,3 +693,7 @@ html[data-theme='halloween'] .srv-side .side-group { display: contents; } html[d
 .bld-f.sm { font-size: 13px; }
 .status-lines { display: grid; gap: 6px; }
 .status-line { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--edge); border-radius: 10px; }
+.mail-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; flex-wrap: wrap; }
+.mail-acts { display: flex; gap: 8px; }
+.mail-modal { position: fixed; inset: 0; background: #050a14cc; display: grid; place-items: center; z-index: 60; padding: 16px; }
+.mail-modal .frame { max-width: 520px; width: 100%; }

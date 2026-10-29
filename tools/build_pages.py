@@ -20,6 +20,7 @@ PAGES = [
     ("server.html", "Server - Rex", "Manage Rex in your server.", "server", False, "noindex"),
     ("profile.html", "Profile - Rex", "Your Rex profile, levels and XP.", "profile", False, "noindex"),
     ("support.html", "Support - Rex", "Chat with the Rex helper or a real person.", "support", False, "noindex"),
+    ("email-builder.html", "Email builder - Rex", "Design Rex emails.", "emailbuilder", False, "noindex,nofollow"),
     ("owner.html", "Owner mode - Rex", "Rex owner tools.", "owner", False, "noindex"),
     ("transcript.html", "Ticket transcript - Rex", "A saved Rex ticket transcript.", "transcript", False, "noindex,nofollow"),
     ("404.html", "Not found - Rex", "That page does not exist.", "404", False, "noindex"),
@@ -79,7 +80,12 @@ for file, title, desc, script, _home, robots in PAGES:
                        robots=f'<meta name="robots" content="{robots}">\n' if robots else "")
     if script == "transcript":
         html = html.replace('<script src="/js/theme.js">', '<link rel="stylesheet" href="/css/transcript.css">\n<script src="/js/theme.js">')
-    html += BODY.format(script=script, extra=extra)
+    if script == "emailbuilder":
+        html = html.replace('<link rel="stylesheet" href="/css/style.css">', '<link rel="stylesheet" href="/css/style.css">\n<link rel="stylesheet" href="/css/emailbuilder.css">')
+        html += ('<body class="page-emailbuilder"><div id="app"></div><div id="toasts" class="toasts" aria-live="polite"></div>\n<script src="/js/app.js"></script>\n'
+                 '<script src="/js/dialog.js"></script>\n<script src="/js/emailbuilder.js"></script>\n</body>\n</html>\n')
+    else:
+        html += BODY.format(script=script, extra=extra)
     with open(os.path.join(OUT, file), "w", encoding="utf-8") as fh:
         fh.write(html)
 

@@ -60,8 +60,7 @@
         };
         if (pr.owner) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Rex owners never receive these emails.'));
         if (!pr.has_email) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Your Discord account has no verified email, so there is nothing to send to.'));
-        if (!pr.can) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Emails are for people who manage a server with Rex. Add Rex to a server first.'));
-        box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Sent to ' + pr.email + '. Everything is off until you turn it on, and every email has an unsubscribe link.'),
+        box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Sent to ' + pr.email + '. You get Rex emails unless you turn them off here, and every email has an unsubscribe link. Account notices (like a server being banned) may still be sent.'),
           row('update', 'Update emails', 'New features and fixes, now and then.'), row('push', 'Important notices', 'Maintenance, outages and anything that needs your attention.'));
       }).catch((e) => box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, e.message)));
     }

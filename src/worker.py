@@ -630,6 +630,8 @@ class Default(WorkerEntrypoint):
                     "fs": prev.get("fs") or now(), "g": [g["id"] for g in managed][:100]})
         await self.put_user(uid, rec)
         await self.touch_watch(uid, force=True)
+        if not prev:
+            await features.fire(self, "first_login", uid, url, rec=rec)
         return redirect("/dashboard", make_cookie(SESSION_COOKIE, token, SESSION_TTL))
 
     # ---- users are spread over 16 shards so logins never overwrite each other
@@ -1507,7 +1509,7 @@ class Default(WorkerEntrypoint):
         if tail == ["poll"] and method == "GET":
             return await self.bot_poll()
         if tail == ["ack"] and method == "POST":
-            return await self.bot_ack(await self.read_json(request, 512 * 1024))
+            return await self.bot_ack(await self.read_json(request, 512 * 1024), urlparse(request.url))
         if tail == ["transcript"] and method == "POST":
             return await self.bot_transcript(request, await self.read_json(request, 3 * 1024 * 1024))
         if tail == ["ownercode"] and method == "POST":
@@ -1591,10 +1593,11 @@ class Default(WorkerEntrypoint):
         xpq = await self.store.get("xpq") or {}
         return json_response({"pending": pending[:50], "watch": recent, "hot": hot, "xp": xpq})
 
-    async def bot_ack(self, body):
+    async def bot_ack(self, body, url=None):
         if not isinstance(body, dict):
             raise HttpError(400, "bad_request", "Expected an object.")
         results = body.get("results") if isinstance(body.get("results"), list) else []
+        mail_events = []
         done_xp = body.get("xp_done") if isinstance(body.get("xp_done"), dict) else {}
         if done_xp:
             xpq = await self.store.get("xpq") or {}
@@ -1635,6 +1638,8 @@ class Default(WorkerEntrypoint):
                 # operations: the person who asked reads the result; only redeem shows in the server's log
                 await self.store.put("ores:" + rid, {"by": entry["by"], "errors": {clean_str(k, 60): clean_str(v, 240) for k, v in errors.items()},
                                                      "notes": notes, "out": clean_out}, ttl=900)
+                if entry["op"] in ("redeem", "blacklist") and not errors:
+                    mail_events.append((entry["op"], entry, gid))
                 if entry["op"] == "redeem" and applied.get("_redeem") and SNOWFLAKE.match(gid):
                     by_guild.setdefault(gid, []).append({
                         "id": rid, "t": t, "by": entry.get("byname", ""), "byid": entry["by"],
@@ -1669,6 +1674,15 @@ class Default(WorkerEntrypoint):
                 for rec in records:
                     guild.setdefault("values", {}).update({k: v for k, v in rec["applied"].items() if not k.startswith("_")})
                 await self.store.put("guild:" + gid, guild)
+        if mail_events and url is not None:
+            gindex = await self.store.get("bot:guilds") or {}
+            for op, entry, gid in mail_events:
+                gi = gindex.get(gid) or {}
+                if op == "redeem":
+                    await features.fire(self, "code_redeemed", str(entry["by"]), url, {"server": gi.get("n", "")})
+                elif gi.get("oi"):
+                    ev = "server_unblacklisted" if (entry.get("args") or {}).get("remove") else "server_blacklisted"
+                    await features.fire(self, ev, str(gi["oi"]), url, {"server": gi.get("n", "")})
         return json_response({"ok": True, "recorded": sum(len(v) for v in by_guild.values())})
 
     async def bot_transcript(self, request, body):

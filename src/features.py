@@ -153,11 +153,11 @@ async def route(w, request, url, path, method, session):
             return jr(_public(c))
         if len(tail) == 2 and tail[1] == "close" and method == "POST":
             w.check_mutation(request, url, session)
-            return jr(_public(await close(w, c, "user")))
+            return jr(_public(await close(w, c, "user", url)))
     raise err(404, "not_found", "Not found.")
 
 
-async def close(w, c, by):
+async def close(w, c, by, url=None):
     if c["status"] != "closed":
         was_open = c["status"] == "open"
         c["status"] = "closed"
@@ -167,6 +167,8 @@ async def close(w, c, by):
         if was_open and c.get("chan"):
             await w.enqueue("_", {"id": secrets.token_hex(6), "ts": H("now")(), "by": c["uid"], "byname": c["name"], "op": "support_close", "gid": "_",
                                   "args": {"cid": c["id"], "chan": c["chan"], "by": by}})
+        if was_open and url is not None and c.get("uid"):
+            await fire(w, "support_closed", c["uid"], url)
     return c
 
 
@@ -208,7 +210,7 @@ async def owner_route(w, request, url, path, method, session):
                                   "gid": "_", "args": {"cid": c["id"], "chan": c.get("chan"), "who": session["user"]["name"], "text": text, "from": "staff"}})
             return jr(_public(c, True))
         if tail[1:] == ["close"] and method == "POST":
-            return jr(_public(await close(w, c, "staff"), True))
+            return jr(_public(await close(w, c, "staff", url), True))
         if tail[1:] == ["reopen"] and method == "POST":
             c["status"] = "open"
             c["reason"] = ""
@@ -234,7 +236,7 @@ async def bot_route(w, tail, method, body):
         await _save(w, c)
     elif tail == ["closed"]:
         c["chan"] = None   # the channel is already gone, so don't ask the bot to close it again
-        await close(w, c, "staff")
+        await close(w, c, "staff", url)
     else:
         raise H("HttpError")(404, "not_found", "Not found.")
     return jr({"ok": True})
@@ -277,7 +279,7 @@ async def prefs_route(w, request, url, path, method, session):
     owner = uid in w.owner_ids()
     if method == "GET":
         return jr({"email": "" if owner else _mask(rec.get("e", "")), "has_email": bool(rec.get("e")) and not owner, "owner": owner,
-                   "can": bool(rec.get("g")), "update": bool((rec.get("ep") or {}).get("update")), "push": bool((rec.get("ep") or {}).get("push"))})
+                   "can": True, "update": (rec.get("ep") or {}).get("update") is not False, "push": (rec.get("ep") or {}).get("push") is not False})
     if method == "PUT":
         w.check_mutation(request, url, session)
         body = await w.read_json(request, 512)
@@ -287,7 +289,7 @@ async def prefs_route(w, request, url, path, method, session):
                 ep[k] = bool(body[k])
         rec["ep"] = ep
         await w.put_user(uid, rec)
-        return jr({"ok": True, "update": bool(ep.get("update")), "push": bool(ep.get("push"))})
+        return jr({"ok": True, "update": ep.get("update") is not False, "push": ep.get("push") is not False})
     raise H("HttpError")(405, "bad_method", "Not allowed.")
 
 
@@ -309,49 +311,6 @@ async def unsub_route(w, request, url, method):
             "<div style='max-width:420px;padding:28px;text-align:center'><h2>Rex</h2><p>" + html.escape(msg) + "</p></div></body>")
     return Response(body, status=200, headers={"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"})
 
-
-# ---- building the email
-def _safe_url(u):
-    u = H("clean_str")(u, 500)
-    return u if re.match(r"^https://[^\s<>\"']{4,480}$", u) else ""
-
-
-def render_email(blocks, name, unsub, brand="Rex"):
-    """Returns (html, text). Blocks: heading, text, button, image, divider, list."""
-    def fill(t):
-        return html.escape(str(t or "")).replace("{name}", html.escape(name or "there")).replace("{brand}", brand)
-    parts_h, parts_t = [], []
-    for b in (blocks or [])[:40]:
-        t = b.get("t")
-        x = H("clean_str")(b.get("x"), 2000)
-        if t == "heading" and x:
-            parts_h.append(f'<h2 style="margin:22px 0 8px;font:700 22px/1.25 Arial,sans-serif;color:#0b1426">{fill(x)}</h2>')
-            parts_t.append(x.replace("{name}", name or "there").upper())
-        elif t == "text" and x:
-            parts_h.append('<p style="margin:0 0 14px;font:400 15px/1.6 Arial,sans-serif;color:#33415c">' + fill(x).replace("\n", "<br>") + "</p>")
-            parts_t.append(x.replace("{name}", name or "there"))
-        elif t == "list" and x:
-            items = [i.strip() for i in x.split("\n") if i.strip()][:12]
-            parts_h.append('<ul style="margin:0 0 14px;padding-left:20px;font:400 15px/1.6 Arial,sans-serif;color:#33415c">' + "".join(f"<li>{fill(i)}</li>" for i in items) + "</ul>")
-            parts_t.append("\n".join("- " + i for i in items))
-        elif t == "button" and _safe_url(b.get("url")) and x:
-            u = html.escape(_safe_url(b.get("url")))
-            parts_h.append(f'<p style="margin:18px 0"><a href="{u}" style="background:#2f8cff;color:#fff;text-decoration:none;font:700 15px Arial,sans-serif;padding:12px 22px;border-radius:10px;display:inline-block">{fill(x)}</a></p>')
-            parts_t.append(f"{x}: {_safe_url(b.get('url'))}")
-        elif t == "image" and _safe_url(b.get("url")):
-            u = html.escape(_safe_url(b.get("url")))
-            parts_h.append(f'<p style="margin:14px 0"><img src="{u}" alt="{fill(x)}" style="max-width:100%;border-radius:12px"></p>')
-        elif t == "divider":
-            parts_h.append('<hr style="border:0;border-top:1px solid #dfe6f3;margin:20px 0">')
-            parts_t.append("-----")
-    foot = ("You're getting this because you chose to hear from Rex. "
-            f'<a href="{html.escape(unsub)}" style="color:#6b7a99">Unsubscribe</a> any time, or change what you get in your Rex profile.')
-    doc = ('<!doctype html><html><body style="margin:0;background:#eef2f9"><div style="max-width:600px;margin:0 auto;padding:24px 16px">'
-           '<div style="background:#ffffff;border-radius:16px;padding:28px">'
-           '<div style="font:800 20px Arial,sans-serif;color:#2f8cff;letter-spacing:.06em">REX</div>' + "".join(parts_h) + "</div>"
-           f'<p style="font:12px/1.5 Arial,sans-serif;color:#6b7a99;text-align:center;margin:16px 0">{foot}</p></div></body></html>')
-    text = "\n\n".join(parts_t) + "\n\n--\nUnsubscribe: " + unsub
-    return doc, text
 
 
 def _b64(data):
@@ -393,28 +352,205 @@ async def _gmail_send(w, g, raw):
     return st, txt
 
 
+# ---- saved emails (templates), audiences and automatic sending
+import mail as _mail   # noqa: E402
+
+EVENTS = {
+    "manual": "Only when I send it",
+    "first_login": "When someone logs in for the first time",
+    "code_redeemed": "When someone redeems a premium code",
+    "support_closed": "When a support chat is closed",
+    "server_blacklisted": "When a server they own is blacklisted",
+    "server_unblacklisted": "When a server they own is unblacklisted",
+}
+SEND_TO = {
+    "everyone": "Everyone (except people who turned emails off)",
+    "opted_in": "Only people who turned emails on",
+    "essential": "Everyone, even if they turned emails off (account notices only)",
+    "manual": "Nobody automatically (I pick when I send)",
+}
+MAX_TPLS = 30
+
+
+def wants(u, cat="update"):
+    """People get emails unless they explicitly turned that kind off."""
+    return (u.get("ep") or {}).get(cat) is not False
+
+
+def eligible(u, send_to):
+    if not u or not u.get("e"):
+        return False
+    if send_to == "essential":
+        return True
+    if send_to == "opted_in":
+        return (u.get("ep") or {}).get("update") is True
+    if send_to == "everyone":
+        return wants(u, "update")
+    return False
+
+
+def _vars(w, origin, uid, name, extra=None):
+    v = {"name": name or "there", "dashboard_url": origin + "/dashboard", "site_url": origin, "unsubscribe_url": _unsub_url(w, origin, uid) if uid else "#",
+         "support_url": origin + "/support", "date": time.strftime("%B %d, %Y", time.gmtime()), "server": ""}
+    v.update(extra or {})
+    return v
+
+
+def _tpl_row(t):
+    return {k: t.get(k) for k in ("id", "name", "subject", "send_to", "send_when", "enabled", "updated", "sent")}
+
+
+def _clean_tpl(body, prev):
+    name = H("clean_str")(body.get("name"), 60)
+    subject = H("clean_str")(body.get("subject"), 150)
+    if not name:
+        raise H("HttpError")(400, "bad_request", "Give the email a name.")
+    try:
+        design = _mail.clean_design(body.get("design"))
+    except ValueError as ex:
+        raise H("HttpError")(400, "bad_design", str(ex))
+    send_to = body.get("send_to") if body.get("send_to") in SEND_TO else "manual"
+    send_when = body.get("send_when") if body.get("send_when") in EVENTS else "manual"
+    enabled = bool(body.get("enabled"))
+    if send_when == "manual":
+        enabled = False
+        if send_to != "manual":
+            send_to = send_to   # remember the default audience for manual sends
+    elif send_to == "manual":
+        raise H("HttpError")(400, "bad_rule", "Pick who should get it automatically, or set “send when” to manual.")
+    return {"id": prev.get("id"), "name": name, "subject": subject or name, "design": design, "send_to": send_to, "send_when": send_when, "enabled": enabled,
+            "updated": H("now")(), "sent": int(prev.get("sent", 0))}
+
+
+async def _gmail(w):
+    g = await w.store.get("email:gmail") or {}
+    return g if g.get("refresh") else None
+
+
+async def _send_one(w, g, tpl, uid, to, name, origin, extra=None):
+    v = _vars(w, origin, uid, name, extra)
+    unsub = v["unsubscribe_url"]
+    doc, text = _mail.render(tpl["design"], v, tpl["subject"])
+    subject = _mail.fill_vars(tpl["subject"], v)
+    st, _ = await _gmail_send(w, g, build_mime(g["addr"], to, subject, doc, text, unsub))
+    return st == 200
+
+
+async def fire(w, event, uid, url, extra=None, rec=None):
+    """Automatic sends. Never raises: a mail problem must not break logging in or closing a chat."""
+    try:
+        if uid in w.owner_ids():
+            return
+        idx = [t for t in (await w.store.get("email:tpls") or []) if t.get("enabled") and t.get("send_when") == event]
+        if not idx:
+            return
+        g = await _gmail(w)
+        if not g:
+            return
+        u = rec if rec is not None else await w.get_user(uid)
+        origin = w.public_origin(url)
+        day_key = "email:day:" + time.strftime("%Y-%m-%d", time.gmtime())
+        day = await w.store.get(day_key) or {"n": 0}
+        for row in idx:
+            if day["n"] >= DAILY_CAP:
+                break
+            tpl = await w.store.get("email:tpl:" + row["id"])
+            if not tpl or not eligible(u, tpl.get("send_to")):
+                continue
+            ok = await _send_one(w, g, tpl, uid, u["e"], u.get("n", ""), origin, extra)
+            day["n"] += 1
+            if ok:
+                tpl["sent"] = int(tpl.get("sent", 0)) + 1
+                await w.store.put("email:tpl:" + tpl["id"], tpl)
+        await w.store.put(day_key, day, ttl=60 * 60 * 36)
+        if g.get("at"):
+            await w.store.put("email:gmail", g)
+    except Exception:
+        return
+
+
+async def _index_put(w, tpl):
+    idx = [t for t in (await w.store.get("email:tpls") or []) if t["id"] != tpl["id"]]
+    idx.insert(0, _tpl_row(tpl))
+    await w.store.put("email:tpls", idx[:MAX_TPLS])
+
+
+def _fonts():
+    return [{"id": k, "label": v[2].replace(" *", ""), "css": v[0], "gf": v[1] or "", "web": bool(v[1])} for k, v in _mail.FONTS.items()]
+
+
 async def owner_email_route(w, request, url, path, method, session):
     err = H("HttpError")
     jr = H("json_response")
     tail = path.split("/")[4:]  # /api/owner/email/...
     g = await w.store.get("email:gmail") or {}
     configured = bool(w.cfg("GMAIL_CLIENT_ID") and w.cfg("GMAIL_CLIENT_SECRET"))
+    origin = w.public_origin(url)
     if tail == [] and method == "GET":
         users = await w.all_users()
-        aud = {"update": 0, "push": 0, "total": len(users)}
+        aud = {"everyone": 0, "opted_in": 0, "off": 0, "no_email": 0, "total": len(users)}
         for uid, u in users.items():
-            if u.get("e") and u.get("g") and uid not in w.owner_ids():
-                for k in PREF_KEYS:
-                    if (u.get("ep") or {}).get(k):
-                        aud[k] += 1
+            if uid in w.owner_ids():
+                continue
+            if not u.get("e"):
+                aud["no_email"] += 1
+            elif wants(u):
+                aud["everyone"] += 1
+                if (u.get("ep") or {}).get("update") is True:
+                    aud["opted_in"] += 1
+            else:
+                aud["off"] += 1
         day = await w.store.get("email:day:" + time.strftime("%Y-%m-%d", time.gmtime())) or {"n": 0}
         auth = ""
         if configured:
             auth = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({"client_id": w.cfg("GMAIL_CLIENT_ID"), "redirect_uri": GMAIL_REDIRECT, "response_type": "code",
                                                                                  "scope": GMAIL_SCOPES, "access_type": "offline", "prompt": "consent"})
         return jr({"configured": configured, "connected": g.get("addr", ""), "auth_url": auth, "audience": aud, "sent_today": day["n"], "cap": DAILY_CAP,
-                   "campaigns": (await w.store.get("email:camps") or [])[:15]})
+                   "campaigns": (await w.store.get("email:camps") or [])[:15], "templates": await w.store.get("email:tpls") or [],
+                   "events": EVENTS, "send_to": SEND_TO})
+    if tail == ["meta"] and method == "GET":
+        return jr({"fonts": _fonts(), "variables": list(_mail.VARIABLES), "events": EVENTS, "send_to": SEND_TO, "mob_w": _mail.MOB_W})
+    if len(tail) == 2 and tail[0] == "templates" and method == "GET":
+        t = await w.store.get("email:tpl:" + tail[1]) if re.match(r"^[a-f0-9]{12}$", tail[1]) else None
+        if not t:
+            raise err(404, "not_found", "That email doesn't exist.")
+        return jr(t)
+    if len(tail) == 2 and tail[0] == "view" and method == "GET":
+        pv = await w.store.get("email:pv:" + tail[1]) if re.match(r"^[A-Za-z0-9_-]{16,40}$", tail[1]) else None
+        if not pv:
+            raise err(404, "not_found", "That preview expired. Press Preview again.")
+        from workers import Response
+        return Response(pv["html"], status=200, headers={
+            "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https: data:; frame-ancestors 'self'"})
     w.check_mutation(request, url, session)
+    if len(tail) == 2 and tail[0] == "templates" and method == "PUT":
+        body = await w.read_json(request, 120 * 1024)
+        if not isinstance(body, dict):
+            raise err(400, "bad_request", "Bad request.")
+        prev = {}
+        tid = tail[1]
+        if tid == "new":
+            if len(await w.store.get("email:tpls") or []) >= MAX_TPLS:
+                raise err(400, "too_many", f"You can save up to {MAX_TPLS} emails. Delete one first.")
+            tid = secrets.token_hex(6)
+            prev = {"id": tid}
+        elif re.match(r"^[a-f0-9]{12}$", tid):
+            prev = await w.store.get("email:tpl:" + tid)
+            if not prev:
+                raise err(404, "not_found", "That email doesn't exist.")
+        else:
+            raise err(404, "not_found", "That email doesn't exist.")
+        tpl = _clean_tpl(body, prev)
+        tpl["id"] = tid
+        await w.store.put("email:tpl:" + tid, tpl)
+        await _index_put(w, tpl)
+        return jr({"ok": True, "id": tid, "template": _tpl_row(tpl)})
+    if len(tail) == 2 and tail[0] == "templates" and method == "DELETE":
+        if re.match(r"^[a-f0-9]{12}$", tail[1]):
+            await w.store.delete("email:tpl:" + tail[1])
+            await w.store.put("email:tpls", [t for t in (await w.store.get("email:tpls") or []) if t["id"] != tail[1]])
+        return jr({"ok": True})
     if tail == ["connect"] and method == "POST":
         if not configured:
             raise err(400, "not_configured", "Add GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET in Cloudflare first.")
@@ -438,19 +574,49 @@ async def owner_email_route(w, request, url, path, method, session):
     if tail == ["disconnect"] and method == "POST":
         await w.store.delete("email:gmail")
         return jr({"ok": True})
+    if tail == ["render"] and method == "POST":
+        body = await w.read_json(request, 120 * 1024)
+        try:
+            design = _mail.clean_design(body.get("design") if isinstance(body, dict) else None)
+        except ValueError as ex:
+            raise err(400, "bad_design", str(ex))
+        who = session["user"]["name"]
+        v = _vars(w, origin, "", who)
+        v["unsubscribe_url"] = origin + "/api/unsub"
+        doc, text = _mail.render(design, v, H("clean_str")(body.get("subject"), 150))
+        tok = secrets.token_urlsafe(18)
+        await w.store.put("email:pv:" + tok, {"html": doc}, ttl=600)
+        return jr({"url": "/api/owner/email/view/" + tok, "text": text, "checks": _mail.checks(design)})
+    if tail == ["test"] and method == "POST":
+        if not g.get("refresh"):
+            raise err(400, "not_connected", "Connect Gmail first.")
+        body = await w.read_json(request, 120 * 1024)
+        to = H("clean_str")(body.get("to"), 120)
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to):
+            raise err(400, "bad_request", "Type a valid test address.")
+        try:
+            design = _mail.clean_design(body.get("design"))
+        except ValueError as ex:
+            raise err(400, "bad_design", str(ex))
+        tpl = {"design": design, "subject": "[Test] " + (H("clean_str")(body.get("subject"), 140) or "Rex email")}
+        ok = await _send_one(w, g, tpl, session["user"]["id"], to, session["user"]["name"], origin)
+        if g.get("at"):
+            await w.store.put("email:gmail", g)
+        if not ok:
+            raise err(502, "gmail_failed", "Gmail didn't accept the test. Try connecting Gmail again.")
+        return jr({"ok": True})
     if tail == ["send"] and method == "POST":
         if not g.get("refresh"):
             raise err(400, "not_connected", "Connect Gmail first.")
         body = await w.read_json(request, 64 * 1024)
-        origin = w.public_origin(url)
         day_key = "email:day:" + time.strftime("%Y-%m-%d", time.gmtime())
         day = await w.store.get(day_key) or {"n": 0}
         cid = body.get("cid")
-        if not cid:   # start a campaign
-            subject = H("clean_str")(body.get("subject"), 150)
-            blocks = body.get("blocks") if isinstance(body.get("blocks"), list) else []
-            if not subject or not blocks:
-                raise err(400, "bad_request", "Add a subject and at least one block.")
+        if not cid:   # start a campaign from a saved email
+            tid = str(body.get("tpl") or "")
+            tpl = await w.store.get("email:tpl:" + tid) if re.match(r"^[a-f0-9]{12}$", tid) else None
+            if not tpl:
+                raise err(404, "not_found", "Save the email first, then send it.")
             aud = body.get("audience")
             recips = []
             if aud == "test":
@@ -458,22 +624,26 @@ async def owner_email_route(w, request, url, path, method, session):
                 if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to):
                     raise err(400, "bad_request", "Type a valid test address.")
                 recips = [{"uid": session["user"]["id"], "e": to, "n": session["user"]["name"]}]
-            else:
+            elif aud in ("everyone", "opted_in", "essential", "users"):
                 users = await w.all_users()
                 want = set(str(x) for x in (body.get("users") or [])[:500])
                 for uid, u in users.items():
-                    if uid in w.owner_ids() or not u.get("e") or not u.get("g"):
+                    if uid in w.owner_ids() or not u.get("e"):
                         continue
-                    if aud in PREF_KEYS and (u.get("ep") or {}).get(aud):
+                    if aud == "users":
+                        if uid in want:
+                            recips.append({"uid": uid, "e": u["e"], "n": u.get("n", "")})
+                    elif eligible(u, aud):
                         recips.append({"uid": uid, "e": u["e"], "n": u.get("n", "")})
-                    elif aud == "users" and uid in want and any((u.get("ep") or {}).get(k) for k in PREF_KEYS):
-                        recips.append({"uid": uid, "e": u["e"], "n": u.get("n", "")})
+            else:
+                raise err(400, "bad_request", "Pick who to send it to.")
             if not recips:
-                raise err(400, "no_audience", "Nobody matches that audience. People only get emails after they opt in on their profile.")
+                raise err(400, "no_audience", "Nobody matches that audience (people need an email on file).")
             cid = secrets.token_hex(6)
-            camp = {"id": cid, "subject": subject, "blocks": blocks[:40], "aud": aud, "total": len(recips), "pos": 0, "sent": 0, "failed": 0, "started": H("now")(), "done": False}
+            camp = {"id": cid, "tpl": tid, "name": tpl["name"], "subject": tpl["subject"], "design": tpl["design"], "aud": aud, "total": len(recips), "pos": 0, "sent": 0,
+                    "failed": 0, "started": H("now")(), "done": False}
             await w.store.put("email:c:" + cid, dict(camp, recips=recips), ttl=60 * 60 * 24 * 14)
-        c = await w.store.get("email:c:" + cid)
+        c = await w.store.get("email:c:" + cid) if re.match(r"^[a-f0-9]{12}$", str(cid)) else None
         if not c:
             raise err(404, "not_found", "Campaign not found.")
         left = DAILY_CAP - day["n"]
@@ -481,30 +651,26 @@ async def owner_email_route(w, request, url, path, method, session):
         for r in c["recips"][c["pos"]:c["pos"] + BATCH]:
             if left <= 0:
                 break
-            unsub = _unsub_url(w, origin, r["uid"])
-            doc, text = render_email(c["blocks"], r["n"], unsub)
-            st, txt = await _gmail_send(w, g, build_mime(g["addr"], r["e"], c["subject"], doc, text, unsub))
+            ok = await _send_one(w, g, c, r["uid"], r["e"], r["n"], origin)
             c["pos"] += 1
             left -= 1
             sent_now += 1
-            if st == 200:
-                c["sent"] += 1
-            else:
-                c["failed"] += 1
+            c["sent" if ok else "failed"] += 1
         day["n"] += sent_now
         await w.store.put(day_key, day, ttl=60 * 60 * 36)
         c["done"] = c["pos"] >= c["total"]
         paused = left <= 0 and not c["done"]
         await w.store.put("email:c:" + cid, c, ttl=60 * 60 * 24 * 14)
-        row = {k: c[k] for k in ("id", "subject", "aud", "total", "sent", "failed", "started", "done")}
+        row = {k: c.get(k) for k in ("id", "name", "subject", "aud", "total", "sent", "failed", "started", "done")}
         camps = [x for x in (await w.store.get("email:camps") or []) if x["id"] != cid]
         camps.insert(0, row)
         await w.store.put("email:camps", camps[:30])
+        if c["done"] and c.get("tpl"):
+            t = await w.store.get("email:tpl:" + c["tpl"])
+            if t:
+                t["sent"] = int(t.get("sent", 0)) + c["sent"]
+                await w.store.put("email:tpl:" + t["id"], t)
         if g.get("at"):
             await w.store.put("email:gmail", g)
         return jr({"cid": cid, "pos": c["pos"], "total": c["total"], "sent": c["sent"], "failed": c["failed"], "done": c["done"], "paused": paused})
-    if tail == ["preview"] and method == "POST":
-        body = await w.read_json(request, 64 * 1024)
-        doc, _ = render_email(body.get("blocks") or [], session["user"]["name"], "#")
-        return jr({"html": doc})
     raise err(404, "not_found", "Not found.")

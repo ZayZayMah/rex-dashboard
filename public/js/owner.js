@@ -173,7 +173,7 @@
     // 1. Gmail connection
     const conn = h('div', { class: 'frame' }, h('h3', {}, 'Gmail'));
     if (!st.configured) {
-      conn.append(h('p', { class: 'muted small' }, 'Gmail is not set up yet. In Google Cloud, create an OAuth client (type "Web application") with the redirect address http://localhost, turn on the Gmail API, then add GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET as secrets on the Cloudflare worker. Reload this page afterwards.'));
+      conn.append(h('p', { class: 'muted small' }, 'Gmail is not set up yet. In Google Cloud, create an OAuth client (type "Desktop app" or "Web application", redirect http://localhost), turn on the Gmail API, then add GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET as secrets on the Cloudflare worker. Reload this page afterwards.'));
     } else if (st.connected) {
       conn.append(h('p', {}, 'Sending from ', h('b', {}, st.connected)), h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Disconnect Gmail?', 'You can connect it again any time.', 'Disconnect', true)) { await api('/api/owner/email/disconnect', { method: 'POST', body: {} }); location.reload(); } } }, 'Disconnect'));
     } else {
@@ -183,53 +183,45 @@
         h('button', { class: 'btn', style: 'margin-top:12px', type: 'button', onclick: async () => { try { await api('/api/owner/email/connect', { method: 'POST', body: { url: paste.value } }); location.reload(); } catch (e) { toast(e.message, 'bad'); } } }, 'Connect'));
     }
     wrap.append(conn);
-    if (!st.connected) return wrap;
+    // 2. saved emails
+    const A = st.audience, label = { everyone: 'Everyone', opted_in: 'Opted in only', essential: 'Everyone (essential)', manual: 'Manual' };
+    const rule = (t) => t.send_when === 'manual' ? 'Sent by you, by hand' : (st.events[t.send_when] || t.send_when) + ' → ' + (label[t.send_to] || t.send_to) + (t.enabled ? '' : ' (paused)');
+    const statusLine = h('div', { class: 'hint', role: 'status' });
+    const rows = h('div', { class: 'stack' });
+    const paintRows = () => rows.replaceChildren(...(st.templates.length ? st.templates.map((t) => h('div', { class: 'well mail-row' },
+      h('div', {}, h('b', {}, t.name), h('div', { class: 'muted small' }, t.subject), h('div', { class: 'small' }, rule(t)), h('div', { class: 'muted small' }, 'Sent ' + (t.sent || 0) + ' time' + (t.sent === 1 ? '' : 's') + ' · edited ' + timeAgo(t.updated))),
+      h('div', { class: 'mail-acts' }, h('a', { class: 'btn sm', href: '/email-builder?id=' + t.id }, 'Edit'), h('button', { class: 'btn ghost sm', type: 'button', onclick: () => sendDialog(t) }, 'Send…'),
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Delete "' + t.name + '"?', 'This cannot be undone. Automatic sending of it stops.', 'Delete', true)) { await api('/api/owner/email/templates/' + t.id, { method: 'DELETE', body: {} }); st.templates = st.templates.filter((x) => x.id !== t.id); paintRows(); } } }, 'Delete')))) : [h('p', { class: 'muted' }, 'No saved emails yet. Press "New email" to design one.')]));
+    async function sendDialog(t) {
+      const aud = h('select', {}, [['everyone', 'Everyone except people who turned emails off (' + A.everyone + ')'], ['opted_in', 'Only people who turned emails on (' + A.opted_in + ')'], ['essential', 'Everyone, even if they turned emails off (' + (A.everyone + A.off) + ')'], ['users', 'Specific people (user IDs)'], ['test', 'A test to one address']].map(([v, n]) => h('option', { value: v }, n)));
+      if (t.send_to !== 'manual' && ['everyone', 'opted_in', 'essential'].includes(t.send_to)) aud.value = t.send_to;
+      const ids = h('textarea', { rows: 3, placeholder: 'User IDs, one per line', hidden: true }), to = h('input', { type: 'email', placeholder: 'you@example.com', hidden: true });
+      aud.addEventListener('change', () => { ids.hidden = aud.value !== 'users'; to.hidden = aud.value !== 'test'; });
+      const bar = h('div', { class: 'track', hidden: true }, h('i', { style: 'width:0%' })), msg = h('div', { class: 'hint', role: 'status' });
+      const go = h('button', { class: 'btn', type: 'button' }, 'Send now'), close = h('button', { class: 'btn ghost', type: 'button' }, 'Close');
+      const box = h('div', { class: 'mail-modal' }, h('div', { class: 'frame' }, h('h3', {}, 'Send "' + t.name + '"'), h('p', { class: 'muted small' }, 'People with no email on file are skipped. Today: ' + st.sent_today + ' of ' + st.cap + ' sends used. Keep this page open while it sends.'), h('div', { class: 'stack' }, field('Who gets it', aud), ids, to), h('div', { style: 'display:flex;gap:10px;margin-top:12px' }, go, close), bar, msg));
+      close.onclick = () => box.remove();
+      go.onclick = async () => {
+        go.disabled = true; bar.hidden = false; let cid = null, last = null;
+        try {
+          for (let i = 0; i < 500; i++) {
+            last = await api('/api/owner/email/send', { method: 'POST', body: { cid, tpl: t.id, audience: aud.value, users: ids.value.split(/[\s,]+/).filter(Boolean), test_to: to.value } });
+            cid = last.cid; bar.firstChild.style.width = Math.round(last.pos / last.total * 100) + '%';
+            msg.textContent = 'Sent ' + last.sent + ' of ' + last.total + (last.failed ? ' (' + last.failed + ' failed)' : '') + '...';
+            if (last.done || last.paused) break;
+          }
+          msg.textContent = last.done ? 'Done. Sent ' + last.sent + ', failed ' + last.failed + '.' : 'Stopped at the daily limit after ' + last.sent + ' emails. Send the rest tomorrow.';
+        } catch (e) { msg.textContent = e.message; }
+        go.disabled = false;
+      };
+      document.body.append(box);
+    }
+    paintRows();
+    wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' }, h('h3', { style: 'margin:0' }, 'Saved emails'), h('a', { class: 'btn', href: '/email-builder' }, 'New email')),
+      h('p', { class: 'muted small' }, 'Each email remembers who gets it and when it goes out. Emails go to everyone with an email on file, unless they turned emails off. ' + A.everyone + ' can get emails now, ' + A.off + ' turned them off, ' + A.no_email + ' have no email on file.'), rows, statusLine));
 
-    // 2. email builder
-    const blocks = [{ t: 'heading', x: 'Hi {name}!' }, { t: 'text', x: 'Here is what is new in Rex.' }];
-    const subject = h('input', { type: 'text', maxlength: 150, placeholder: 'Subject' });
-    const list = h('div', { class: 'stack' }), preview = h('iframe', { class: 'mail-prev', title: 'Preview', sandbox: '' });
-    let pt = 0;
-    const refreshPreview = () => { clearTimeout(pt); pt = setTimeout(async () => { try { preview.srcdoc = (await api('/api/owner/email/preview', { method: 'POST', body: { blocks } })).html; } catch (e) { /* ignore */ } }, 400); };
-    const KIND = { heading: 'Heading', text: 'Text', list: 'Bullet list (one per line)', button: 'Button', image: 'Image', divider: 'Divider' };
-    const paint = () => { list.replaceChildren(...blocks.map((b, i) => h('div', { class: 'well mblock' },
-      h('div', { class: 'mb-head' }, h('b', {}, KIND[b.t]), h('span', { style: 'display:flex;gap:6px' },
-        h('button', { class: 'btn ghost sm', type: 'button', 'aria-label': 'Move up', disabled: i === 0, onclick: () => { [blocks[i - 1], blocks[i]] = [blocks[i], blocks[i - 1]]; paint(); refreshPreview(); } }, '↑'),
-        h('button', { class: 'btn ghost sm', type: 'button', 'aria-label': 'Move down', disabled: i === blocks.length - 1, onclick: () => { [blocks[i + 1], blocks[i]] = [blocks[i], blocks[i + 1]]; paint(); refreshPreview(); } }, '↓'),
-        h('button', { class: 'btn ghost sm', type: 'button', 'aria-label': 'Remove', onclick: () => { blocks.splice(i, 1); paint(); refreshPreview(); } }, '✕'))),
-      b.t === 'divider' ? null : (b.t === 'text' || b.t === 'list' ? h('textarea', { rows: 3, maxlength: 2000, oninput: (e) => { b.x = e.target.value; refreshPreview(); } }, b.x || '') : h('input', { type: 'text', maxlength: 300, placeholder: b.t === 'image' ? 'Alt text' : '', value: b.x || '', oninput: (e) => { b.x = e.target.value; refreshPreview(); } })),
-      b.t === 'button' || b.t === 'image' ? h('input', { type: 'url', placeholder: 'https://...', value: b.url || '', style: 'margin-top:8px', oninput: (e) => { b.url = e.target.value; refreshPreview(); } }) : null))); };
-    const palette = h('div', { class: 'chips' }, Object.entries(KIND).map(([t, n]) => h('button', { class: 'chip', type: 'button', onclick: () => { blocks.push({ t, x: '', url: '' }); paint(); refreshPreview(); } }, '+ ' + n.split(' (')[0])));
-    wrap.append(h('div', { class: 'frame' }, h('h3', {}, 'Write the email'), h('p', { class: 'muted small' }, 'Use {name} for the person\'s name. A footer with an unsubscribe link is added for you.'), field('Subject', subject), h('div', { style: 'height:12px' }), palette,
-      h('div', { class: 'mail-split' }, list, h('div', {}, h('div', { class: 'muted small' }, 'Preview'), preview))));
-    paint(); refreshPreview();
-
-    // 3. send
-    const aud = h('select', {}, [['update', 'People who want update emails (' + st.audience.update + ')'], ['push', 'People who want important notices (' + st.audience.push + ')'], ['users', 'Specific people (user IDs)'], ['test', 'A test to one address']].map(([v, t]) => h('option', { value: v }, t)));
-    const ids = h('textarea', { rows: 2, placeholder: 'User IDs, one per line', hidden: true }), testTo = h('input', { type: 'email', placeholder: 'you@example.com', hidden: true });
-    aud.addEventListener('change', () => { ids.hidden = aud.value !== 'users'; testTo.hidden = aud.value !== 'test'; });
-    const bar = h('div', { class: 'track', hidden: true }, h('i', { style: 'width:0%' }));
-    const go = h('button', { class: 'btn', type: 'button' }, 'Send');
-    go.onclick = async () => {
-      const n = aud.value === 'test' ? 1 : null;
-      if (!(await rexDialog.confirm('Send this email?', n ? 'One test email.' : 'It goes to everyone in that audience. Today: ' + st.sent_today + ' of ' + st.cap + ' sends used.', 'Send'))) return;
-      go.disabled = true; bar.hidden = false; let cid = null, last = null;
-      try {
-        for (let i = 0; i < 400; i++) {
-          last = await api('/api/owner/email/send', { method: 'POST', body: { cid, subject: subject.value, blocks, audience: aud.value, users: ids.value.split(/[\s,]+/).filter(Boolean), test_to: testTo.value } });
-          cid = last.cid; bar.firstChild.style.width = Math.round(last.pos / last.total * 100) + '%';
-          status.textContent = 'Sent ' + last.sent + ' of ' + last.total + (last.failed ? ' (' + last.failed + ' failed)' : '') + '...';
-          if (last.done || last.paused) break;
-        }
-        status.textContent = last.done ? 'Done. Sent ' + last.sent + ', failed ' + last.failed + '.' : 'Stopped at today\'s daily limit after ' + last.sent + ' emails. Send the rest tomorrow as a new email.';
-      } catch (e) { status.textContent = e.message; }
-      go.disabled = false;
-    };
-    wrap.append(h('div', { class: 'frame' }, h('h3', {}, 'Send it'), h('p', { class: 'muted small' }, 'Only people who opted in, have a verified email and manage a server with Rex are included. Owners are always skipped. Keep this page open while it sends.'),
-      h('div', { class: 'stack' }, field('Who gets it', aud), ids, testTo), h('div', { style: 'margin-top:12px' }, go), bar, status));
-
-    // 4. history
-    if (st.campaigns.length) wrap.append(h('div', { class: 'frame' }, h('h3', {}, 'Recent emails'), h('table', { class: 'tbl' }, h('tbody', {}, st.campaigns.map((c) => h('tr', {}, h('td', {}, c.subject), h('td', {}, c.sent + '/' + c.total + (c.failed ? ' (' + c.failed + ' failed)' : '')), h('td', { class: 'muted' }, timeAgo(c.started))))))));
+    // 3. history
+    if (st.campaigns.length) wrap.append(h('div', { class: 'frame' }, h('h3', {}, 'Recent sends'), h('table', { class: 'tbl' }, h('tbody', {}, st.campaigns.map((c) => h('tr', {}, h('td', {}, c.name || c.subject), h('td', {}, c.sent + '/' + c.total + (c.failed ? ' (' + c.failed + ' failed)' : '')), h('td', { class: 'muted' }, timeAgo(c.started))))))));
     return wrap;
   }
 
@@ -247,13 +239,13 @@
     mTitle.value = maint.title || ''; mDesc.value = maint.desc || '';
     const support = h('input', { type: 'url', maxlength: 200, placeholder: 'https://discord.gg/...' });
     support.value = site.support_url || '';
-    const BETAS = [['email', 'Email updates', 'Gmail emails with tags, unsubscribe and an email builder.'], ['support', 'Website support tickets', 'Automatic help chat that can escalate to a real ticket in the support server.'], ['builder', 'Custom commands and events', 'The block builder on every server dashboard.']];
+    const BETAS = [['email', 'Email updates', 'Gmail emails with a full drag-and-drop email builder, saved emails and automatic sending.'], ['support', 'Website support tickets', 'Automatic help chat that can escalate to a real ticket in the support server.'], ['builder', 'Custom commands and events', 'The block builder on every server dashboard.']];
     const beta = Object.assign({ email: 'off', support: 'off', builder: 'off' }, site.beta || {});
     const testers = h('textarea', { rows: 3, placeholder: 'Discord user IDs, one per line' }); testers.value = (site.testers || []).join('\n');
     const HOWTO = {
       builder: ['Off: nobody sees it.', 'Testing: only the user IDs in the box below see Custom commands and Events.', 'On: every server with Premium or higher sees it.', 'Where: open a server, then Commands (or Events) in the side menu.'],
       support: ['Off: the Support page does not exist.', 'Testing: only the testers see Support in the menu and on their profile.', 'On: everybody can open /support, chat with the helper and escalate to a real ticket.', 'You: this page gets a Support tab with every conversation, where you can read, reply, close and reopen.'],
-      email: ['Off: nothing is shown.', 'Testing: only testers see the Email options on their profile.', 'On: everybody can choose which emails they want (all start OFF).', 'You: this page gets an Email tab to connect Gmail, build an email and send it. Owners and people with no server to manage are skipped.'],
+      email: ['Off: nothing is shown.', 'Testing: only testers see the Email options on their profile.', 'On: everybody gets your emails unless they turn them off on their profile.', 'You: this page gets an Email tab to connect Gmail, design emails, send them or set them to go out automatically. Owners and people with no email on file are skipped.'],
     };
     const open = {};
     const betaBox = h('div', { class: 'beta-list' });
