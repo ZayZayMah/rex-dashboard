@@ -11,7 +11,7 @@ import re
 import secrets
 import time
 from email.header import Header
-from urllib.parse import urlencode, parse_qs, urlparse
+from urllib.parse import urlencode, parse_qs, urlparse, quote
 
 _G = {}
 _NAMES = ("HttpError", "json_response", "clean_str", "clean_int", "now", "rate_limited", "safe_equal", "http")
@@ -241,27 +241,38 @@ async def bot_route(w, tail, method, body):
         raise H("HttpError")(404, "not_found", "Not found.")
     return jr({"ok": True})
 
-
 # =====================================================================================================================
-# Email updates (beta "email"): opt-in preferences, Gmail sending driven by the owner page, one-click unsubscribe
+# Email: tags (kinds of email people can pick), preferences page, Gmail sending, saved emails, automatic sending
 # =====================================================================================================================
 GMAIL_REDIRECT = "http://localhost"
 GMAIL_SCOPES = "openid email https://www.googleapis.com/auth/gmail.send"
 DAILY_CAP = 450
 BATCH = 8
 PREF_KEYS = ("update", "push")
+DEFAULT_TAGS = [{"id": "announcements", "name": "Announcements", "desc": "Big news about Rex."},
+                {"id": "new_features", "name": "New features", "desc": "When Rex gets something new."},
+                {"id": "bug_fixes", "name": "Bug fixes", "desc": "Problems we found and fixed."}]
+MAX_TAGS = 12
+EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,200}\.[^@\s]{2,24}$")
 
 
 def _secret(w):
     return (w.cfg("BOT_API_KEY") or "rex") + "|email"
 
 
-def _unsub_token(w, uid):
-    return hmac.new(_secret(w).encode(), ("unsub:" + uid).encode(), hashlib.sha256).hexdigest()[:24]
+def _unsub_token(w, key):
+    return hmac.new(_secret(w).encode(), ("unsub:" + key).encode(), hashlib.sha256).hexdigest()[:24]
 
 
-def _unsub_url(w, origin, uid):
-    return f"{origin}/api/unsub?u={uid}&t={_unsub_token(w, uid)}"
+def _unsub_url(w, origin, key):
+    """One-click unsubscribe. key is a Discord id, or an email address for people without a Discord account."""
+    p = "u=" + key if re.match(r"^\d{15,25}$", key) else "e=" + quote(key, safe="")
+    return f"{origin}/api/unsub?{p}&t={_unsub_token(w, key)}"
+
+
+def _prefs_url(w, origin, key):
+    """The email preferences page: /<discord id>/email, or /<email>/email when there is no Discord account."""
+    return f"{origin}/{quote(key, safe='')}/email?t={_unsub_token(w, key)}"
 
 
 def _mask(addr):
@@ -271,46 +282,130 @@ def _mask(addr):
     return (name[:2] + "***" if len(name) > 2 else name[:1] + "*") + "@" + dom
 
 
+def _ext_key(email):
+    return "email:ext:" + hashlib.sha1(email.lower().encode()).hexdigest()[:20]
+
+
+async def get_tags(w):
+    t = await w.store.get("email:tags")
+    return t if isinstance(t, list) and t else [dict(x) for x in DEFAULT_TAGS]
+
+
+def _slug(name):
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:24]
+
+
+def _pref_view(ep, tags):
+    ep = ep or {}
+    return {"all": ep.get("update") is not False, "push": ep.get("push") is not False,
+            "tags": [{"id": t["id"], "name": t["name"], "desc": t.get("desc", ""), "on": (ep.get("tags") or {}).get(t["id"]) is not False} for t in tags]}
+
+
+def _pref_apply(ep, body, tags):
+    ep = dict(ep or {})
+    known = {t["id"] for t in tags}
+    tg = {k: v for k, v in (ep.get("tags") or {}).items() if k in known}
+    if isinstance(body.get("tags"), dict):
+        for k, v in body["tags"].items():
+            if k in known:
+                tg[k] = bool(v)
+                if v:
+                    ep["update"] = True
+    ep["tags"] = tg
+    if "push" in body:
+        ep["push"] = bool(body["push"])
+    if "all" in body:
+        ep["update"] = bool(body["all"])
+        if not body["all"]:
+            ep["push"] = False
+    return ep
+
+
 async def prefs_route(w, request, url, path, method, session):
+    """Logged-in users: the profile box."""
     jr = H("json_response")
     uid = session["user"]["id"]
     await w.require_beta("email", session)
     rec = await w.get_user(uid) or {}
     owner = uid in w.owner_ids()
+    tags = await get_tags(w)
     if method == "GET":
-        return jr({"email": "" if owner else _mask(rec.get("e", "")), "has_email": bool(rec.get("e")) and not owner, "owner": owner,
-                   "can": True, "update": (rec.get("ep") or {}).get("update") is not False, "push": (rec.get("ep") or {}).get("push") is not False})
+        return jr(dict(_pref_view(rec.get("ep"), tags), email="" if owner else _mask(rec.get("e", "")), has_email=bool(rec.get("e")) and not owner, owner=owner, uid=uid,
+                       update=_pref_view(rec.get("ep"), tags)["all"]))
     if method == "PUT":
         w.check_mutation(request, url, session)
-        body = await w.read_json(request, 512)
-        ep = dict(rec.get("ep") or {})
-        for k in PREF_KEYS:
-            if isinstance(body, dict) and k in body:
-                ep[k] = bool(body[k])
-        rec["ep"] = ep
+        body = await w.read_json(request, 1024)
+        rec["ep"] = _pref_apply(rec.get("ep"), body if isinstance(body, dict) else {}, tags)
         await w.put_user(uid, rec)
-        return jr({"ok": True, "update": ep.get("update") is not False, "push": ep.get("push") is not False})
+        return jr(dict(_pref_view(rec["ep"], tags), ok=True))
     raise H("HttpError")(405, "bad_method", "Not allowed.")
+
+
+async def emailprefs_route(w, request, url, method, session):
+    """The public preferences page API. Allowed with the link's token, or when you are logged in as that person."""
+    err, jr = H("HttpError"), H("json_response")
+    q = parse_qs(url.query or "")
+    key = H("clean_str")((q.get("k") or [""])[0], 220)
+    tok = (q.get("t") or [""])[0]
+    is_uid = bool(re.match(r"^\d{15,25}$", key))
+    if not is_uid and not EMAIL_RE.match(key):
+        raise err(404, "not_found", "That email preferences link isn't valid.")
+    if H("rate_limited")("epref:" + key, 60, 600):
+        raise err(429, "slow_down", "Too many tries. Please wait a few minutes.")
+    by_token = bool(tok) and H("safe_equal")(tok, _unsub_token(w, key))
+    by_session = bool(session) and is_uid and session["user"]["id"] == key
+    if not (by_token or by_session):
+        raise err(403, "bad_link", "That link has expired or isn't valid. Use the link from your latest Rex email, or log in.")
+    tags = await get_tags(w)
+    if is_uid:
+        rec = await w.get_user(key)
+        if rec is None:
+            raise err(404, "not_found", "We don't have an account for that link.")
+        who, addr = rec.get("n", ""), rec.get("e", "")
+    else:
+        rec = await w.store.get(_ext_key(key)) or {"e": key}
+        who, addr = "", key
+    if method == "GET":
+        return jr(dict(_pref_view(rec.get("ep"), tags), kind="discord" if is_uid else "email", name=who, email=_mask(addr)))
+    if method == "PUT":
+        if not by_token:
+            w.check_mutation(request, url, session)
+        body = await w.read_json(request, 1024)
+        rec["ep"] = _pref_apply(rec.get("ep"), body if isinstance(body, dict) else {}, tags)
+        if is_uid:
+            await w.put_user(key, rec)
+        else:
+            rec["e"] = key
+            await w.store.put(_ext_key(key), rec)
+        return jr(dict(_pref_view(rec["ep"], tags), ok=True))
+    raise err(405, "bad_method", "Not allowed.")
 
 
 async def unsub_route(w, request, url, method):
     q = parse_qs(url.query or "")
     uid = (q.get("u") or [""])[0]
+    email = (q.get("e") or [""])[0].strip()
+    key = uid or email
     tok = (q.get("t") or [""])[0]
-    if not re.match(r"^\d{15,25}$", uid) or not H("safe_equal")(tok, _unsub_token(w, uid)):
+    valid = bool(key) and (re.match(r"^\d{15,25}$", key) or EMAIL_RE.match(key)) and H("safe_equal")(tok, _unsub_token(w, key))
+    if not valid:
         msg = "That unsubscribe link isn't valid."
     else:
-        rec = await w.get_user(uid)
-        if rec is not None:
-            rec["ep"] = {"update": False, "push": False}
-            await w.put_user(uid, rec)
+        if uid:
+            rec = await w.get_user(uid)
+            if rec is not None:
+                rec["ep"] = dict(rec.get("ep") or {}, update=False, push=False)
+                await w.put_user(uid, rec)
+        else:
+            rec = await w.store.get(_ext_key(email)) or {"e": email}
+            rec["ep"] = dict(rec.get("ep") or {}, update=False, push=False)
+            await w.store.put(_ext_key(email), rec)
         msg = "You're unsubscribed. You won't get any more emails from Rex."
     from workers import Response
     body = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Unsubscribe</title>"
             "<body style='font-family:system-ui;background:#050a14;color:#e8f1ff;display:grid;place-items:center;min-height:100vh;margin:0'>"
             "<div style='max-width:420px;padding:28px;text-align:center'><h2>Rex</h2><p>" + html.escape(msg) + "</p></div></body>")
     return Response(body, status=200, headers={"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"})
-
 
 
 def _b64(data):
@@ -352,24 +447,25 @@ async def _gmail_send(w, g, raw):
     return st, txt
 
 
+
 # ---- saved emails (templates), audiences and automatic sending
 import mail as _mail   # noqa: E402
 
 EVENTS = {
     "manual": "Only when I send it",
     "first_login": "When someone logs in for the first time",
+    "data_removed": "When someone removes all their data",
+    "bot_joins_server": "When Rex is added to a server they own",
+    "bot_leaves_server": "When Rex is removed from a server they own",
+    "joins_support": "When someone joins the Rex support server",
     "code_redeemed": "When someone redeems a premium code",
     "support_closed": "When a support chat is closed",
     "server_blacklisted": "When a server they own is blacklisted",
     "server_unblacklisted": "When a server they own is unblacklisted",
 }
-SEND_TO = {
-    "everyone": "Everyone (except people who turned emails off)",
-    "opted_in": "Only people who turned emails on",
-    "essential": "Everyone, even if they turned emails off (account notices only)",
-    "manual": "Nobody automatically (I pick when I send)",
-}
+SEND_AT = {"now": "Immediately", "time": "At a set time of day (UTC)", "online": "When they are next on the dashboard"}
 MAX_TPLS = 30
+MAX_LATER = 500
 
 
 def wants(u, cat="update"):
@@ -378,29 +474,34 @@ def wants(u, cat="update"):
 
 
 def eligible(u, send_to):
+    """send_to: tag:<id> (people who kept that kind on), everyone (anyone who hasn't unsubscribed), essential (account notices)."""
     if not u or not u.get("e"):
         return False
+    ep = u.get("ep") or {}
     if send_to == "essential":
         return True
     if send_to == "opted_in":
-        return (u.get("ep") or {}).get("update") is True
+        return ep.get("update") is True
     if send_to == "everyone":
-        return wants(u, "update")
+        return ep.get("update") is not False
+    if isinstance(send_to, str) and send_to.startswith("tag:"):
+        return ep.get("update") is not False and (ep.get("tags") or {}).get(send_to[4:]) is not False
     return False
 
 
-def _vars(w, origin, uid, name, extra=None):
-    v = {"name": name or "there", "dashboard_url": origin + "/dashboard", "site_url": origin, "unsubscribe_url": _unsub_url(w, origin, uid) if uid else "#",
-         "support_url": origin + "/support", "date": time.strftime("%B %d, %Y", time.gmtime()), "server": ""}
+def _vars(w, origin, key, name, extra=None):
+    v = {"name": name or "there", "dashboard_url": origin + "/dashboard", "site_url": origin, "unsubscribe_url": _unsub_url(w, origin, key) if key else "#",
+         "unsubscribe_link": _prefs_url(w, origin, key) if key else origin + "/", "support_url": origin + "/support",
+         "date": time.strftime("%B %d, %Y", time.gmtime()), "server": ""}
     v.update(extra or {})
     return v
 
 
 def _tpl_row(t):
-    return {k: t.get(k) for k in ("id", "name", "subject", "send_to", "send_when", "enabled", "updated", "sent")}
+    return {k: t.get(k) for k in ("id", "name", "subject", "send_to", "send_when", "when_at", "at_time", "enabled", "updated", "sent")}
 
 
-def _clean_tpl(body, prev):
+def _clean_tpl(body, prev, tag_ids):
     name = H("clean_str")(body.get("name"), 60)
     subject = H("clean_str")(body.get("subject"), 150)
     if not name:
@@ -409,17 +510,18 @@ def _clean_tpl(body, prev):
         design = _mail.clean_design(body.get("design"))
     except ValueError as ex:
         raise H("HttpError")(400, "bad_design", str(ex))
-    send_to = body.get("send_to") if body.get("send_to") in SEND_TO else "manual"
+    st = body.get("send_to")
+    send_to = st if st in ("everyone", "essential") or (isinstance(st, str) and st.startswith("tag:") and st[4:] in tag_ids) else "everyone"
     send_when = body.get("send_when") if body.get("send_when") in EVENTS else "manual"
-    enabled = bool(body.get("enabled"))
-    if send_when == "manual":
-        enabled = False
-        if send_to != "manual":
-            send_to = send_to   # remember the default audience for manual sends
-    elif send_to == "manual":
-        raise H("HttpError")(400, "bad_rule", "Pick who should get it automatically, or set “send when” to manual.")
-    return {"id": prev.get("id"), "name": name, "subject": subject or name, "design": design, "send_to": send_to, "send_when": send_when, "enabled": enabled,
-            "updated": H("now")(), "sent": int(prev.get("sent", 0))}
+    when_at = body.get("when_at") if body.get("when_at") in SEND_AT else "now"
+    at_time = H("clean_str")(body.get("at_time"), 5)
+    if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", at_time or ""):
+        at_time = "09:00"
+    if send_when in ("data_removed", "bot_leaves_server"):
+        when_at = "now"   # they won't be around later
+    enabled = bool(body.get("enabled")) and send_when != "manual"
+    return {"id": prev.get("id"), "name": name, "subject": subject or name, "design": design, "send_to": send_to, "send_when": send_when, "when_at": when_at, "at_time": at_time,
+            "enabled": enabled, "updated": H("now")(), "sent": int(prev.get("sent", 0))}
 
 
 async def _gmail(w):
@@ -427,13 +529,38 @@ async def _gmail(w):
     return g if g.get("refresh") else None
 
 
-async def _send_one(w, g, tpl, uid, to, name, origin, extra=None):
-    v = _vars(w, origin, uid, name, extra)
-    unsub = v["unsubscribe_url"]
+async def _send_one(w, g, tpl, key, to, name, origin, extra=None):
+    v = _vars(w, origin, key, name, extra)
     doc, text = _mail.render(tpl["design"], v, tpl["subject"])
     subject = _mail.fill_vars(tpl["subject"], v)
-    st, _ = await _gmail_send(w, g, build_mime(g["addr"], to, subject, doc, text, unsub))
+    st, _ = await _gmail_send(w, g, build_mime(g["addr"], to, subject, doc, text, v["unsubscribe_url"]))
     return st == 200
+
+
+def _next_due(at_time):
+    hh, mm = int(at_time[:2]), int(at_time[3:])
+    t = H("now")()
+    day = t - (t % 86400)
+    due = day + hh * 3600 + mm * 60
+    return due if due > t + 30 else due + 86400
+
+
+async def _send_tpl(w, g, tpl_id, rec, key, origin, extra):
+    """Sends one saved email to one person, if they are still eligible. Returns True if it was sent."""
+    tpl = await w.store.get("email:tpl:" + tpl_id)
+    if not tpl or not tpl.get("enabled") or not eligible(rec, tpl.get("send_to")):
+        return False
+    day_key = "email:day:" + time.strftime("%Y-%m-%d", time.gmtime())
+    day = await w.store.get(day_key) or {"n": 0}
+    if day["n"] >= DAILY_CAP:
+        return False
+    ok = await _send_one(w, g, tpl, key, rec["e"], rec.get("n", ""), origin, extra)
+    day["n"] += 1
+    await w.store.put(day_key, day, ttl=60 * 60 * 36)
+    if ok:
+        tpl["sent"] = int(tpl.get("sent", 0)) + 1
+        await w.store.put("email:tpl:" + tpl_id, tpl)
+    return ok
 
 
 async def fire(w, event, uid, url, extra=None, rec=None):
@@ -448,21 +575,69 @@ async def fire(w, event, uid, url, extra=None, rec=None):
         if not g:
             return
         u = rec if rec is not None else await w.get_user(uid)
+        if not u:
+            return
         origin = w.public_origin(url)
-        day_key = "email:day:" + time.strftime("%Y-%m-%d", time.gmtime())
-        day = await w.store.get(day_key) or {"n": 0}
         for row in idx:
-            if day["n"] >= DAILY_CAP:
-                break
-            tpl = await w.store.get("email:tpl:" + row["id"])
-            if not tpl or not eligible(u, tpl.get("send_to")):
-                continue
-            ok = await _send_one(w, g, tpl, uid, u["e"], u.get("n", ""), origin, extra)
-            day["n"] += 1
-            if ok:
-                tpl["sent"] = int(tpl.get("sent", 0)) + 1
-                await w.store.put("email:tpl:" + tpl["id"], tpl)
-        await w.store.put(day_key, day, ttl=60 * 60 * 36)
+            when = row.get("when_at") or "now"
+            if when == "now":
+                await _send_tpl(w, g, row["id"], u, uid, origin, extra)
+            elif when == "time":
+                later = await w.store.get("email:later") or []
+                if len(later) < MAX_LATER:
+                    later.append({"tpl": row["id"], "uid": uid, "due": _next_due(row.get("at_time") or "09:00"), "extra": extra or {}})
+                    await w.store.put("email:later", later)
+            elif when == "online":
+                pend = await w.store.get("email:pend:" + uid) or []
+                if len(pend) < 10 and not any(p["tpl"] == row["id"] for p in pend):
+                    pend.append({"tpl": row["id"], "extra": extra or {}, "ts": H("now")()})
+                    await w.store.put("email:pend:" + uid, pend, ttl=60 * 60 * 24 * 60)
+        if g.get("at"):
+            await w.store.put("email:gmail", g)
+    except Exception:
+        return
+
+
+async def flush_due(w, url):
+    """Called whenever the bot checks in: sends anything scheduled for a time of day that has now passed."""
+    try:
+        later = await w.store.get("email:later")
+        if not later:
+            return
+        t = H("now")()
+        due = [x for x in later if x["due"] <= t][:BATCH]
+        if not due:
+            return
+        g = await _gmail(w)
+        keep = [x for x in later if x not in due]
+        await w.store.put("email:later", keep)
+        if not g:
+            return
+        origin = w.public_origin(url)
+        for x in due:
+            u = await w.get_user(x["uid"])
+            if u:
+                await _send_tpl(w, g, x["tpl"], u, x["uid"], origin, x.get("extra"))
+        if g.get("at"):
+            await w.store.put("email:gmail", g)
+    except Exception:
+        return
+
+
+async def deliver_pending(w, uid, url):
+    """Called when someone is on the website: sends the emails that were waiting for them to be online."""
+    try:
+        pend = await w.store.get("email:pend:" + uid)
+        if not pend:
+            return
+        await w.store.delete("email:pend:" + uid)
+        g = await _gmail(w)
+        u = await w.get_user(uid)
+        if not g or not u:
+            return
+        origin = w.public_origin(url)
+        for p in pend[:5]:
+            await _send_tpl(w, g, p["tpl"], u, uid, origin, p.get("extra"))
         if g.get("at"):
             await w.store.put("email:gmail", g)
     except Exception:
@@ -488,7 +663,8 @@ async def owner_email_route(w, request, url, path, method, session):
     origin = w.public_origin(url)
     if tail == [] and method == "GET":
         users = await w.all_users()
-        aud = {"everyone": 0, "opted_in": 0, "off": 0, "no_email": 0, "total": len(users)}
+        tags = await get_tags(w)
+        aud = {"everyone": 0, "off": 0, "no_email": 0, "total": len(users), "tags": {t["id"]: 0 for t in tags}}
         for uid, u in users.items():
             if uid in w.owner_ids():
                 continue
@@ -496,8 +672,9 @@ async def owner_email_route(w, request, url, path, method, session):
                 aud["no_email"] += 1
             elif wants(u):
                 aud["everyone"] += 1
-                if (u.get("ep") or {}).get("update") is True:
-                    aud["opted_in"] += 1
+                for t in tags:
+                    if eligible(u, "tag:" + t["id"]):
+                        aud["tags"][t["id"]] += 1
             else:
                 aud["off"] += 1
         day = await w.store.get("email:day:" + time.strftime("%Y-%m-%d", time.gmtime())) or {"n": 0}
@@ -507,9 +684,9 @@ async def owner_email_route(w, request, url, path, method, session):
                                                                                  "scope": GMAIL_SCOPES, "access_type": "offline", "prompt": "consent"})
         return jr({"configured": configured, "connected": g.get("addr", ""), "auth_url": auth, "audience": aud, "sent_today": day["n"], "cap": DAILY_CAP,
                    "campaigns": (await w.store.get("email:camps") or [])[:15], "templates": await w.store.get("email:tpls") or [],
-                   "events": EVENTS, "send_to": SEND_TO})
+                   "events": EVENTS, "tags": tags, "send_at": SEND_AT})
     if tail == ["meta"] and method == "GET":
-        return jr({"fonts": _fonts(), "variables": list(_mail.VARIABLES), "events": EVENTS, "send_to": SEND_TO, "mob_w": _mail.MOB_W})
+        return jr({"fonts": _fonts(), "variables": list(_mail.VARIABLES), "events": EVENTS, "send_at": SEND_AT, "tags": await get_tags(w), "mob_w": _mail.MOB_W})
     if len(tail) == 2 and tail[0] == "templates" and method == "GET":
         t = await w.store.get("email:tpl:" + tail[1]) if re.match(r"^[a-f0-9]{12}$", tail[1]) else None
         if not t:
@@ -524,6 +701,36 @@ async def owner_email_route(w, request, url, path, method, session):
             "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https: data:; frame-ancestors 'self'"})
     w.check_mutation(request, url, session)
+    if tail == ["tags"] and method == "PUT":
+        body = await w.read_json(request, 8 * 1024)
+        old = {t["id"]: t for t in await get_tags(w)}
+        out, seen = [], set()
+        for it in (body.get("tags") if isinstance(body, dict) else None) or []:
+            name = H("clean_str")(it.get("name") if isinstance(it, dict) else "", 30)
+            if not name:
+                continue
+            tid = it.get("id") if it.get("id") in old else _slug(name)
+            if not tid or tid in seen:
+                continue
+            seen.add(tid)
+            out.append({"id": tid, "name": name, "desc": H("clean_str")(it.get("desc"), 120)})
+        if not out:
+            raise err(400, "bad_request", "Keep at least one tag.")
+        if len(out) > MAX_TAGS:
+            raise err(400, "too_many", f"Up to {MAX_TAGS} tags.")
+        await w.store.put("email:tags", out)
+        gone = set(old) - seen
+        if gone:   # emails aimed at a removed tag stop sending automatically
+            idx = await w.store.get("email:tpls") or []
+            for row in idx:
+                if row.get("send_to") in {"tag:" + g2 for g2 in gone}:
+                    t = await w.store.get("email:tpl:" + row["id"])
+                    if t:
+                        t["send_to"], t["enabled"] = "everyone", False
+                        await w.store.put("email:tpl:" + row["id"], t)
+                        row["send_to"], row["enabled"] = "everyone", False
+            await w.store.put("email:tpls", idx)
+        return jr({"ok": True, "tags": out})
     if len(tail) == 2 and tail[0] == "templates" and method == "PUT":
         body = await w.read_json(request, 120 * 1024)
         if not isinstance(body, dict):
@@ -541,7 +748,7 @@ async def owner_email_route(w, request, url, path, method, session):
                 raise err(404, "not_found", "That email doesn't exist.")
         else:
             raise err(404, "not_found", "That email doesn't exist.")
-        tpl = _clean_tpl(body, prev)
+        tpl = _clean_tpl(body, prev, {t["id"] for t in await get_tags(w)})
         tpl["id"] = tid
         await w.store.put("email:tpl:" + tid, tpl)
         await _index_put(w, tpl)
@@ -581,8 +788,7 @@ async def owner_email_route(w, request, url, path, method, session):
         except ValueError as ex:
             raise err(400, "bad_design", str(ex))
         who = session["user"]["name"]
-        v = _vars(w, origin, "", who)
-        v["unsubscribe_url"] = origin + "/api/unsub"
+        v = _vars(w, origin, session["user"]["id"], who)
         doc, text = _mail.render(design, v, H("clean_str")(body.get("subject"), 150))
         tok = secrets.token_urlsafe(18)
         await w.store.put("email:pv:" + tok, {"html": doc}, ttl=600)
@@ -623,22 +829,29 @@ async def owner_email_route(w, request, url, path, method, session):
                 to = H("clean_str")(body.get("test_to"), 120)
                 if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to):
                     raise err(400, "bad_request", "Type a valid test address.")
-                recips = [{"uid": session["user"]["id"], "e": to, "n": session["user"]["name"]}]
-            elif aud in ("everyone", "opted_in", "essential", "users"):
+                recips = [{"key": session["user"]["id"], "e": to, "n": session["user"]["name"]}]
+            elif aud in ("everyone", "essential", "people") or (isinstance(aud, str) and aud.startswith("tag:")):
                 users = await w.all_users()
-                want = set(str(x) for x in (body.get("users") or [])[:500])
-                for uid, u in users.items():
-                    if uid in w.owner_ids() or not u.get("e"):
-                        continue
-                    if aud == "users":
-                        if uid in want:
-                            recips.append({"uid": uid, "e": u["e"], "n": u.get("n", "")})
-                    elif eligible(u, aud):
-                        recips.append({"uid": uid, "e": u["e"], "n": u.get("n", "")})
+                if aud == "people":
+                    want = [H("clean_str")(x, 220) for x in (body.get("users") or [])[:500]]
+                    ids = {x for x in want if re.match(r"^\d{15,25}$", x)}
+                    for uid in ids:
+                        u = users.get(uid)
+                        if u and u.get("e") and uid not in w.owner_ids():
+                            recips.append({"key": uid, "e": u["e"], "n": u.get("n", "")})
+                    for x in want:
+                        if EMAIL_RE.match(x):
+                            ext = await w.store.get(_ext_key(x)) or {}
+                            if (ext.get("ep") or {}).get("update") is not False:
+                                recips.append({"key": x, "e": x, "n": ""})
+                else:
+                    for uid, u in users.items():
+                        if uid not in w.owner_ids() and eligible(u, aud):
+                            recips.append({"key": uid, "e": u["e"], "n": u.get("n", "")})
             else:
                 raise err(400, "bad_request", "Pick who to send it to.")
             if not recips:
-                raise err(400, "no_audience", "Nobody matches that audience (people need an email on file).")
+                raise err(400, "no_audience", "Nobody matches that audience (people need an email on file and must not have turned that kind of email off).")
             cid = secrets.token_hex(6)
             camp = {"id": cid, "tpl": tid, "name": tpl["name"], "subject": tpl["subject"], "design": tpl["design"], "aud": aud, "total": len(recips), "pos": 0, "sent": 0,
                     "failed": 0, "started": H("now")(), "done": False}
@@ -651,7 +864,7 @@ async def owner_email_route(w, request, url, path, method, session):
         for r in c["recips"][c["pos"]:c["pos"] + BATCH]:
             if left <= 0:
                 break
-            ok = await _send_one(w, g, c, r["uid"], r["e"], r["n"], origin)
+            ok = await _send_one(w, g, c, r.get("key") or r.get("uid"), r["e"], r["n"], origin)
             c["pos"] += 1
             left -= 1
             sent_now += 1

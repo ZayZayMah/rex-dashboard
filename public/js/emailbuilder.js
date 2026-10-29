@@ -13,7 +13,7 @@
   if (gf) document.head.append(h('link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?' + gf + '&display=swap' }));
 
   /* ---------- state */
-  let D = null, M = { name: '', subject: '', send_to: 'everyone', send_when: 'manual', enabled: false };
+  let D = null, M = { name: '', subject: '', send_to: 'everyone', send_when: 'manual', when_at: 'now', at_time: '09:00', enabled: false };
   let dev = 'd', sel = null, zoom = 1, mode = 'edit', dirty = false, tab = 'layers';
   const undo = [], redo = [];
   const uid = () => Math.random().toString(36).slice(2, 10);
@@ -84,7 +84,7 @@
   function markup(text) {
     const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     let s = esc(fillVars(text || ''));
-    s = s.replace(/\[([^\]\n]{1,80})\]\((https:\/\/[^\s)]{4,300})\)/g, (m, a) => '<u class="lnk">' + a + '</u>');
+    s = s.replace(/\[([^\]\n]{1,80})\]\((https:\/\/[^\s)]{4,300}|\{\w+\})\)/g, (m, a) => '<u class="lnk">' + a + '</u>');
     s = s.replace(/\*\*([^*\n]{1,300})\*\*/g, '<b>$1</b>').replace(/(^|[^*\w])\*([^*\n]{1,300})\*(?![*\w])/g, '$1<i>$2</i>');
     return s.replace(/\n/g, '<br>');
   }
@@ -101,15 +101,16 @@
   const zLabel = h('span', { class: 'eb-z' }, '100%');
   const bSave = h('button', { type: 'button', class: 'eb-save', onclick: save }, 'Save');
   const status = h('span', { class: 'eb-status' });
+  const bAuto = h('button', { type: 'button', class: 'eb-ghost eb-auto-btn', title: 'Choose when and to whom this email is sent automatically', onclick: () => automation() }, '⚡ Automation');
   const bar = h('header', { class: 'eb-bar' },
     h('button', { type: 'button', class: 'eb-back', title: 'Back', 'aria-label': 'Back', onclick: goBack }, '←'),
     nameIn, h('div', { class: 'eb-segs' }, bDesk, bMob), h('div', { class: 'eb-segs' }, bEdit, bPrev),
     h('div', { class: 'eb-tools' }, bUndo, bRedo,
       h('button', { type: 'button', class: 'eb-ic', 'aria-label': 'Zoom out', onclick: () => setZoom(zoom - 0.1) }, '−'), zLabel, h('button', { type: 'button', class: 'eb-ic', 'aria-label': 'Zoom in', onclick: () => setZoom(zoom + 0.1) }, '+')),
-    status, h('button', { type: 'button', class: 'eb-ghost', onclick: testSend }, 'Send test'), bSave);
+    status, bAuto, h('button', { type: 'button', class: 'eb-ghost', onclick: testSend }, 'Send test'), bSave);
   app.replaceChildren(h('div', { class: 'eb' }, bar, h('div', { class: 'eb-body' }, left, h('main', { class: 'eb-main' }, canvasWrap, previewBox), right)));
 
-  function syncBar() { bUndo.disabled = !undo.length; bRedo.disabled = !redo.length; bSave.textContent = dirty ? 'Save' : 'Saved'; bSave.classList.toggle('clean', !dirty); zLabel.textContent = Math.round(zoom * 100) + '%'; }
+  function syncBar() { bAuto.classList.toggle('on', !!M.enabled && M.send_when !== 'manual'); bAuto.textContent = '⚡ Automation' + (M.enabled && M.send_when !== 'manual' ? ': on' : ''); bUndo.disabled = !undo.length; bRedo.disabled = !redo.length; bSave.textContent = dirty ? 'Save' : 'Saved'; bSave.classList.toggle('clean', !dirty); zLabel.textContent = Math.round(zoom * 100) + '%'; }
   function setZoom(z) { zoom = Math.max(0.4, Math.min(1.6, Math.round(z * 10) / 10)); paintCanvas(); syncBar(); }
   function setDev(d) { dev = d; bDesk.classList.toggle('on', d === 'd'); bMob.classList.toggle('on', d === 'm'); if (mode === 'preview') showPreview(); paintAll(); }
   function setMode(m) { mode = m; bEdit.classList.toggle('on', m === 'edit'); bPrev.classList.toggle('on', m === 'preview'); canvasWrap.hidden = m === 'preview'; previewBox.hidden = m !== 'preview'; left.classList.toggle('dim', m === 'preview'); if (m === 'preview') showPreview(); }
@@ -280,14 +281,8 @@
     const wr = h('div', { class: 'eb-pad' });
     const subj = h('input', { type: 'text', maxlength: 150, value: M.subject, placeholder: 'Subject line, e.g. Welcome to Rex, {first_name}!', oninput: (e) => { M.subject = e.target.value; dirty = true; syncBar(); } });
     const pre = h('input', { type: 'text', maxlength: 160, value: D.pre, placeholder: 'Short text shown next to the subject', oninput: (e) => { D.pre = e.target.value; dirty = true; syncBar(); } });
-    const sendTo = sel2(Object.entries(meta.send_to), () => M.send_to, (v) => { M.send_to = v; dirty = true; layers(); syncBar(); });
-    const sendWhen = sel2(Object.entries(meta.events), () => M.send_when, (v) => { M.send_when = v; if (v !== 'manual' && M.send_to === 'manual') M.send_to = 'everyone'; if (v === 'manual') M.enabled = false; dirty = true; layers(); syncBar(); });
-    const auto = M.send_when !== 'manual';
-    const en = h('button', { type: 'button', class: 'rocker', role: 'switch', 'aria-checked': String(!!M.enabled), disabled: !auto, onclick: () => { M.enabled = !M.enabled; dirty = true; layers(); syncBar(); } });
     wr.append(h('h4', {}, 'Message'), F('Subject', subj), F('Preview text', pre),
-      h('h4', {}, 'Who and when'), F('Send to', sendTo), F('Send when', sendWhen),
-      auto ? h('div', { class: 'eb-f' }, h('span', {}, M.enabled ? 'Sends automatically' : 'Automatic sending is off'), en) : h('p', { class: 'eb-help' }, 'This email only goes out when you press Send on the Email tab of Owner mode.'),
-      auto ? h('p', { class: 'eb-help' }, 'Example: Welcome → everyone → first login. Needs Gmail connected, and people with no email on file are skipped.') : null,
+      h('p', { class: 'eb-help' }, 'Who gets this and when it is sent is set with the Automation button at the top.'),
       h('h4', {}, 'Look'),
       F('Page background', colorIn(() => D.bg, (v, live) => { D.bg = v; live ? 0 : (dirty = true); }, { fallback: '#eef2f9' })), F('Email background', colorIn(() => D.page, (v) => edit(() => { D.page = v; }, true), { fallback: '#ffffff' })),
       F('Default font', sel2(meta.fonts.map((f) => [f.id, f.label]), () => D.font, (v) => edit(() => { D.font = v; }))), F('Default text colour', colorIn(() => D.color, (v) => edit(() => { D.color = v; }, true))),
@@ -368,6 +363,57 @@
     status.textContent = '';
   }
 
+  /* ---------- automation: when it sends, to whom, and at what time */
+  function modal(title, body, actions) {
+    const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card' }, h('h2', {}, title), body, h('div', { class: 'eb-row' }, actions(() => m.remove()))));
+    m.addEventListener('pointerdown', (e) => { if (e.target === m) m.remove(); });
+    document.body.append(m); return m;
+  }
+  const tagName = (id) => ((meta.tags.find((t) => t.id === id) || {}).name) || id;
+  const sendToLabel = (v) => v === 'everyone' ? 'everyone who has not unsubscribed' : v === 'essential' ? 'essential (even if they turned a tag off)' : 'people with the tag “' + tagName(v.slice(4)) + '”';
+  function automation() {
+    const c = Object.assign({}, M);
+    const sum = h('p', { class: 'eb-help eb-sum' });
+    const en = h('button', { type: 'button', class: 'rocker', role: 'switch', onclick: () => { c.enabled = !c.enabled; draw(); } });
+    const when = sel2(Object.entries(meta.events), () => c.send_when, (v) => { c.send_when = v; if (v === 'manual') c.enabled = false; draw(); });
+    const to = sel2([...meta.tags.map((t) => ['tag:' + t.id, 'People with tag: ' + t.name]), ['everyone', 'Everyone (unless unsubscribed)'], ['essential', 'Essential notice (ignores tags)']], () => c.send_to, (v) => { c.send_to = v; draw(); });
+    const at = sel2(Object.entries(meta.send_at), () => c.when_at, (v) => { c.when_at = v; draw(); });
+    const tm = h('input', { type: 'time', value: c.at_time, onchange: (e) => { c.at_time = e.target.value || '09:00'; draw(); } });
+    const note = h('p', { class: 'eb-help' });
+    function draw() {
+      const auto = c.send_when !== 'manual', now = c.send_when === 'data_removed' || c.send_when === 'bot_leaves_server';
+      en.setAttribute('aria-checked', String(!!c.enabled)); en.disabled = !auto; at.disabled = !auto || now; tm.hidden = c.when_at !== 'time' || !auto || now;
+      note.textContent = now ? 'This one is always sent immediately, because the person will not be around later.' : (c.when_at === 'online' && auto ? 'It waits until they next open the website while logged in.' : (c.when_at === 'time' && auto ? 'Sent shortly after that time (UTC) once the event has happened.' : ''));
+      sum.textContent = auto ? (c.enabled ? 'On: ' : 'Off (paused): ') + meta.events[c.send_when] + ', send to ' + sendToLabel(c.send_to) + ', ' + (now ? 'immediately' : c.when_at === 'time' ? 'at ' + c.at_time + ' UTC' : (meta.send_at[c.when_at] || '').toLowerCase()) + '.'
+        : 'This email only goes out when you press Send on the Email tab in Owner mode. Pick an event above to make it automatic.';
+    }
+    draw();
+    modal('Automation', h('div', { class: 'eb-pad' }, F('When', when), F('Send to', to), F('At', at), tm, note, h('div', { class: 'eb-f' }, h('span', {}, 'Send automatically'), en), sum,
+      h('p', { class: 'eb-help' }, 'Needs Gmail connected. People with no email on file are skipped, and nobody gets more than the daily limit.')), (close) => [
+      h('button', { type: 'button', class: 'eb-ghost', onclick: close }, 'Cancel'),
+      h('button', { type: 'button', class: 'eb-save', onclick: () => { Object.assign(M, c); dirty = true; syncBar(); close(); toast('Automation updated. Remember to Save.', 'good'); } }, 'Done')]);
+  }
+
+  /* ---------- generate a ready-to-edit email for a tag (e.g. bug fixes) */
+  function generate(tagId, notes) {
+    const tag = meta.tags.find((t) => t.id === tagId) || { id: tagId, name: tagId };
+    const look = { bug_fixes: ['Bug fixes in Rex', '#16a34a', 'We squashed some bugs. Here is what is fixed:'], new_features: ['New in Rex', '#2f8cff', 'Rex just got better. Here is what is new:'], announcements: ['News from Rex', '#7c3aed', 'We have some news to share:'] }[tagId] || [tag.name + ' from Rex', '#2f8cff', 'Here is the latest:'];
+    const items = notes.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 12), d = base();
+    const list = items.length ? items.map((x) => '• ' + x).join('\n') : '• First thing\n• Second thing';
+    const lh = Math.max(60, items.length * 30 + 16);
+    d.els = [RECT(0, 0, 600, 150, '#0b1426', { name: 'Header' }), RECT(40, 52, 6, 46, look[1], { name: 'Accent', radius: 3 }), T(60, 52, 500, 46, look[0], { size: 30, bold: true, color: '#ffffff', font: 'poppins', name: 'Title', va: 'middle' }),
+      T(40, 180, 520, 70, 'Hi {first_name},\n\n' + look[2], { name: 'Intro' }), T(40, 270, 520, lh, list, { name: 'List', size: 16, lh: 1.8, bg: '#f3f6fc', pad: 16, radius: 12 }),
+      BTN(40, 270 + lh + 30, 220, 'Open my dashboard'), T(40, 270 + lh + 100, 520, 60, 'Don\'t want these? [Change which emails you get]({unsubscribe_link}).', { size: 13, color: '#6b7a99', name: 'Small print' })];
+    return { d, subject: look[0], name: tag.name + ' – ' + new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), send_to: 'tag:' + tag.id };
+  }
+  function askNotes(tagId) {
+    return new Promise((resolve) => {
+      const ta = h('textarea', { rows: 6, placeholder: 'One item per line, e.g.\nFixed the welcome card not showing\nFixed ticket buttons on mobile', maxlength: 1500 });
+      modal('Generate a “' + tagName(tagId) + '” email', h('div', { class: 'eb-pad' }, h('p', { class: 'eb-help' }, 'What changed? You can leave this empty and write it in the builder. It is sent to people who kept the “' + tagName(tagId) + '” tag on.'), ta),
+        (close) => [h('button', { type: 'button', class: 'eb-ghost', onclick: () => { close(); resolve(null); } }, 'Cancel'), h('button', { type: 'button', class: 'eb-save', onclick: () => { close(); resolve(ta.value); } }, 'Generate')]);
+    });
+  }
+
   function paintAll() { paintCanvas(); layers(); props(); syncBar(); }
 
   /* ---------- load */
@@ -375,17 +421,25 @@
     return new Promise((resolve) => {
       const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card' }, h('h2', {}, 'Start a new email'), h('p', { class: 'eb-help' }, 'Pick a starting point. You can change everything afterwards.'),
         h('div', { class: 'eb-starts' }, Object.entries(PRESETS).map(([k, p]) => h('button', { type: 'button', class: 'eb-start', onclick: () => { m.remove(); resolve(k); } }, h('b', {}, p.label), h('span', {}, p.desc)))),
+        h('h4', { class: 'eb-h4' }, 'Or generate one for a tag'), h('div', { class: 'eb-starts' }, meta.tags.map((t) => h('button', { type: 'button', class: 'eb-start', onclick: () => { m.remove(); resolve('gen:' + t.id); } }, h('b', {}, 'Generate: ' + t.name), h('span', {}, 'A ready-to-edit email for people with this tag.')))),
         h('button', { type: 'button', class: 'eb-ghost', onclick: () => { location.href = '/owner#email'; } }, '← Back')));
       document.body.append(m);
     });
   }
   if (tplId) {
-    try { const t = await api('/api/owner/email/templates/' + tplId); D = t.design; M = { name: t.name, subject: t.subject, send_to: t.send_to, send_when: t.send_when, enabled: !!t.enabled }; }
+    try { const t = await api('/api/owner/email/templates/' + tplId); D = t.design; M = { name: t.name, subject: t.subject, send_to: t.send_to, send_when: t.send_when, when_at: t.when_at || 'now', at_time: t.at_time || '09:00', enabled: !!t.enabled }; if (!/^(everyone|essential|tag:.+)$/.test(M.send_to)) M.send_to = 'everyone'; }
     catch (e) { app.replaceChildren(stateScreen('Email not found', e.message, h('a', { class: 'btn', href: '/owner#email' }, 'Back'))); return; }
   } else {
-    const k = await pickStart(), p = PRESETS[k].make(); D = p.d; M.subject = p.subject; M.name = k === 'blank' ? '' : PRESETS[k].label; dirty = true;
-    if (k === 'welcome') { M.send_when = 'first_login'; M.send_to = 'everyone'; }
-    if (k === 'notice') { M.send_when = 'server_blacklisted'; M.send_to = 'essential'; }
+    let k = qs.get('gen') ? 'gen:' + qs.get('gen') : await pickStart();
+    if (k.startsWith('gen:')) {
+      const notes = await askNotes(k.slice(4));
+      if (notes === null) { location.href = '/owner#email'; return; }
+      const g = generate(k.slice(4), notes); D = g.d; M.subject = g.subject; M.name = g.name; M.send_to = g.send_to; dirty = true;
+    } else {
+      const p = PRESETS[k].make(); D = p.d; M.subject = p.subject; M.name = k === 'blank' ? '' : PRESETS[k].label; dirty = true;
+      if (k === 'welcome') { M.send_when = 'first_login'; M.send_to = 'everyone'; }
+      if (k === 'notice') { M.send_when = 'server_blacklisted'; M.send_to = 'essential'; }
+    }
   }
   nameIn.value = M.name; tab = 'add'; paintAll();
   new ResizeObserver(() => { if (!canvasWrap.clientWidth) return; const c = canvasWrap.clientWidth - 48, need = (dev === 'd' ? D.w : MOB); if (c < need * zoom && zoom === 1) setZoom(Math.max(0.4, Math.floor(c / need * 10) / 10)); }).observe(canvasWrap);

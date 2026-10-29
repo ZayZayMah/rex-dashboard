@@ -53,16 +53,18 @@
       const box = h('div', { class: 'well' }, h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Loading...'));
       body.append(box);
       api('/api/email/prefs').then((pr) => {
-        const row = (key, title, desc) => {
-          const sw = h('button', { type: 'button', class: 'rocker', role: 'switch', 'aria-checked': String(!!pr[key]), 'aria-label': title });
-          sw.addEventListener('click', async () => { const on = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', String(on)); try { await api('/api/email/prefs', { method: 'PUT', body: { [key]: on } }); toast(on ? 'Turned on' : 'Turned off', 'good'); } catch (e) { sw.setAttribute('aria-checked', String(!on)); toast(e.message, 'bad'); } });
+        const row = (title, desc, on, set) => {
+          const sw = h('button', { type: 'button', class: 'rocker', role: 'switch', 'aria-checked': String(!!on), 'aria-label': title });
+          sw.addEventListener('click', async () => { const next = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', String(next)); try { await set(next); toast(next ? 'Turned on' : 'Turned off', 'good'); } catch (e) { sw.setAttribute('aria-checked', String(!next)); toast(e.message, 'bad'); } });
           return h('div', { class: 'beta-row' }, h('div', {}, h('b', {}, title), h('div', { class: 'muted small' }, desc)), sw);
         };
-        if (pr.owner) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Rex owners never receive these emails.'));
-        if (!pr.has_email) return box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Your Discord account has no verified email, so there is nothing to send to.'));
-        box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, 'Sent to ' + pr.email + '. You get Rex emails unless you turn them off here, and every email has an unsubscribe link. Account notices (like a server being banned) may still be sent.'),
-          row('update', 'Update emails', 'New features and fixes, now and then.'), row('push', 'Important notices', 'Maintenance, outages and anything that needs your attention.'));
-      }).catch((e) => box.replaceChildren(h('h3', {}, 'Email updates'), h('p', { class: 'muted small' }, e.message)));
+        if (pr.owner) return box.replaceChildren(h('h3', {}, 'Email preferences'), h('p', { class: 'muted small' }, 'Rex owners never receive these emails.'));
+        if (!pr.has_email) return box.replaceChildren(h('h3', {}, 'Email preferences'), h('p', { class: 'muted small' }, 'Your Discord account has no verified email, so there is nothing to send to.'));
+        box.replaceChildren(h('h3', {}, 'Email preferences'), h('p', { class: 'muted small' }, 'Sent to ' + pr.email + '. Pick the kinds of email you want. Every email has an unsubscribe link.'),
+          ...pr.tags.map((t) => row(t.name, t.desc || '', pr.all && t.on, (on) => api('/api/email/prefs', { method: 'PUT', body: { tags: { [t.id]: on } } }))),
+          row('Important notices', 'Account and security messages, like a server being banned. Recommended.', pr.push && pr.all, (on) => api('/api/email/prefs', { method: 'PUT', body: { push: on } })),
+          h('p', { class: 'small', style: 'margin-top:10px' }, h('a', { href: '/' + pr.uid + '/email' }, 'Open the full email preferences page')));
+      }).catch((e) => box.replaceChildren(h('h3', {}, 'Email preferences'), h('p', { class: 'muted small' }, e.message)));
     }
     if (me.beta && me.beta.support) body.append(h('div', { class: 'well' }, h('h3', {}, 'Need help?'), h('p', { class: 'muted small' }, 'Chat with the Rex helper. If it cannot solve it, a real person joins.'), h('a', { class: 'btn', href: '/support' }, 'Open support chat')));
     body.append(h('div', { class: 'well' }, h('h3', {}, 'Your data'),

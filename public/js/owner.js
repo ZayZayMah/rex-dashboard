@@ -183,9 +183,19 @@
         h('button', { class: 'btn', style: 'margin-top:12px', type: 'button', onclick: async () => { try { await api('/api/owner/email/connect', { method: 'POST', body: { url: paste.value } }); location.reload(); } catch (e) { toast(e.message, 'bad'); } } }, 'Connect'));
     }
     wrap.append(conn);
+    function tagsCard() {
+      const list = h('div', { class: 'stack' }), msg = h('span', { class: 'muted small' }); let tg = st.tags.map((x) => Object.assign({}, x));
+      const paint = () => list.replaceChildren(...tg.map((x, i) => h('div', { class: 'well' }, h('div', { class: 'row-2' }, field('Tag name', h('input', { type: 'text', maxlength: 30, value: x.name, oninput: (e) => { x.name = e.target.value; } })), field('What it is (people see this)', h('input', { type: 'text', maxlength: 120, value: x.desc || '', oninput: (e) => { x.desc = e.target.value; } }))),
+        h('button', { class: 'btn ghost sm', type: 'button', disabled: tg.length < 2, onclick: () => { tg.splice(i, 1); paint(); } }, 'Remove'))));
+      paint();
+      return h('div', { class: 'frame' }, h('h3', {}, 'Email tags'), h('p', { class: 'muted small' }, 'Tags are the kinds of email people can choose on their preferences page. Send an email to a tag and only people who kept it on get it. Removing a tag pauses any automatic email that was using it.'), list,
+        h('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (tg.length < 12) { tg.push({ name: '', desc: '' }); paint(); } } }, 'Add a tag'),
+          h('button', { class: 'btn', type: 'button', onclick: async () => { try { const r = await api('/api/owner/email/tags', { method: 'PUT', body: { tags: tg } }); tg = r.tags; st.tags = r.tags; msg.textContent = 'Saved.'; toast('Tags saved', 'good'); paint(); } catch (e) { msg.textContent = e.message; toast(e.message, 'bad'); } } }, 'Save tags'), msg));
+    }
+
     // 2. saved emails
-    const A = st.audience, label = { everyone: 'Everyone', opted_in: 'Opted in only', essential: 'Everyone (essential)', manual: 'Manual' };
-    const rule = (t) => t.send_when === 'manual' ? 'Sent by you, by hand' : (st.events[t.send_when] || t.send_when) + ' → ' + (label[t.send_to] || t.send_to) + (t.enabled ? '' : ' (paused)');
+    const A = st.audience, tagName = (id) => ((st.tags.find((t) => t.id === id) || {}).name) || id, label = (v) => v === 'everyone' ? 'Everyone' : v === 'essential' ? 'Essential' : (v || '').startsWith('tag:') ? 'Tag: ' + tagName(v.slice(4)) : v;
+    const rule = (t) => t.send_when === 'manual' ? 'Sent by you, by hand' : (st.events[t.send_when] || t.send_when) + ' → ' + label(t.send_to) + ' → ' + (st.send_at[t.when_at || 'now'] || '').toLowerCase() + (t.when_at === 'time' ? ' ' + t.at_time + ' UTC' : '') + (t.enabled ? '' : ' (paused)');
     const statusLine = h('div', { class: 'hint', role: 'status' });
     const rows = h('div', { class: 'stack' });
     const paintRows = () => rows.replaceChildren(...(st.templates.length ? st.templates.map((t) => h('div', { class: 'well mail-row' },
@@ -193,10 +203,10 @@
       h('div', { class: 'mail-acts' }, h('a', { class: 'btn sm', href: '/email-builder?id=' + t.id }, 'Edit'), h('button', { class: 'btn ghost sm', type: 'button', onclick: () => sendDialog(t) }, 'Send…'),
         h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Delete "' + t.name + '"?', 'This cannot be undone. Automatic sending of it stops.', 'Delete', true)) { await api('/api/owner/email/templates/' + t.id, { method: 'DELETE', body: {} }); st.templates = st.templates.filter((x) => x.id !== t.id); paintRows(); } } }, 'Delete')))) : [h('p', { class: 'muted' }, 'No saved emails yet. Press "New email" to design one.')]));
     async function sendDialog(t) {
-      const aud = h('select', {}, [['everyone', 'Everyone except people who turned emails off (' + A.everyone + ')'], ['opted_in', 'Only people who turned emails on (' + A.opted_in + ')'], ['essential', 'Everyone, even if they turned emails off (' + (A.everyone + A.off) + ')'], ['users', 'Specific people (user IDs)'], ['test', 'A test to one address']].map(([v, n]) => h('option', { value: v }, n)));
-      if (t.send_to !== 'manual' && ['everyone', 'opted_in', 'essential'].includes(t.send_to)) aud.value = t.send_to;
-      const ids = h('textarea', { rows: 3, placeholder: 'User IDs, one per line', hidden: true }), to = h('input', { type: 'email', placeholder: 'you@example.com', hidden: true });
-      aud.addEventListener('change', () => { ids.hidden = aud.value !== 'users'; to.hidden = aud.value !== 'test'; });
+      const aud = h('select', {}, [...st.tags.map((x) => ['tag:' + x.id, 'People with tag: ' + x.name + ' (' + (A.tags[x.id] || 0) + ')']), ['everyone', 'Everyone except people who unsubscribed (' + A.everyone + ')'], ['essential', 'Essential: everyone, even if they unsubscribed (' + (A.everyone + A.off) + ')'], ['people', 'Specific people (Discord IDs or email addresses)'], ['test', 'A test to one address']].map(([v, n]) => h('option', { value: v }, n)));
+      if (t.send_to && [...aud.options].some((op) => op.value === t.send_to)) aud.value = t.send_to;
+      const ids = h('textarea', { rows: 3, placeholder: 'Discord IDs or email addresses, one per line', hidden: true }), to = h('input', { type: 'email', placeholder: 'you@example.com', hidden: true });
+      aud.addEventListener('change', () => { ids.hidden = aud.value !== 'people'; to.hidden = aud.value !== 'test'; });
       const bar = h('div', { class: 'track', hidden: true }, h('i', { style: 'width:0%' })), msg = h('div', { class: 'hint', role: 'status' });
       const go = h('button', { class: 'btn', type: 'button' }, 'Send now'), close = h('button', { class: 'btn ghost', type: 'button' }, 'Close');
       const box = h('div', { class: 'mail-modal' }, h('div', { class: 'frame' }, h('h3', {}, 'Send "' + t.name + '"'), h('p', { class: 'muted small' }, 'People with no email on file are skipped. Today: ' + st.sent_today + ' of ' + st.cap + ' sends used. Keep this page open while it sends.'), h('div', { class: 'stack' }, field('Who gets it', aud), ids, to), h('div', { style: 'display:flex;gap:10px;margin-top:12px' }, go, close), bar, msg));
@@ -217,8 +227,10 @@
       document.body.append(box);
     }
     paintRows();
+    const gen = h('div', { class: 'chips' }, st.tags.map((x) => h('a', { class: 'chip', href: '/email-builder?gen=' + x.id }, 'Generate: ' + x.name)));
     wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' }, h('h3', { style: 'margin:0' }, 'Saved emails'), h('a', { class: 'btn', href: '/email-builder' }, 'New email')),
-      h('p', { class: 'muted small' }, 'Each email remembers who gets it and when it goes out. Emails go to everyone with an email on file, unless they turned emails off. ' + A.everyone + ' can get emails now, ' + A.off + ' turned them off, ' + A.no_email + ' have no email on file.'), rows, statusLine));
+      h('p', { class: 'muted small' }, 'Each email remembers who gets it and when it goes out. Emails go to everyone with an email on file, unless they turned emails off. ' + A.everyone + ' can get emails now, ' + A.off + ' turned them off, ' + A.no_email + ' have no email on file.'), h('div', { class: 'muted small' }, 'Make a ready-to-edit email for a tag:'), gen, rows, statusLine));
+    wrap.append(tagsCard());
 
     // 3. history
     if (st.campaigns.length) wrap.append(h('div', { class: 'frame' }, h('h3', {}, 'Recent sends'), h('table', { class: 'tbl' }, h('tbody', {}, st.campaigns.map((c) => h('tr', {}, h('td', {}, c.name || c.subject), h('td', {}, c.sent + '/' + c.total + (c.failed ? ' (' + c.failed + ' failed)' : '')), h('td', { class: 'muted' }, timeAgo(c.started))))))));

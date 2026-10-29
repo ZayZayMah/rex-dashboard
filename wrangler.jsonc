@@ -13,7 +13,7 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*", "/auth/*"]
+    "run_worker_first": ["/api/*", "/auth/*", "/*/email"]
   },
 
   // Storage for sessions, server settings, premium flags and bot stats.

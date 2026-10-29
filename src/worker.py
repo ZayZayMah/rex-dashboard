@@ -519,6 +519,10 @@ class Default(WorkerEntrypoint):
             return await self.api_public_schema()
         if path == "/api/ownergate" and method == "POST":
             return await self.api_ownergate(request, url)
+        if path == "/api/emailprefs" and method in ("GET", "PUT"):
+            return await features.emailprefs_route(self, request, url, method, await self.get_session(request))
+        if method == "GET" and re.match(r"^/[^/]{3,230}/email$", path) and not path.startswith(("/api/", "/auth/")):
+            return await self.serve_asset(url, "/email-prefs")
         if path == "/api/unsub" and method in ("GET", "POST"):
             return await features.unsub_route(self, request, url, method)
         if path.startswith("/api/img/") and method == "GET":
@@ -528,6 +532,15 @@ class Default(WorkerEntrypoint):
         if path.startswith("/api/"):
             return await self.route_user(request, url, path, method)
         raise HttpError(404, "not_found", "Not found.")
+
+    async def serve_asset(self, url, asset_path):
+        """Serve a static page under a different address (the email preferences page lives at /<id>/email)."""
+        res = await self.env.ASSETS.fetch(self.public_origin(url) + asset_path)
+        body = await res.text()
+        out = {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+               "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"}
+        out.update(SECURITY_HEADERS)
+        return Response(body, status=200, headers=out)
 
     # ---- Discord login
     async def auth_login(self, url):
@@ -844,6 +857,7 @@ class Default(WorkerEntrypoint):
 
         if path == "/api/me" and method == "GET":
             await self.note_user(session)
+            await features.deliver_pending(self, session["user"]["id"], url)
             return await self.api_me(session)
         if path == "/api/profile" and method == "GET":
             return await self.api_profile(session)
@@ -1196,7 +1210,10 @@ class Default(WorkerEntrypoint):
     async def api_delete_me(self, request, url, session):
         self.check_mutation(request, url, session)
         uid = session["user"]["id"]
+        old_rec = await self.get_user(uid)
         await self.del_user(uid)
+        if old_rec:
+            await features.fire(self, "data_removed", uid, url, rec=old_rec)
         watch = await self.store.get("watch") or {}
         if uid in watch:
             del watch[uid]
@@ -1465,6 +1482,7 @@ class Default(WorkerEntrypoint):
         tail = parts[3:]
 
         if tail == ["heartbeat"] and method == "POST":
+            await features.flush_due(self, urlparse(request.url))
             stats = sanitize_stats(await self.read_json(request, 64 * 1024))
             previous = await self.store.get("stats:latest") or {}
             hist = list(previous.get("hist") or [])
@@ -1505,7 +1523,7 @@ class Default(WorkerEntrypoint):
                 await self.store.put("commands", catalog)
             return json_response({"ok": True, "commands": len(catalog["commands"])})
         if tail == ["sync"] and method == "POST":
-            return await self.bot_sync(await self.read_json(request, 2 * 1024 * 1024))
+            return await self.bot_sync(await self.read_json(request, 2 * 1024 * 1024), urlparse(request.url))
         if tail == ["poll"] and method == "GET":
             return await self.bot_poll()
         if tail == ["ack"] and method == "POST":
@@ -1531,17 +1549,28 @@ class Default(WorkerEntrypoint):
                 raise HttpError(400, "bad_request", "Bad guild id.")
             index = await self.store.get("bot:guilds") or {}
             if gid in index:
+                left = index[gid]
                 del index[gid]
                 await self.store.put("bot:guilds", index)
+                if left.get("oi"):
+                    await features.fire(self, "bot_leaves_server", str(left["oi"]), urlparse(request.url), {"server": left.get("n", "")})
             await self.store.delete("guild:" + gid)
+            return json_response({"ok": True})
+        if tail == ["event"] and method == "POST":
+            body = await self.read_json(request, 2048)
+            ev, uid = (body.get("event") if isinstance(body, dict) else ""), str((body or {}).get("uid") or "")
+            if ev == "joins_support" and SNOWFLAKE.match(uid):
+                await features.fire(self, "joins_support", uid, urlparse(request.url))
             return json_response({"ok": True})
         raise HttpError(404, "not_found", "Not found.")
 
-    async def bot_sync(self, body):
+    async def bot_sync(self, body, url=None):
         if not isinstance(body, dict) or not isinstance(body.get("guilds"), list):
             raise HttpError(400, "bad_request", "Expected {guilds: [...]}.")
         batch = [g for g in (sanitize_guild(x) for x in body["guilds"][:25]) if g]
         index = await self.store.get("bot:guilds") or {}
+        had_index = len(index) > 3
+        joined = []
         index_changed = False
         written = 0
         for g in batch:
@@ -1554,6 +1583,8 @@ class Default(WorkerEntrypoint):
             entry = {"n": g["name"], "i": g["icon"], "t": highest_tier(g["tiers"]), "m": g["member_count"],
                      "o": g["owner_name"], "oi": g["owner_id"], "b": g["blacklisted"], "cr": g["created"]}
             old = index.get(g["id"])
+            if not old and had_index:
+                joined.append((g["owner_id"], g["name"]))
             if not old or {k: v for k, v in old.items() if k != "m"} != {k: v for k, v in entry.items() if k != "m"}:
                 index[g["id"]] = entry
                 index_changed = True
@@ -1568,6 +1599,10 @@ class Default(WorkerEntrypoint):
                 index_changed = True
         if index_changed:
             await self.store.put("bot:guilds", index)
+        if joined and len(joined) <= 3 and url is not None:
+            for oid, gname in joined:
+                if oid:
+                    await features.fire(self, "bot_joins_server", str(oid), url, {"server": gname})
         return json_response({"ok": True, "received": len(batch), "written": written, "pruned": pruned})
 
     async def bot_poll(self):

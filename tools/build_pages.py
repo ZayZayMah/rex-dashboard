@@ -21,6 +21,7 @@ PAGES = [
     ("profile.html", "Profile - Rex", "Your Rex profile, levels and XP.", "profile", False, "noindex"),
     ("support.html", "Support - Rex", "Chat with the Rex helper or a real person.", "support", False, "noindex"),
     ("email-builder.html", "Email builder - Rex", "Design Rex emails.", "emailbuilder", False, "noindex,nofollow"),
+    ("email-prefs.html", "Email preferences - Rex", "Choose which Rex emails you get.", "emailprefs", False, "noindex,nofollow"),
     ("owner.html", "Owner mode - Rex", "Rex owner tools.", "owner", False, "noindex"),
     ("transcript.html", "Ticket transcript - Rex", "A saved Rex ticket transcript.", "transcript", False, "noindex,nofollow"),
     ("404.html", "Not found - Rex", "That page does not exist.", "404", False, "noindex"),

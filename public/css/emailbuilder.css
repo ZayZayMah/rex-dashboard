@@ -80,3 +80,9 @@ body.page-emailbuilder { margin: 0; height: 100vh; overflow: hidden; background:
   .eb-left { max-height: 34vh; border-right: 0; border-bottom: 1px solid #252d42; } .eb-right { max-height: 34vh; border-left: 0; border-top: 1px solid #252d42; }
   .eb-bar { gap: 8px; } .eb-name { max-width: none; }
 }
+.eb-auto-btn.on { border-color: #2f8cff; color: #8fb8ff; }
+.eb-row { display: flex; gap: 10px; justify-content: flex-end; }
+.eb-h4 { margin: 8px 0 0; font: 700 11px inherit; letter-spacing: .08em; text-transform: uppercase; color: #7f8db0; }
+.eb-sum { background: #0f1420; border-radius: 10px; padding: 10px 12px; }
+.eb-modal .eb-pad { padding: 0; }
+.eb-card { max-height: 90vh; overflow-y: auto; }

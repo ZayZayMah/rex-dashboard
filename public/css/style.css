@@ -697,3 +697,5 @@ html[data-theme='halloween'] .srv-side .side-group { display: contents; } html[d
 .mail-acts { display: flex; gap: 8px; }
 .mail-modal { position: fixed; inset: 0; background: #050a14cc; display: grid; place-items: center; z-index: 60; padding: 16px; }
 .mail-modal .frame { max-width: 520px; width: 100%; }
+.pref-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.wrap.narrow { max-width: 640px; }

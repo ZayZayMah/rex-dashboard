@@ -46,7 +46,7 @@ FONTS = {
 }
 HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 URL = re.compile(r"^https://[^\s<>\"']{4,480}$")
-VARIABLES = ("name", "first_name", "dashboard_url", "site_url", "unsubscribe_url", "support_url", "date", "server")
+VARIABLES = ("name", "first_name", "dashboard_url", "site_url", "unsubscribe_url", "unsubscribe_link", "support_url", "date", "server")
 
 
 def _num(v, lo, hi, default):
@@ -235,6 +235,14 @@ def _tree(items):
                 continue
             if best is None or area[i] < area[best]:
                 best = i
+        if best is not None:
+            zi, zj = items[best][0].get("z", best), ej.get("z", j)
+            for k, (ek, bk) in enumerate(items):
+                if k in (best, j) or ek["t"] == "rect" and _inside(bk, items[best][1]) and False:
+                    continue
+                if _hit(bk, items[best][1]) and not _inside(bk, items[best][1]) and zi < ek.get("z", k) < zj:
+                    best = None   # something sits between the box and this item in the stack, so keep the order by stacking them
+                    break
         parent[j] = best
     nodes = [{"e": e, "b": dict(b), "kids": []} for e, b in items]
     top = []
@@ -246,19 +254,35 @@ def _tree(items):
     return top
 
 
-def _settle(nodes):
-    """Make siblings not overlap (email can't stack things): push later ones down. Returns the nodes sorted."""
-    nodes.sort(key=lambda nd: (nd["b"]["y"], nd["b"]["x"]))
-    placed = []
-    for nd in nodes:
-        for _ in range(60):
-            clash = next((p for p in placed if _hit(nd["b"], p["b"])), None)
-            if clash is None:
+def _bbox(group):
+    x0 = min(n["b"]["x"] for n in group); y0 = min(n["b"]["y"] for n in group)
+    x1 = max(n["b"]["x"] + n["b"]["w"] for n in group); y1 = max(n["b"]["y"] + n["b"]["h"] for n in group)
+    return {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0}
+
+
+def _merge_overlaps(nodes):
+    """Things that overlap are kept together as one 'stack' that is drawn with absolute positioning (top-most last)."""
+    groups = [[n] for n in nodes]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                if _hit(_bbox(groups[i]), _bbox(groups[j])):
+                    groups[i] += groups.pop(j)
+                    changed = True
+                    break
+            if changed:
                 break
-            nd["b"]["y"] = clash["b"]["y"] + clash["b"]["h"]
-        placed.append(nd)
-    nodes.sort(key=lambda nd: (nd["b"]["y"], nd["b"]["x"]))
-    return nodes
+    out = []
+    for g in groups:
+        if len(g) == 1:
+            out.append(g[0])
+        else:
+            g.sort(key=lambda n: n["e"].get("z", 0))
+            out.append({"stack": g, "b": _bbox(g), "kids": [], "e": {"t": "stack", "z": min(n["e"].get("z", 0) for n in g)}})
+    out.sort(key=lambda nd: (nd["b"]["y"], nd["b"]["x"]))
+    return out
 
 
 _Z = "font-size:0;line-height:0;mso-line-height-rule:exactly"
@@ -289,7 +313,7 @@ class _Ctx:
 
 def _rows(nodes, W, cx):
     """Bands of side-by-side elements stacked top to bottom. Returns table HTML of width W."""
-    nodes = _settle(nodes)
+    nodes = _merge_overlaps(nodes)
     out, y, i = [], 0, 0
     while i < len(nodes):
         band = [nodes[i]]
@@ -327,6 +351,17 @@ def _border(e):
 def _element(node, cx):
     e, b = node["e"], node["b"]
     w, h = round(b["w"]), round(b["h"])
+    if node.get("stack"):
+        parts = []
+        for k in node["stack"]:
+            kb = k["b"]
+            rel = {"x": kb["x"] - b["x"], "y": kb["y"] - b["y"], "w": kb["w"], "h": kb["h"]}
+            if k["kids"]:
+                pass
+            k2 = dict(k, b=rel)
+            parts.append(f'<div style="position:absolute;left:{round(rel["x"])}px;top:{round(rel["y"])}px;width:{round(rel["w"])}px;height:{round(rel["h"])}px">{_element(k2, cx)}</div>')
+        return (f'<table role="presentation" width="{w}" cellpadding="0" cellspacing="0" border="0" style="width:{w}px"><tr><td valign="top" height="{h}" style="height:{h}px">'
+                f'<div style="position:relative;width:{w}px;height:{h}px">{"".join(parts)}</div></td></tr></table>')
     t = e["t"]
     rad = f"border-radius:{e['radius']}px;" if e.get("radius") else ""
     bg = e.get("bg") if e.get("bg") and e["bg"] != "transparent" else ""
@@ -416,7 +451,7 @@ def render(design, v, subject=""):
     foot = design["footer"]
     unsub = html.escape(v.get("unsubscribe_url", "#"))
     foot_html = (f'<p style="margin:0;font:{foot["size"]}px/1.5 Arial,sans-serif;color:{foot["color"]};text-align:{foot["align"]}">'
-                 f'{_markup(fill_vars(foot["text"], v), foot["color"])} <a href="{unsub}" style="color:{foot["color"]};text-decoration:underline">Unsubscribe</a></p>')
+                 f'{_markup(fill_vars(foot["text"], v), foot["color"])} <a href="{html.escape(v.get("unsubscribe_link", "#"))}" style="color:{foot["color"]};text-decoration:underline">Email preferences</a> · <a href="{unsub}" style="color:{foot["color"]};text-decoration:underline">Unsubscribe</a></p>')
     pre = html.escape(fill_vars(design.get("pre", ""), v))
     page_bg = design["page"]
     rad = design["radius"]
@@ -445,7 +480,7 @@ def render(design, v, subject=""):
             lines.append(f"{fill_vars(e['label'], v)}: {_fill_url(e.get('url'), v)}" if e.get("url") else fill_vars(e["label"], v))
         elif e["t"] == "image" and e.get("alt"):
             lines.append(f"[{fill_vars(e['alt'], v)}]")
-    text = "\n\n".join(x for x in lines if x.strip()) + f"\n\n--\n{foot['text']}\nUnsubscribe: {v.get('unsubscribe_url', '')}"
+    text = "\n\n".join(x for x in lines if x.strip()) + f"\n\n--\n{foot['text']}\nEmail preferences: {v.get('unsubscribe_link', '')}\nUnsubscribe: {v.get('unsubscribe_url', '')}"
     return doc, text
 
 
@@ -464,9 +499,10 @@ def checks(design):
             out.append(f"Button “{name}” has no link.")
         if ba["x"] + ba["w"] > design["w"] + 1:
             out.append(f"“{name}” goes past the right edge.")
-        for b, bb in items[i + 1:]:
-            if _hit(ba, bb) and not (a["t"] == "rect" and _inside(bb, ba)) and not (b["t"] == "rect" and _inside(ba, bb)):
-                out.append(f"“{name}” overlaps “{b.get('name') or b['t']}”. Email can't stack things, so one is moved down.")
+    ov = any(_hit(items[i][1], items[j][1]) and not (items[i][0]["t"] == "rect" and _inside(items[j][1], items[i][1])) and not (items[j][0]["t"] == "rect" and _inside(items[i][1], items[j][1]))
+             for i in range(len(items)) for j in range(i + 1, len(items)))
+    if ov:
+        out.append("Some things overlap. That works in Gmail, Apple Mail and most apps, but Outlook.com and Yahoo may show overlapping items one under the other.")
     if not els:
         out.append("The email is empty.")
     return out[:12]
