@@ -370,17 +370,20 @@
     document.body.append(m); return m;
   }
   const tagName = (id) => ((meta.tags.find((t) => t.id === id) || {}).name) || id;
-  const sendToLabel = (v) => v === 'everyone' ? 'everyone who has not unsubscribed' : v === 'essential' ? 'essential (even if they turned a tag off)' : 'people with the tag “' + tagName(v.slice(4)) + '”';
+  const sendToLabel = (v) => v === 'target' ? 'only the person it happens to' : v === 'everyone' ? 'everyone who has not unsubscribed' : v === 'essential' ? 'essential (even if they turned a tag off)' : 'people with the tag “' + tagName(v.slice(4)) + '”';
   function automation() {
     const c = Object.assign({}, M);
     const sum = h('p', { class: 'eb-help eb-sum' });
     const en = h('button', { type: 'button', class: 'rocker', role: 'switch', onclick: () => { c.enabled = !c.enabled; draw(); } });
     const when = sel2(Object.entries(meta.events), () => c.send_when, (v) => { c.send_when = v; if (v === 'manual') c.enabled = false; draw(); });
-    const to = sel2([...meta.tags.map((t) => ['tag:' + t.id, 'People with tag: ' + t.name]), ['everyone', 'Everyone (unless unsubscribed)'], ['essential', 'Essential notice (ignores tags)']], () => c.send_to, (v) => { c.send_to = v; draw(); });
+    const toBox = h('div', {});
+    const drawTo = () => { const auto = c.send_when !== 'manual'; if (auto && c.send_to === 'everyone') c.send_to = 'target'; if (!auto && c.send_to === 'target') c.send_to = 'everyone';
+      toBox.replaceChildren(sel2([...(auto ? [['target', 'Only the person it happens to']] : [['everyone', 'Everyone (unless unsubscribed)']]), ...meta.tags.map((t) => ['tag:' + t.id, (auto ? 'The person, only if they kept tag: ' : 'People with tag: ') + t.name]), ['essential', auto ? 'The person, even if they turned tags off (essential)' : 'Essential: everyone (ignores tags)']], () => c.send_to, (v) => { c.send_to = v; draw(); })); };
     const at = sel2(Object.entries(meta.send_at), () => c.when_at, (v) => { c.when_at = v; draw(); });
     const tm = h('input', { type: 'time', value: c.at_time, onchange: (e) => { c.at_time = e.target.value || '09:00'; draw(); } });
     const note = h('p', { class: 'eb-help' });
     function draw() {
+      drawTo();
       const auto = c.send_when !== 'manual', now = c.send_when === 'data_removed' || c.send_when === 'bot_leaves_server';
       en.setAttribute('aria-checked', String(!!c.enabled)); en.disabled = !auto; at.disabled = !auto || now; tm.hidden = c.when_at !== 'time' || !auto || now;
       note.textContent = now ? 'This one is always sent immediately, because the person will not be around later.' : (c.when_at === 'online' && auto ? 'It waits until they next open the website while logged in.' : (c.when_at === 'time' && auto ? 'Sent shortly after that time (UTC) once the event has happened.' : ''));
@@ -388,7 +391,7 @@
         : 'This email only goes out when you press Send on the Email tab in Owner mode. Pick an event above to make it automatic.';
     }
     draw();
-    modal('Automation', h('div', { class: 'eb-pad' }, F('When', when), F('Send to', to), F('At', at), tm, note, h('div', { class: 'eb-f' }, h('span', {}, 'Send automatically'), en), sum,
+    modal('Automation', h('div', { class: 'eb-pad' }, F('When', when), F('Send to', toBox), F('At', at), tm, note, h('div', { class: 'eb-f' }, h('span', {}, 'Send automatically'), en), sum,
       h('p', { class: 'eb-help' }, 'Needs Gmail connected. People with no email on file are skipped, and nobody gets more than the daily limit.')), (close) => [
       h('button', { type: 'button', class: 'eb-ghost', onclick: close }, 'Cancel'),
       h('button', { type: 'button', class: 'eb-save', onclick: () => { Object.assign(M, c); dirty = true; syncBar(); close(); toast('Automation updated. Remember to Save.', 'good'); } }, 'Done')]);
@@ -427,7 +430,7 @@
     });
   }
   if (tplId) {
-    try { const t = await api('/api/owner/email/templates/' + tplId); D = t.design; M = { name: t.name, subject: t.subject, send_to: t.send_to, send_when: t.send_when, when_at: t.when_at || 'now', at_time: t.at_time || '09:00', enabled: !!t.enabled }; if (!/^(everyone|essential|tag:.+)$/.test(M.send_to)) M.send_to = 'everyone'; }
+    try { const t = await api('/api/owner/email/templates/' + tplId); D = t.design; M = { name: t.name, subject: t.subject, send_to: t.send_to, send_when: t.send_when, when_at: t.when_at || 'now', at_time: t.at_time || '09:00', enabled: !!t.enabled }; if (!/^(everyone|essential|target|tag:.+)$/.test(M.send_to)) M.send_to = 'everyone'; if (M.send_when !== 'manual' && M.send_to === 'everyone') M.send_to = 'target'; }
     catch (e) { app.replaceChildren(stateScreen('Email not found', e.message, h('a', { class: 'btn', href: '/owner#email' }, 'Back'))); return; }
   } else {
     let k = qs.get('gen') ? 'gen:' + qs.get('gen') : await pickStart();
@@ -437,7 +440,7 @@
       const g = generate(k.slice(4), notes); D = g.d; M.subject = g.subject; M.name = g.name; M.send_to = g.send_to; dirty = true;
     } else {
       const p = PRESETS[k].make(); D = p.d; M.subject = p.subject; M.name = k === 'blank' ? '' : PRESETS[k].label; dirty = true;
-      if (k === 'welcome') { M.send_when = 'first_login'; M.send_to = 'everyone'; }
+      if (k === 'welcome') { M.send_when = 'first_login'; M.send_to = 'target'; }
       if (k === 'notice') { M.send_when = 'server_blacklisted'; M.send_to = 'essential'; }
     }
   }

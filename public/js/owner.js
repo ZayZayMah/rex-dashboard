@@ -194,7 +194,7 @@
     }
 
     // 2. saved emails
-    const A = st.audience, tagName = (id) => ((st.tags.find((t) => t.id === id) || {}).name) || id, label = (v) => v === 'everyone' ? 'Everyone' : v === 'essential' ? 'Essential' : (v || '').startsWith('tag:') ? 'Tag: ' + tagName(v.slice(4)) : v;
+    const A = st.audience, tagName = (id) => ((st.tags.find((t) => t.id === id) || {}).name) || id, label = (v) => v === 'target' ? 'Only the person it happens to' : v === 'everyone' ? 'Everyone' : v === 'essential' ? 'Essential' : (v || '').startsWith('tag:') ? 'Tag: ' + tagName(v.slice(4)) : v;
     const rule = (t) => t.send_when === 'manual' ? 'Sent by you, by hand' : (st.events[t.send_when] || t.send_when) + ' → ' + label(t.send_to) + ' → ' + (st.send_at[t.when_at || 'now'] || '').toLowerCase() + (t.when_at === 'time' ? ' ' + t.at_time + ' UTC' : '') + (t.enabled ? '' : ' (paused)');
     const statusLine = h('div', { class: 'hint', role: 'status' });
     const rows = h('div', { class: 'stack' });

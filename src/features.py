@@ -480,6 +480,8 @@ def eligible(u, send_to):
     ep = u.get("ep") or {}
     if send_to == "essential":
         return True
+    if send_to == "target":   # automatic emails: just the person the event is about (still respects a full unsubscribe)
+        return ep.get("update") is not False
     if send_to == "opted_in":
         return ep.get("update") is True
     if send_to == "everyone":
@@ -511,7 +513,7 @@ def _clean_tpl(body, prev, tag_ids):
     except ValueError as ex:
         raise H("HttpError")(400, "bad_design", str(ex))
     st = body.get("send_to")
-    send_to = st if st in ("everyone", "essential") or (isinstance(st, str) and st.startswith("tag:") and st[4:] in tag_ids) else "everyone"
+    send_to = st if st in ("everyone", "essential", "target") or (isinstance(st, str) and st.startswith("tag:") and st[4:] in tag_ids) else "everyone"
     send_when = body.get("send_when") if body.get("send_when") in EVENTS else "manual"
     when_at = body.get("when_at") if body.get("when_at") in SEND_AT else "now"
     at_time = H("clean_str")(body.get("at_time"), 5)
@@ -519,6 +521,10 @@ def _clean_tpl(body, prev, tag_ids):
         at_time = "09:00"
     if send_when in ("data_removed", "bot_leaves_server"):
         when_at = "now"   # they won't be around later
+    if send_when != "manual" and send_to == "everyone":
+        send_to = "target"   # an event only ever involves one person, so "everyone" means "the person it happens to"
+    if send_when == "manual" and send_to == "target":
+        send_to = "everyone"
     enabled = bool(body.get("enabled")) and send_when != "manual"
     return {"id": prev.get("id"), "name": name, "subject": subject or name, "design": design, "send_to": send_to, "send_when": send_when, "when_at": when_at, "at_time": at_time,
             "enabled": enabled, "updated": H("now")(), "sent": int(prev.get("sent", 0))}
