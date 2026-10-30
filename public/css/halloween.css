@@ -35,12 +35,16 @@ html[data-theme='halloween'] .nav::after { content: ""; position: absolute; left
 .hw-crest::before, .hw-crest::after { content: none; }
 
 /* ---- surfaces: iron-bound, torn, arched */
-html[data-theme='halloween'] .btn { border-radius: 10px; border: 1px solid rgba(255, 190, 120, .35); line-height: 1.2; white-space: nowrap; font-family: var(--display); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; background: linear-gradient(180deg, #ff8a1f, #c24a00); color: #1a0900; --hx: 16px; clip-path: polygon(var(--hx) 0, calc(100% - var(--hx)) 0, 100% 50%, calc(100% - var(--hx)) 100%, var(--hx) 100%, 0 50%); border: 0; padding: 13px 34px; box-shadow: none; }
-html[data-theme='halloween'] .btn:hover { filter: brightness(1.2); transform: none; }
-html[data-theme='halloween'] .btn.ghost { background: linear-gradient(180deg, rgba(255, 140, 40, .34), rgba(255, 100, 0, .16)); color: var(--arc); box-shadow: inset 0 0 0 2px var(--volt); }
-html[data-theme='halloween'] .btn.danger { background: linear-gradient(180deg, #ff4d5f, #a3122a); color: #fff; }
-html[data-theme='halloween'] .btn.discord { background: linear-gradient(180deg, #7a6bff, #4a3fc4); color: #fff; }
-html[data-theme='halloween'] .btn.sm { padding: 8px 24px; --hx: 11px; }
+/* hexagon buttons: the outline is a hexagon too (an outer shape in the border colour, an inner one inset by the border width), so borders follow every edge, slanted ones included */
+html[data-theme='halloween'] .btn { --hx: 18px; --bw: 2px; --bd: #ff9a3c; --fill: linear-gradient(180deg, #ff8a1f, #c24a00); position: relative; isolation: isolate; border: 0; border-radius: 0; background: var(--bd); color: #1a0900; line-height: 1.2; white-space: nowrap; font-family: var(--display); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; padding: 13px 38px; box-shadow: none; clip-path: polygon(var(--hx) 0, calc(100% - var(--hx)) 0, 100% 50%, calc(100% - var(--hx)) 100%, var(--hx) 100%, 0 50%); }
+html[data-theme='halloween'] .btn::before { content: ''; position: absolute; z-index: -1; inset: var(--bw) calc(var(--bw) * 1.5); background: var(--fill); clip-path: polygon(var(--hx) 0, calc(100% - var(--hx)) 0, 100% 50%, calc(100% - var(--hx)) 100%, var(--hx) 100%, 0 50%); }
+html[data-theme='halloween'] .btn:hover { filter: brightness(1.2); transform: none; box-shadow: none; }
+html[data-theme='halloween'] .btn.ghost { --bd: var(--volt); --fill: linear-gradient(180deg, #3a2412, #1d0f08); color: var(--arc); border: 0; box-shadow: none; }
+html[data-theme='halloween'] .btn.danger { --bd: #ff7a88; --fill: linear-gradient(180deg, #ff4d5f, #a3122a); color: #fff; }
+html[data-theme='halloween'] .btn.discord { --bd: #a99fff; --fill: linear-gradient(180deg, #7a6bff, #4a3fc4); color: #fff; }
+html[data-theme='halloween'] .btn[disabled] { opacity: .5; }
+html[data-theme='halloween'] .btn.lg { --hx: 24px; --bw: 3px; padding: 16px 46px; }
+html[data-theme='halloween'] .btn.sm { padding: 8px 24px; --hx: 11px; --bw: 1.5px; }
 html[data-theme='halloween'] .plate { clip-path: polygon(0 4%, 3% 0, 12% 2%, 24% 0, 40% 3%, 58% 0, 76% 2%, 92% 0, 100% 3%, 100% 96%, 94% 100%, 80% 98%, 60% 100%, 40% 97%, 22% 100%, 8% 98%, 0 100%); border: 0; background: linear-gradient(170deg, #241438, #130a20); }
 html[data-theme='halloween'] .slab { border-radius: 90px 90px 6px 6px / 40px 40px 6px 6px; border-left: 0; border-top: 3px solid var(--volt); padding-top: 34px; background: linear-gradient(#1c1030, #120a1e); }
 html[data-theme='halloween'] .frame { border-radius: 0; background: rgba(20, 11, 31, .8); background-image: none; border: 2px solid var(--edge2); outline: 1px dashed rgba(255, 179, 71, .4); outline-offset: -8px; }

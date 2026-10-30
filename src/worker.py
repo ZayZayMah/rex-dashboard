@@ -64,7 +64,7 @@ XP_DAILY_BATS = 30
 THEMES = ("normal", "halloween", "christmas")
 # The three Rex owners always count as owners, even if the OWNER_ID variable in Cloudflare is missing or incomplete.
 DEFAULT_OWNERS = ("1500533136591949926", "1488216696215965956", "1289304415144247399")
-BETA_FEATURES = ("email", "support", "builder")
+BETA_FEATURES = ("email", "support", "builder", "pages")
 BETA_KEYS = {"builder_commands": "builder", "builder_events": "builder"}
 BETA_STATES = ("off", "testing", "on")
 TIER_WEIGHT = {"priority": 4, "ultra": 3, "premium": 2, "free": 1}
@@ -525,6 +525,10 @@ class Default(WorkerEntrypoint):
             return await self.serve_asset(url, "/email-prefs")
         if path == "/api/unsub" and method in ("GET", "POST"):
             return await features.unsub_route(self, request, url, method)
+        if method == "GET" and re.match(r"^/pages/[a-z0-9-]{2,40}$", path):
+            return await self.serve_asset(url, "/page")
+        if path.startswith("/api/pages/") and method == "GET":
+            return await features.pages_public(self, request, path, await self.get_session(request))
         if path.startswith("/api/img/") and method == "GET":
             return await self.api_img_get(path)
         if path.startswith("/api/bot/"):
@@ -1385,6 +1389,8 @@ class Default(WorkerEntrypoint):
             return json_response(await self.get_site())
         if path == "/api/owner/email" or path.startswith("/api/owner/email/"):
             return await features.owner_email_route(self, request, url, path, method, session)
+        if path == "/api/owner/pages" or path.startswith("/api/owner/pages/"):
+            return await features.pages_owner_route(self, request, url, path, method, session)
         if path == "/api/owner/support" or path.startswith("/api/owner/support/"):
             return await features.owner_route(self, request, url, path, method, session)
         if path == "/api/owner/status" and method == "GET":

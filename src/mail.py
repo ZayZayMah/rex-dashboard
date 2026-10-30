@@ -7,6 +7,7 @@ its own box for the mobile layout. Email clients can't do absolute positioning, 
 nested tables (rows of side-by-side cells, with rectangles acting as containers for what sits on top of them).
 No Worker imports here, so it can be tested on its own.
 """
+import colorsys
 import html
 import re
 
@@ -42,11 +43,47 @@ FONTS = {
     "dancing": ("'Dancing Script', cursive", "Dancing+Script:wght@400;700", "Dancing Script *"),
     "fredoka": ("'Fredoka', Arial, sans-serif", "Fredoka:wght@400;600;700", "Fredoka *"),
     "chakra": ("'Chakra Petch', Arial, sans-serif", "Chakra+Petch:wght@400;600;700", "Chakra Petch *"),
+    "creepster": ("'Creepster', cursive", "Creepster", "Creepster *"),
+    "mountains": ("'Mountains of Christmas', cursive", "Mountains+of+Christmas:wght@400;700", "Mountains of Christmas *"),
+    "righteous": ("'Righteous', Arial, sans-serif", "Righteous", "Righteous *"),
+    "abril": ("'Abril Fatface', Georgia, serif", "Abril+Fatface", "Abril Fatface *"),
+    "caveat": ("'Caveat', cursive", "Caveat:wght@400;700", "Caveat *"),
     "jetbrains": ("'JetBrains Mono', 'Courier New', monospace", "JetBrains+Mono:wght@400;700", "JetBrains Mono *"),
 }
 HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
-URL = re.compile(r"^https://[^\s<>\"']{4,480}$")
-VARIABLES = ("name", "first_name", "dashboard_url", "site_url", "unsubscribe_url", "unsubscribe_link", "support_url", "date", "server")
+URL = re.compile(r"^https?://[^\s<>\"']{4,480}$")
+VARIABLES = ("name", "first_name", "dashboard_url", "site_url", "unsubscribe_url", "unsubscribe_link", "logo_url", "support_url", "date", "server")
+
+
+def _rgb(hx):
+    hx = hx.lstrip("#")
+    if len(hx) == 3:
+        hx = "".join(c * 2 for c in hx)
+    return tuple(int(hx[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def _hex(r, g, b):
+    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def dark_bg(hx):
+    """The dark-mode version of a background colour: light colours become deep ones, dark and mid colours stay."""
+    if not HEX.match(hx or ""):
+        return ""
+    h, l, s = colorsys.rgb_to_hls(*_rgb(hx))
+    if l <= 0.55:
+        return hx
+    return _hex(*colorsys.hls_to_rgb(h, 0.10 + (1 - l) * 0.30, s * 0.7))
+
+
+def dark_text(hx):
+    """The dark-mode version of a text colour: dark text becomes light, light and mid colours stay."""
+    if not HEX.match(hx or ""):
+        return ""
+    h, l, s = colorsys.rgb_to_hls(*_rgb(hx))
+    if l >= 0.5:
+        return hx
+    return _hex(*colorsys.hls_to_rgb(h, 0.92 - l * 0.4, s * 0.8))
 
 
 def _num(v, lo, hi, default):
@@ -87,12 +124,10 @@ def clean_design(raw):
     if not isinstance(raw, dict):
         raise ValueError("The email design is not valid.")
     W = _num(raw.get("w"), 480, 700, 600)
-    foot = raw.get("footer") if isinstance(raw.get("footer"), dict) else {}
     out = {"v": 1, "w": W, "bg": _col(raw.get("bg"), "#eef2f9"), "page": _col(raw.get("page"), "#ffffff"), "font": raw.get("font") if raw.get("font") in FONTS else "arial",
            "color": _col(raw.get("color"), "#33415c"), "link": _col(raw.get("link"), "#2f8cff"), "outer": _num(raw.get("outer"), 0, 60, 24),
            "radius": _num(raw.get("radius"), 0, 40, 16), "pre": _txt(raw.get("pre"), 160), "mh": _num(raw.get("mh"), 200, 4000, 600), "dh": _num(raw.get("dh"), 200, 6000, 600),
-           "footer": {"text": _txt(foot.get("text"), 240) or "You're getting this email from Rex.", "color": _col(foot.get("color"), "#6b7a99"), "size": _num(foot.get("size"), 10, 16, 12),
-                      "align": foot.get("align") if foot.get("align") in ("left", "center", "right") else "center"},
+           "dark": "off" if raw.get("dark") == "off" else "auto",
            "els": []}
     els = raw.get("els")
     if not isinstance(els, list):
@@ -116,6 +151,8 @@ def clean_design(raw):
             if e["m"].get("size") not in (None, ""):
                 m["size"] = _num(e["m"].get("size"), 8, 120, 16)
             o["m"] = m
+        o["dbg"] = _col(e.get("dbg"), "")
+        o["dcolor"] = _col(e.get("dcolor"), "")
         o["bg"] = _col(e.get("bg"), "")
         o["radius"] = _num(e.get("radius"), 0, 300, 0)
         o["bw"] = _num(e.get("bw"), 0, 16, 0)
@@ -158,7 +195,7 @@ def _fill_url(u, v):
 def _markup(text, link):
     """Escaped text with **bold**, *italic*, [label](https://...) and new lines."""
     s = html.escape(text, quote=False)
-    s = re.sub(r"\[([^\]\n]{1,80})\]\((https://[^\s)]{4,300})\)", lambda m: f'<a href="{m.group(2)}" style="color:{link};text-decoration:underline">{m.group(1)}</a>', s)
+    s = re.sub(r"\[([^\]\n]{1,80})\]\((https?://[^\s)]{4,300})\)", lambda m: f'<a href="{m.group(2)}" style="color:{link};text-decoration:underline">{m.group(1)}</a>', s)
     s = re.sub(r"\*\*([^*\n]{1,300})\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"(?<![\*\w])\*([^*\n]{1,300})\*(?![\*\w])", r"<em>\1</em>", s)
     return s.replace("\r", "").replace("\n", "<br>")
@@ -303,12 +340,50 @@ class _Ctx:
         self.d, self.mode, self.v = design, mode, v
         self.W = design["w"] if mode == "d" else MOB_W
         self.fonts = set()
+        self.dark = {}
+
+    def dkcls(self, e, bg, color):
+        """Class that carries this element's dark-mode colours (applied only inside the dark media query)."""
+        if self.d.get("dark") == "off":
+            return ""
+        dbg = e.get("dbg") or (dark_bg(bg) if bg else "")
+        dcol = e.get("dcolor") or (dark_text(color) if color else "")
+        css = (f"background-color:{dbg}!important;" if dbg and dbg != bg else "") + (f"color:{dcol}!important;" if dcol and dcol != color else "")
+        if not css:
+            return ""
+        self.dark[e["id"]] = f".dk-{e['id']}{{{css}}}" + (f".dk-{e['id']} a{{color:{dcol}!important}}" if dcol and dcol != color else "")
+        return f' class="dk-{e["id"]}"'
 
     def font(self, key):
         key = key or self.d["font"]
         if FONTS[key][1]:
             self.fonts.add(FONTS[key][1])
         return FONTS[key][0]
+
+
+def _merge_x(band):
+    """Inside one row, things that share horizontal space can't sit side by side: stack them (absolute) as one cell."""
+    groups = [[n] for n in band]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                a, b = _bbox(groups[i]), _bbox(groups[j])
+                if a["x"] < b["x"] + b["w"] - 0.5 and b["x"] < a["x"] + a["w"] - 0.5:
+                    groups[i] += groups.pop(j)
+                    changed = True
+                    break
+            if changed:
+                break
+    out = []
+    for g in groups:
+        if len(g) == 1:
+            out.append(g[0])
+        else:
+            g.sort(key=lambda n: n["e"].get("z", 0))
+            out.append({"stack": g, "b": _bbox(g), "kids": [], "e": {"t": "stack", "z": 0}})
+    return out
 
 
 def _rows(nodes, W, cx):
@@ -325,6 +400,7 @@ def _rows(nodes, W, cx):
             j += 1
         start = nodes[i]["b"]["y"]
         out.append(_gap_row(start - y))
+        band = _merge_x(band)
         band.sort(key=lambda nd: nd["b"]["x"])
         cells, x = [], 0
         for nd in band:
@@ -365,7 +441,8 @@ def _element(node, cx):
     t = e["t"]
     rad = f"border-radius:{e['radius']}px;" if e.get("radius") else ""
     bg = e.get("bg") if e.get("bg") and e["bg"] != "transparent" else ""
-    bgattr = f' bgcolor="{bg}"' if bg else ""
+    eff_color = (e.get("color") or cx.d["color"]) if t in ("text", "button") else ""
+    bgattr = (f' bgcolor="{bg}"' if bg else "") + cx.dkcls(e, bg, eff_color)
     bgcss = f"background-color:{bg};" if bg else ""
     bw = e.get("bw") or 0
     if t == "rect":
@@ -438,7 +515,7 @@ def _layout(design, mode, v):
     return _rows(top, cx.W, cx), cx
 
 
-def render(design, v, subject=""):
+def render(design, v, subject="", force_dark=False):
     """Returns (html, text). `design` must already be cleaned. v: name, first_name, unsubscribe_url, dashboard_url, ..."""
     v = dict(v)
     v.setdefault("first_name", (v.get("name") or "there").split(" ")[0])
@@ -448,27 +525,30 @@ def render(design, v, subject=""):
     fonts = sorted(dcx.fonts | mcx.fonts | ({FONTS[design["font"]][1]} if FONTS[design["font"]][1] else set()))
     link = "".join(f'<link href="https://fonts.googleapis.com/css2?family={f}&display=swap" rel="stylesheet">' for f in fonts)
     W, outer = design["w"], design["outer"]
-    foot = design["footer"]
-    unsub = html.escape(v.get("unsubscribe_url", "#"))
-    foot_html = (f'<p style="margin:0;font:{foot["size"]}px/1.5 Arial,sans-serif;color:{foot["color"]};text-align:{foot["align"]}">'
-                 f'{_markup(fill_vars(foot["text"], v), foot["color"])} <a href="{html.escape(v.get("unsubscribe_link", "#"))}" style="color:{foot["color"]};text-decoration:underline">Email preferences</a> · <a href="{unsub}" style="color:{foot["color"]};text-decoration:underline">Unsubscribe</a></p>')
     pre = html.escape(fill_vars(design.get("pre", ""), v))
     page_bg = design["page"]
     rad = design["radius"]
 
     def card(inner, width, maxw):
-        return (f'<table role="presentation" width="{width}" cellpadding="0" cellspacing="0" border="0" align="center" bgcolor="{page_bg}" '
+        return (f'<table role="presentation" class="dk-card" width="{width}" cellpadding="0" cellspacing="0" border="0" align="center" bgcolor="{page_bg}" '
                 f'style="width:{width}px;max-width:{maxw};background:{page_bg};border-radius:{rad}px;border-collapse:separate;overflow:hidden"><tr><td>{inner}</td></tr></table>')
+    dark_on = design.get("dark") != "off"
+    dark_css = ""
+    if dark_on:
+        rules = [f"body,.dk-bg{{background-color:{dark_bg(design['bg']) or design['bg']}!important}}", f".dk-card{{background-color:{dark_bg(page_bg) or page_bg}!important}}"] + list(dcx.dark.values()) + [r for k, r in mcx.dark.items() if k not in dcx.dark]
+        body_rules = "".join(rules)
+        dark_css = body_rules if force_dark else f"@media (prefers-color-scheme:dark){{{body_rules}}}"
+    scheme = "light dark" if dark_on else "light"
     doc = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-           f'<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>{html.escape(subject or "Rex")}</title>{link}'
-           f'<style>body{{margin:0;padding:0;-webkit-text-size-adjust:100%}}table{{border-collapse:collapse}}img{{-ms-interpolation-mode:bicubic}}'
+           f'<meta name="color-scheme" content="{scheme}"><meta name="supported-color-schemes" content="{scheme}"><title>{html.escape(subject or "Rex")}</title>{link}'
+           f'<style>:root{{color-scheme:{scheme}}}body{{margin:0;padding:0;-webkit-text-size-adjust:100%}}table{{border-collapse:collapse}}img{{-ms-interpolation-mode:bicubic}}'
            f'.rx-m{{display:none;max-height:0;overflow:hidden;mso-hide:all}}'
            f'@media only screen and (max-width:{BREAKPOINT}px){{.rx-d{{display:none!important;max-height:0!important;overflow:hidden!important}}.rx-m{{display:block!important;max-height:none!important;overflow:visible!important}}.rx-o{{padding:0!important}}}}'
-           f'</style></head><body style="margin:0;padding:0;background:{design["bg"]}">'
+           f'{dark_css}</style></head><body class="dk-bg" style="margin:0;padding:0;background:{design["bg"]}">'
            f'<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">{pre}{"&nbsp;&zwnj;" * 40 if pre else ""}</div>'
-           f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{design["bg"]}" style="background:{design["bg"]}"><tr><td align="center" class="rx-o" style="padding:{outer}px 0">'
-           f'<div class="rx-d">{card(d_html, W, "100%")}<div style="height:14px;line-height:14px">&nbsp;</div><table role="presentation" width="{W}" cellpadding="0" cellspacing="0" border="0" style="width:{W}px;max-width:100%"><tr><td style="padding:0 12px">{foot_html}</td></tr></table></div>'
-           f'<div class="rx-m">{card(m_html, MOB_W, "100%")}<div style="height:14px;line-height:14px">&nbsp;</div><table role="presentation" width="{MOB_W}" cellpadding="0" cellspacing="0" border="0" style="width:{MOB_W}px;max-width:100%"><tr><td style="padding:0 12px">{foot_html}</td></tr></table></div>'
+           f'<table role="presentation" class="dk-bg" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{design["bg"]}" style="background:{design["bg"]}"><tr><td align="center" class="rx-o" style="padding:{outer}px 0">'
+           f'<div class="rx-d">{card(d_html, W, "100%")}</div>'
+           f'<div class="rx-m">{card(m_html, MOB_W, "100%")}</div>'
            f'</td></tr></table></body></html>')
     lines = []
     for e in sorted(design["els"], key=lambda e: (e["d"]["y"], e["d"]["x"])):
@@ -480,7 +560,7 @@ def render(design, v, subject=""):
             lines.append(f"{fill_vars(e['label'], v)}: {_fill_url(e.get('url'), v)}" if e.get("url") else fill_vars(e["label"], v))
         elif e["t"] == "image" and e.get("alt"):
             lines.append(f"[{fill_vars(e['alt'], v)}]")
-    text = "\n\n".join(x for x in lines if x.strip()) + f"\n\n--\n{foot['text']}\nEmail preferences: {v.get('unsubscribe_link', '')}\nUnsubscribe: {v.get('unsubscribe_url', '')}"
+    text = "\n\n".join(x for x in lines if x.strip())
     return doc, text
 
 
@@ -503,6 +583,9 @@ def checks(design):
              for i in range(len(items)) for j in range(i + 1, len(items)))
     if ov:
         out.append("Some things overlap. That works in Gmail, Apple Mail and most apps, but Outlook.com and Yahoo may show overlapping items one under the other.")
+    blob = " ".join(str(e.get(k) or "") for e in els for k in ("text", "label", "url"))
+    if els and "{unsubscribe_url}" not in blob and "{unsubscribe_link}" not in blob:
+        out.append("There is no unsubscribe or preferences link in this email. Add [Unsubscribe]({unsubscribe_url}) or [Email preferences]({unsubscribe_link}) somewhere. (Gmail still shows its own Unsubscribe button.)")
     if not els:
         out.append("The email is empty.")
     return out[:12]

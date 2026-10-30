@@ -11,7 +11,7 @@ window.rexDialog = (function () {
       const okBtn = h('button', { type: 'button', class: 'btn' + (danger ? ' danger' : ''), onclick: () => done(input ? field.value : true) }, ok);
       const back = h('div', { class: 'dlg-back', onclick: (e) => { if (e.target === back) done(input ? null : false); } },
         h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
-          h('h3', {}, title), body ? h('p', { class: 'muted' }, body) : null, field,
+          h('h3', {}, title), body ? (typeof body === 'string' ? h('p', { class: 'muted' }, body) : body) : null, field,
           h('div', { class: 'dlg-actions' }, cancel ? h('button', { type: 'button', class: 'btn ghost', onclick: () => done(input ? null : false) }, cancel) : null, okBtn)));
       const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(input ? null : false); } else if (e.key === 'Enter' && !(e.target && e.target.tagName === 'BUTTON')) { e.preventDefault(); okBtn.click(); } };
       document.addEventListener('keydown', key, true);

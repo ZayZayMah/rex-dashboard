@@ -699,3 +699,27 @@ html[data-theme='halloween'] .srv-side .side-group { display: contents; } html[d
 .mail-modal .frame { max-width: 520px; width: 100%; }
 .pref-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .wrap.narrow { max-width: 640px; }
+
+/* support chat: Rex avatar, dividers, quick-reply chips, typing dots */
+.msg img.av { object-fit: cover; padding: 0; background: var(--plate); }
+.msg img.av.rex, img.av.rex { background: #0b1426; padding: 3px; object-fit: contain; border-radius: 50%; width: 34px; height: 34px; border: 1px solid var(--edge2); }
+img.av.rex.sm { width: 26px; height: 26px; }
+.msg.b .bd { border-top-left-radius: 4px; } .msg.u .bd { border-top-right-radius: 4px; }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--dim); font-size: 11px; letter-spacing: .02em; margin: 2px 0; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--edge2); }
+.divider span { white-space: normal; text-align: center; max-width: 70%; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; min-height: 0; }
+.chip { border: 1px solid var(--arc); background: transparent; color: var(--arc); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 14px; cursor: pointer; transition: background .15s, color .15s; }
+.chip:hover:not(:disabled) { background: var(--arc); color: #031; } .chip:disabled { opacity: .5; cursor: default; }
+.chat-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+.chat-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #3ddc97; } .chat-status .dot.off { background: #8a93a6; }
+.typing .dots { display: inline-flex; gap: 4px; padding: 4px 2px; } .typing .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); animation: dotb 1s infinite ease-in-out; }
+.typing .dots i:nth-child(2) { animation-delay: .15s; } .typing .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes dotb { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.chat-in textarea:disabled { opacity: .55; cursor: not-allowed; }
+.sup-row .pill { max-width: 52%; white-space: normal; text-align: left; }
+
+/* custom pages */
+.pg-wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 60px; }
+body.pg-nonav .pg-wrap { padding-top: 24px; }
+.pg-el.pg-button { text-decoration: none; cursor: pointer; transition: filter .15s, transform .15s; } .pg-el.pg-button:hover { filter: brightness(1.1); transform: translateY(-1px); }

@@ -86,3 +86,20 @@ body.page-emailbuilder { margin: 0; height: 100vh; overflow: hidden; background:
 .eb-sum { background: #0f1420; border-radius: 10px; padding: 10px 12px; }
 .eb-modal .eb-pad { padding: 0; }
 .eb-card { max-height: 90vh; overflow-y: auto; }
+.eb-wide { max-width: 860px; }
+.eb-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.eb-theme { text-align: left; padding: 10px; background: #1b2336; border: 1px solid #2a3350; border-radius: 12px; color: #e6ebf5; cursor: pointer; display: flex; flex-direction: column; gap: 4px; font: inherit; }
+.eb-theme:hover { border-color: #2f8cff; } .eb-theme span { font-size: 11px; color: #8a97b3; line-height: 1.35; }
+.eb-sw { padding: 8px; margin-bottom: 4px; } .eb-sw-h { height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; border-radius: 8px 8px 0 0; } .eb-sw-t { font-weight: 800; font-size: 18px; }
+.eb-sw-b { height: 36px; border-radius: 0 0 8px 8px; display: flex; align-items: center; padding: 0 10px; } .eb-sw-btn { display: block; width: 38px; height: 12px; border-radius: 6px; }
+.eb-prevbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+/* page builder: the canvas area shows the website theme behind the page */
+.pt-normal { --ice: #eaf5ff; --volt: #2f8cff; --arc: #62cbff; --on-accent: #ffffff; --steel: #98a8c2; background: radial-gradient(900px 500px at 50% -120px, rgba(47, 140, 255, .18), transparent 70%), #050a14; color: #eaf5ff; }
+.pt-christmas { --ice: #f5f0e2; --volt: #d9b45f; --arc: #e9cf8c; --on-accent: #1d1503; --steel: #bac6b8; background: radial-gradient(900px 520px at 50% -160px, rgba(217, 180, 95, .14), transparent 70%), linear-gradient(#0b1a13, #07120d 55%, #050d09); color: #f5f0e2; }
+.pt-halloween { --ice: #f6ead8; --volt: #ff6a00; --arc: #ffb347; --on-accent: #1a0900; --steel: #b8a6c8; background: radial-gradient(560px 560px at 50% -180px, rgba(255, 150, 40, .22), transparent 70%), radial-gradient(900px 500px at 10% 110%, rgba(120, 40, 190, .22), transparent 65%), #07040d; color: #f6ead8; }
+.eb-canvas-wrap.pt-normal, .eb-canvas-wrap.pt-christmas, .eb-canvas-wrap.pt-halloween { background-attachment: local; }
+.pv-site { border-radius: 14px; overflow: hidden; min-height: 60vh; border: 1px solid rgba(255, 255, 255, .1); }
+.pv-nav { padding: 12px 18px; font-size: 13px; background: rgba(0, 0, 0, .35); border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.pv-body { padding: 24px 16px 40px; }
+.eb-seg { white-space: nowrap; }

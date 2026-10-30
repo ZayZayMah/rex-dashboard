@@ -14,6 +14,7 @@
   const TABS = [['tools', 'Tools'], ['website', 'Website'], ['servers', 'Servers'], ['users', 'Users']];
   if (B.support && B.support !== 'off') TABS.push(['support', 'Support']);
   if (B.email && B.email !== 'off') TABS.push(['email', 'Email']);
+  if (B.pages && B.pages !== 'off') TABS.push(['pages', 'Pages']);
   TABS.push(['audit', 'Audit'], ['health', 'Health']);
   let tab = (location.hash || '#tools').slice(1);
   if (!TABS.some((t) => t[0] === tab)) tab = 'tools';
@@ -125,30 +126,43 @@
   async function supportTab() {
     const wrap = h('div', { class: 'stack' }), listBox = h('div', { class: 'sup-list' }), view = h('div', { class: 'well' }, h('p', { class: 'muted' }, 'Pick a chat on the left.'));
     let sel = null, items = [], timer = null, shown = 0;
-    const label = { bot: 'Helper', open: 'Needs you', closed: 'Closed' };
+    let cools = [];
     const paintList = () => listBox.replaceChildren(...(items.length ? items.map((c) => h('button', { type: 'button', class: 'sup-row' + (sel === c.id ? ' sel' : ''), onclick: () => pick(c.id) },
-      h('div', { style: 'min-width:0;text-align:left' }, h('b', {}, c.name), h('div', { class: 'muted small ell' }, c.last || '')), h('span', { class: 'pill ' + (c.status === 'open' ? 'mid' : c.status === 'closed' ? 'off' : 'on') }, label[c.status]))) : [h('p', { class: 'muted' }, 'No chats yet.')]));
-    async function refresh() { try { items = (await api('/api/owner/support')).items; paintList(); } catch (e) { /* ignore */ } }
+      h('div', { style: 'min-width:0;text-align:left' }, h('b', {}, (c.flag ? '🚩 ' : '') + c.name), h('div', { class: 'muted small ell' }, c.label + (c.hidden ? ' · deleted by user' : '') + (c.keep ? ' · kept' : ''))), h('span', { class: 'pill ' + (c.status === 'closed' ? 'off' : 'on') }, c.status === 'closed' ? 'Closed' : 'Open'))) : [h('p', { class: 'muted' }, 'No chats yet.')]));
+    async function refresh() { try { const d = await api('/api/owner/support'); items = d.items; cools = d.cools || []; paintList(); paintCools(); } catch (e) { /* ignore */ } }
     async function pick(id) {
       sel = id; shown = 0; paintList();
-      const log = h('div', { class: 'chat-log' }), input = h('textarea', { rows: 2, maxlength: 600, placeholder: 'Reply as the Rex team...' }), head = h('div', { class: 'chat-head' }), acts = h('div', { class: 'chat-actions' });
+      const labelIn = h('input', { type: 'text', maxlength: 60, placeholder: 'e.g. Open · Waiting on your reply' }), log = h('div', { class: 'chat-log' }), input = h('textarea', { rows: 2, maxlength: 600, placeholder: 'Reply as the Rex team...' }), head = h('div', { class: 'chat-head' }), acts = h('div', { class: 'chat-actions' });
       const paint = (c) => {
         if (c.msgs.length < shown) { log.replaceChildren(); shown = 0; }
-        c.msgs.slice(shown).forEach((m) => log.append(h('div', { class: 'msg ' + (m.f === 's' ? 'u' : m.f) }, h('div', { class: 'av' }, m.f === 'u' ? '🧑' : m.f === 's' ? 'R' : '🦖'),
-          h('div', { class: 'bd' }, h('div', { class: 'who' }, m.f === 'u' ? c.name : m.f === 's' ? 'Team' : 'Helper', h('small', {}, ' ' + new Date(m.t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))), h('div', { class: 'tx' }, m.x)))));
+        c.msgs.slice(shown).forEach((m) => log.append(m.f === 'd' ? h('div', { class: 'divider' }, h('span', {}, m.x)) : h('div', { class: 'msg ' + (m.f === 's' ? 'u' : m.f) }, m.f === 'u' ? (c.avatar ? h('img', { class: 'av', src: c.avatar, alt: '', referrerpolicy: 'no-referrer' }) : h('div', { class: 'av' }, '🧑')) : m.f === 's' ? h('div', { class: 'av' }, 'R') : h('img', { class: 'av rex', src: '/img/rex-logo.png', alt: '' }),
+          h('div', { class: 'bd' }, h('div', { class: 'who' }, m.f === 'u' ? c.name : m.f === 's' ? 'Team' : 'Rex', h('small', {}, ' ' + new Date(m.t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))), h('div', { class: 'tx' }, String(m.x).replace(/\*\*|`/g, ''))))));
         if (c.msgs.length !== shown) log.scrollTop = log.scrollHeight;
         shown = c.msgs.length;
-        head.replaceChildren(h('b', {}, c.name), h('span', { class: 'muted small' }, 'ID ' + c.uid + ' - ' + c.type), c.url ? h('a', { class: 'btn ghost sm', href: c.url, target: '_blank', rel: 'noopener' }, 'Discord channel') : null);
-        acts.replaceChildren(c.status === 'closed' ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => act('reopen') }, 'Reopen') : h('button', { class: 'btn ghost sm', type: 'button', onclick: () => act('close') }, 'Close chat'));
+        head.replaceChildren(h('b', {}, c.name), h('span', { class: 'muted small' }, 'ID ' + c.uid + ' - ' + c.type + (c.flagged ? ' - flagged' : '')), c.url ? h('a', { class: 'btn ghost sm', href: c.url, target: '_blank', rel: 'noopener' }, 'Discord ticket') : null);
+        labelIn.value = c.label || '';
+        acts.replaceChildren(
+          c.status === 'closed' ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => act('reopen') }, 'Reopen') : h('button', { class: 'btn ghost sm', type: 'button', onclick: () => act('close') }, 'Close chat'),
+          h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { paint(await api('/api/owner/support/' + id + '/keep', { method: 'POST', body: { keep: !c.keep } })); refresh(); } catch (e) { toast(e.message, 'bad'); } } }, c.keep ? 'Allow auto-delete' : 'Keep (stop 30-day delete)'),
+          h('button', { class: 'btn ghost sm', type: 'button', onclick: () => timeoutDialog(c.uid, c.name) }, c.cool ? 'Change timeout' : 'Timeout user'),
+          h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (!(await rexDialog.confirm('Delete this chat?', 'This removes it for everyone, including the owners.', 'Delete', true))) return; try { await api('/api/owner/support/' + id + '/delete', { method: 'POST', body: {} }); view.replaceChildren(h('p', { class: 'muted' }, 'Deleted.')); sel = null; refresh(); } catch (e) { toast(e.message, 'bad'); } } }, 'Delete'),
+          c.status === 'closed' && c.delete_at ? h('span', { class: 'muted small' }, 'Auto-deletes ' + new Date(c.delete_at * 1000).toLocaleDateString()) : null);
       };
       async function act(a) { try { paint(await api('/api/owner/support/' + id + '/' + a, { method: 'POST', body: {} })); refresh(); } catch (e) { toast(e.message, 'bad'); } }
       async function reply() { const t = input.value.trim(); if (!t) return; input.value = ''; try { paint(await api('/api/owner/support/' + id + '/reply', { method: 'POST', body: { text: t } })); refresh(); } catch (e) { toast(e.message, 'bad'); input.value = t; } }
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); reply(); } });
-      view.replaceChildren(head, log, h('div', { class: 'chat-in' }, input, h('button', { class: 'btn', type: 'button', onclick: reply }, 'Send')), acts);
+      view.replaceChildren(head, h('div', { class: 'chat-in' }, labelIn, h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { paint(await api('/api/owner/support/' + id + '/status', { method: 'POST', body: { label: labelIn.value } })); refresh(); toast('Status updated', 'good'); } catch (e) { toast(e.message, 'bad'); } } }, 'Set status')), log, h('div', { class: 'chat-in' }, input, h('button', { class: 'btn', type: 'button', onclick: reply }, 'Send')), acts);
       paint(await api('/api/owner/support/' + id));
       clearInterval(timer);
       timer = setInterval(async () => { if (tab !== 'support') return clearInterval(timer); try { const c = await api('/api/owner/support/' + id); if (c.msgs.length !== shown) paint(c); refresh(); } catch (e) { /* ignore */ } }, 3500);
     }
+    function timeoutDialog(uid, name) {
+      const mins = h('input', { type: 'number', min: 0, value: 60, style: 'width:110px' }), unit = h('select', {}, h('option', { value: 1 }, 'minutes'), h('option', { value: 60, selected: true }, 'hours'), h('option', { value: 1440 }, 'days')), reason = h('input', { type: 'text', maxlength: 120, placeholder: 'Reason (only owners see this)' }), idIn = h('input', { type: 'text', value: uid || '', placeholder: 'Discord user ID', disabled: !!uid });
+      const box = h('div', { class: 'stack' }, h('p', { class: 'muted small' }, 'While timed out they cannot start new support chats or reply in existing ones. Use 0 to remove a timeout.'), idIn, h('div', { style: 'display:flex;gap:8px' }, mins, unit), reason);
+      return rexDialog.confirm('Timeout ' + (name || 'a user') + '?', box, 'Apply', true).then(async (ok) => { if (!ok) return; try { await api('/api/owner/support/timeout', { method: 'POST', body: { uid: idIn.value.trim(), name: name || '', minutes: Math.round(Number(mins.value || 0) * Number(unit.value)), reason: reason.value } }); toast('Timeout saved', 'good'); refresh(); if (sel) pick(sel); } catch (e) { toast(e.message, 'bad'); } });
+    }
+    const coolBox = h('div', { class: 'stack' });
+    function paintCools() { coolBox.replaceChildren(...(cools.length ? cools.map((r) => h('div', { class: 'sup-row' }, h('div', { style: 'text-align:left;min-width:0' }, h('b', {}, r.name), h('div', { class: 'muted small' }, 'until ' + new Date(r.until * 1000).toLocaleString() + ' - ' + r.reason)), h('button', { class: 'btn ghost sm', type: 'button', style: 'margin-left:auto', onclick: async () => { try { await api('/api/owner/support/timeout', { method: 'POST', body: { uid: r.uid, minutes: 0 } }); refresh(); } catch (e) { toast(e.message, 'bad'); } } }, 'Remove'))) : [h('p', { class: 'muted small' }, 'Nobody is timed out.')])); }
     // answers the helper knows (added on top of the built-in ones)
     const kb = await api('/api/owner/support/kb'); const kbBox = h('div', { class: 'stack' }), kbItems = kb.items || [];
     const paintKb = () => kbBox.replaceChildren(...kbItems.map((it, i) => h('div', { class: 'well' },
@@ -158,10 +172,32 @@
     paintKb();
     const kbStatus = h('span', { class: 'muted small' });
     wrap.append(h('div', { class: 'sup-split' }, h('div', { class: 'frame' }, h('h3', {}, 'Chats'), listBox), view),
+      h('div', { class: 'frame' }, h('h3', {}, 'Timeouts'), h('p', { class: 'muted small' }, 'Rex pauses people for 10 minutes when it flags them and DMs you to choose how long. You can also do it yourself.'), coolBox, h('button', { class: 'btn ghost sm', type: 'button', style: 'margin-top:10px', onclick: () => timeoutDialog('', '') }, 'Timeout someone by ID')),
       h('div', { class: 'frame' }, h('h3', {}, 'What the helper can answer'), h('p', { class: 'muted small' }, 'Rex already knows the basics. Add your own answers here and they take effect straight away.'), kbBox,
         h('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:12px' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => { kbItems.push({ title: '', keys: [], answer: '' }); paintKb(); } }, 'Add an answer'),
           h('button', { class: 'btn', type: 'button', onclick: async () => { try { const r = await api('/api/owner/support/kb', { method: 'PUT', body: { items: kbItems } }); kbStatus.textContent = 'Saved ' + r.n + ' answers.'; toast('Saved', 'good'); } catch (e) { kbStatus.textContent = e.message; } } }, 'Save answers'), kbStatus)));
     await refresh();
+    return wrap;
+  }
+
+  /* ---- pages (beta) */
+  async function pagesTab() {
+    const wrap = h('div', { class: 'stack' }), list = h('div', { class: 'sup-list' });
+    const link = (n) => location.origin + '/pages/' + n;
+    async function copy(n) { try { await navigator.clipboard.writeText(link(n)); toast('Link copied', 'good'); } catch (e) { rexDialog.alert('Page link', link(n)); } }
+    async function load() {
+      let d; try { d = await api('/api/owner/pages'); } catch (e) { list.replaceChildren(h('p', { class: 'muted' }, e.message)); return; }
+      list.replaceChildren(...(d.items.length ? d.items.map((p) => h('div', { class: 'sup-row' },
+        h('div', { style: 'text-align:left;min-width:0' }, h('b', {}, p.title), h('div', { class: 'muted small ell' }, '/pages/' + p.name + (p.hide_nav ? ' · no navigation bar' : ''))),
+        h('div', { style: 'margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end' },
+          h('button', { class: 'btn ghost sm', type: 'button', onclick: () => copy(p.name) }, 'Copy link'),
+          h('a', { class: 'btn ghost sm', href: '/pages/' + p.name, target: '_blank', rel: 'noopener' }, 'Open'),
+          h('a', { class: 'btn sm', href: '/page-builder?name=' + p.name }, 'Edit'),
+          h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (!(await rexDialog.confirm('Remove /pages/' + p.name + '?', 'The link will stop working straight away.', 'Remove', true))) return; try { await api('/api/owner/pages/' + p.name, { method: 'DELETE' }); toast('Removed', 'good'); load(); } catch (e) { toast(e.message, 'bad'); } } }, 'Remove')))) : [h('p', { class: 'muted' }, 'No pages yet. Create one to get started.')]));
+    }
+    wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' }, h('h3', { style: 'margin:0' }, 'Custom pages'), h('a', { class: 'btn', href: '/page-builder' }, 'New page')),
+      h('p', { class: 'muted small' }, 'Pages open from their link only (nothing on the site points to them). They follow the website theme and are built in the same editor as emails.'), list));
+    await load();
     return wrap;
   }
 
@@ -251,10 +287,11 @@
     mTitle.value = maint.title || ''; mDesc.value = maint.desc || '';
     const support = h('input', { type: 'url', maxlength: 200, placeholder: 'https://discord.gg/...' });
     support.value = site.support_url || '';
-    const BETAS = [['email', 'Email updates', 'Gmail emails with a full drag-and-drop email builder, saved emails and automatic sending.'], ['support', 'Website support tickets', 'Automatic help chat that can escalate to a real ticket in the support server.'], ['builder', 'Custom commands and events', 'The block builder on every server dashboard.']];
-    const beta = Object.assign({ email: 'off', support: 'off', builder: 'off' }, site.beta || {});
+    const BETAS = [['email', 'Email updates', 'Gmail emails with a full drag-and-drop email builder, saved emails and automatic sending.'], ['support', 'Website support tickets', 'Automatic help chat that can escalate to a real ticket in the support server.'], ['pages', 'Custom pages', 'Pages you design yourself that live at /pages/name (for example a Learn more page), built in the same editor as emails.'], ['builder', 'Custom commands and events', 'The block builder on every server dashboard.']];
+    const beta = Object.assign({ email: 'off', support: 'off', builder: 'off', pages: 'off' }, site.beta || {});
     const testers = h('textarea', { rows: 3, placeholder: 'Discord user IDs, one per line' }); testers.value = (site.testers || []).join('\n');
     const HOWTO = {
+      pages: ['Off: every /pages/ link shows Page not found.', 'Testing: only owners and testers can open pages (and see the Pages tab).', 'On: anyone with the link can open the pages.', 'You: this page gets a Pages tab to add, edit, remove pages and copy their links.'],
       builder: ['Off: nobody sees it.', 'Testing: only the user IDs in the box below see Custom commands and Events.', 'On: every server with Premium or higher sees it.', 'Where: open a server, then Commands (or Events) in the side menu.'],
       support: ['Off: the Support page does not exist.', 'Testing: only the testers see Support in the menu and on their profile.', 'On: everybody can open /support, chat with the helper and escalate to a real ticket.', 'You: this page gets a Support tab with every conversation, where you can read, reply, close and reopen.'],
       email: ['Off: nothing is shown.', 'Testing: only testers see the Email options on their profile.', 'On: everybody gets your emails unless they turn them off on their profile.', 'You: this page gets an Email tab to connect Gmail, design emails, send them or set them to go out automatically. Owners and people with no email on file are skipped.'],
@@ -370,6 +407,7 @@
       else if (tab === 'users') node = await usersTab();
       else if (tab === 'support') node = await supportTab();
       else if (tab === 'email') node = await emailTab();
+      else if (tab === 'pages') node = await pagesTab();
       else if (tab === 'audit') node = await auditTab();
       else node = await healthTab();
       pane.replaceChildren(node);

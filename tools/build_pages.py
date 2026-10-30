@@ -21,6 +21,8 @@ PAGES = [
     ("profile.html", "Profile - Rex", "Your Rex profile, levels and XP.", "profile", False, "noindex"),
     ("support.html", "Support - Rex", "Chat with the Rex helper or a real person.", "support", False, "noindex"),
     ("email-builder.html", "Email builder - Rex", "Design Rex emails.", "emailbuilder", False, "noindex,nofollow"),
+    ("page-builder.html", "Page builder - Rex", "Design Rex pages.", "pagebuilder", False, "noindex,nofollow"),
+    ("page.html", "Rex", "A Rex page.", "pageview", False, "noindex"),
     ("email-prefs.html", "Email preferences - Rex", "Choose which Rex emails you get.", "emailprefs", False, "noindex,nofollow"),
     ("owner.html", "Owner mode - Rex", "Rex owner tools.", "owner", False, "noindex"),
     ("transcript.html", "Ticket transcript - Rex", "A saved Rex ticket transcript.", "transcript", False, "noindex,nofollow"),
@@ -75,16 +77,18 @@ for file, title, desc, script, _home, robots in PAGES:
     extra = ""
     if script in ("commands", "command", "about", "premium", "live"):
         extra = '<script src="/js/catalog.js"></script>\n' if script in ("commands", "command") else ""
+    if script == "pageview":
+        extra = '<script src="/js/pagerender.js"></script>\n'
     if script == "server":
         extra = '<script src="/js/card.js"></script>\n<script src="/js/builder.js"></script>\n'
     html = HEAD.format(title=title, desc=desc, origin=ORIGIN, path=path,
                        robots=f'<meta name="robots" content="{robots}">\n' if robots else "")
     if script == "transcript":
         html = html.replace('<script src="/js/theme.js">', '<link rel="stylesheet" href="/css/transcript.css">\n<script src="/js/theme.js">')
-    if script == "emailbuilder":
+    if script in ("emailbuilder", "pagebuilder"):
         html = html.replace('<link rel="stylesheet" href="/css/style.css">', '<link rel="stylesheet" href="/css/style.css">\n<link rel="stylesheet" href="/css/emailbuilder.css">')
         html += ('<body class="page-emailbuilder"><div id="app"></div><div id="toasts" class="toasts" aria-live="polite"></div>\n<script src="/js/app.js"></script>\n'
-                 '<script src="/js/dialog.js"></script>\n<script src="/js/emailbuilder.js"></script>\n</body>\n</html>\n')
+                 '<script src="/js/dialog.js"></script>\n' + ('<script src="/js/pagerender.js"></script>\n<script src="/js/pagemode.js"></script>\n' if script == "pagebuilder" else '') + '<script src="/js/emailbuilder.js"></script>\n</body>\n</html>\n')
     else:
         html += BODY.format(script=script, extra=extra)
     with open(os.path.join(OUT, file), "w", encoding="utf-8") as fh:

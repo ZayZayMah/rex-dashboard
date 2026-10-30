@@ -10,6 +10,7 @@ import json
 import re
 import secrets
 import time
+import helper
 from email.header import Header
 from urllib.parse import urlencode, parse_qs, urlparse, quote
 
@@ -29,20 +30,40 @@ def H(name):
 SUPPORT_TYPES = {"help": "General help", "bug": "Report a bug", "premium": "Premium or codes", "appeal": "Ban appeal"}
 MAX_MSG = 600
 MAX_MSGS = 120
-SWEAR = re.compile(r"\b(fuck\w*|shit\w*|bitch\w*|cunt|asshole|dickhead|bastard|wanker|twat|nigg\w+|faggot|retard\w*|slut|whore)\b", re.I)
-COOLDOWN = 600
+MAX_CHATS = 3            # chats per person that the owners can still see (user-deleted ones count until they auto-delete)
+KEEP_DAYS = 30           # closed chats are removed after this long unless an owner keeps them
+HOLD = 600               # automatic pause (seconds) when Rex flags someone, until an owner decides
+SUPPORT_GUILD = "1550512979655794760"
+INVITE = "https://discord.gg/2JSVqkVdeq"
+DAY = 86400
+WAITING = ("join", "retry")
+
+
+def _sys_label(c):
+    if c["status"] == "closed":
+        return "Closed"
+    return {"opening": "Open · Opening your ticket", "join": "Open · Waiting for you to join the server", "retry": "Open · Waiting for you",
+            "human": "Open · With the Rex team", "ticket": "Open · With the Rex team"}.get(c.get("phase"), "Open · Chatting with Rex")
 
 
 def _idx_row(c):
-    return {"id": c["id"], "uid": c["uid"], "name": c["name"], "type": c["type"], "status": c["status"], "updated": c["updated"],
-            "last": (c["msgs"][-1]["x"][:80] if c["msgs"] else ""), "n": len(c["msgs"])}
+    return {"id": c["id"], "uid": c["uid"], "name": c["name"], "type": c["type"], "status": c["status"], "label": c.get("label") or _sys_label(c), "updated": c["updated"],
+            "last": next((m["x"][:80] for m in reversed(c["msgs"]) if m["f"] != "d"), ""), "n": len(c["msgs"]), "flag": bool(c.get("flagged")), "keep": bool(c.get("keep")),
+            "hidden": bool(c.get("hidden")), "del": _delete_at(c)}
+
+
+def _delete_at(c):
+    if c["status"] == "closed" and not c.get("keep") and c.get("closed_at"):
+        return int(c["closed_at"] + KEEP_DAYS * DAY)
+    return 0
 
 
 async def _save(w, c):
     c["updated"] = H("now")()
     if len(c["msgs"]) > MAX_MSGS:
         c["msgs"] = c["msgs"][-MAX_MSGS:]
-    await w.store.put("sup:" + c["id"], c, ttl=60 * 60 * 24 * 30)
+    dl = _delete_at(c)
+    await w.store.put("sup:" + c["id"], c, ttl=(max(120, int(dl - H("now")())) if dl else None))
     idx = await w.store.get("sup:idx") or []
     idx = [r for r in idx if r["id"] != c["id"]]
     idx.insert(0, _idx_row(c))
@@ -53,19 +74,132 @@ async def _load(w, cid, uid=None, staff=False):
     if not re.match(r"^[0-9a-f]{12}$", cid or ""):
         raise H("HttpError")(404, "not_found", "Conversation not found.")
     c = await w.store.get("sup:" + cid)
-    if not c or (not staff and c["uid"] != uid):
+    if not c or (not staff and (c["uid"] != uid or c.get("hidden"))):
+        raise H("HttpError")(404, "not_found", "Conversation not found.")
+    if c["status"] == "closed" and _delete_at(c) and _delete_at(c) < H("now")():
+        await _purge(w, c)
         raise H("HttpError")(404, "not_found", "Conversation not found.")
     return c
 
 
+async def _purge(w, c):
+    await w.store.delete("sup:" + c["id"])
+    idx = await w.store.get("sup:idx") or []
+    await w.store.put("sup:idx", [r for r in idx if r["id"] != c["id"]])
+
+
 def _public(c, staff=False):
-    d = {k: c.get(k) for k in ("id", "type", "status", "created", "updated", "url", "name", "uid", "strikes", "reason")}
+    d = {k: c.get(k) for k in ("id", "type", "status", "phase", "created", "updated", "url", "name", "uid", "avatar", "closed_at", "keep", "flagged", "reason")}
+    d["label"] = c.get("label") or _sys_label(c)
     d["msgs"] = c["msgs"]
+    d["chips"] = c.get("chips") or []
+    d["delete_at"] = _delete_at(c)
+    d["locked"] = c["status"] == "closed" or c.get("phase") in ("opening", "join", "retry")
     return d
 
 
-def _msg(frm, text):
-    return {"f": frm, "t": H("now")(), "x": H("clean_str")(text, MAX_MSG)}
+def _msg(frm, text, url=None):
+    m = {"f": frm, "t": H("now")(), "x": H("clean_str")(text, 1800 if frm in ("b", "d") else MAX_MSG)}
+    if url:
+        m["u"] = url
+    return m
+
+
+def _div(text):
+    return _msg("d", text)
+
+
+async def _cool(w, uid):
+    cool = await w.store.get("sup:cool:" + uid)
+    if cool and cool["until"] > H("now")():
+        return cool
+    return None
+
+
+async def _set_cool(w, uid, name, seconds, reason, by="owner"):
+    cools = [r for r in (await w.store.get("sup:cools") or []) if r["uid"] != uid and r["until"] > H("now")()]
+    if seconds > 0:
+        until = H("now")() + seconds
+        await w.store.put("sup:cool:" + uid, {"until": until, "reason": reason, "by": by}, ttl=int(seconds) + 60)
+        cools.insert(0, {"uid": uid, "name": name, "until": until, "reason": reason, "by": by})
+    else:
+        await w.store.delete("sup:cool:" + uid)
+    await w.store.put("sup:cools", cools[:100])
+
+
+def _close_chat(c, label, divider, reason=""):
+    if c["status"] != "closed":
+        c["status"] = "closed"
+        c["closed_at"] = H("now")()
+        c["msgs"].append(_div(divider))
+    c["chips"] = []
+    c["label"] = label
+    if reason:
+        c["reason"] = reason
+    return c
+
+
+async def close(w, c, by, url=None):
+    if c["status"] != "closed":
+        had_chan = c.get("chan") and c.get("phase") == "ticket"
+        _close_chat(c, "Closed" if by != "staff" else "Closed · By the Rex team", "Chat closed" if by != "staff" else "Chat closed by the Rex team", by)
+        await _save(w, c)
+        if url is not None and c.get("uid"):
+            await fire(w, "support_closed", c["uid"], url)
+    return c
+
+
+def _chip_ok(c, choice):
+    return any(len(x) > 1 and x[1] == choice for x in (c.get("chips") or []))
+
+
+async def _kb_extra(w):
+    return (await w.store.get("support:kb") or {}).get("items") or []
+
+
+async def _enqueue(w, uid, name, op, args):
+    await w.enqueue("_", {"id": secrets.token_hex(6), "ts": H("now")(), "by": uid, "byname": name, "op": op, "gid": "_", "args": args})
+
+
+async def _open_ticket(w, c):
+    c["phase"] = "opening"
+    c["chips"] = []
+    c["label"] = "Open · Opening your ticket"
+    c["opening_at"] = H("now")()
+    await _enqueue(w, c["uid"], c["name"], "support_open", {"cid": c["id"], "uid": c["uid"], "name": c["name"], "typename": SUPPORT_TYPES[c["type"]],
+                                                          "summary": (c.get("flow") or {}).get("data", {}).get("_sum", []),
+                                                          "log": [{"f": m["f"], "x": m["x"][:300]} for m in c["msgs"] if m["f"] in ("u", "b")][-25:]})
+
+
+def _unstick(c):
+    """If the bot never answered about the ticket, let the person retry or end instead of waiting forever."""
+    if c.get("phase") == "opening" and H("now")() - c.get("opening_at", 0) > 90 and c["status"] == "open":
+        c["phase"] = "retry"
+        c["chips"] = [["Try again", "retry"], ["End ticket here", "end"]]
+        c["msgs"].append(_msg("b", "Rex is taking a while to open the ticket. You can try again, or end this chat here."))
+        return True
+    return False
+
+
+async def _flag(w, c, reason, excerpt):
+    c["flagged"] = True
+    label = "Closed · Being reviewed for inappropriate language" if "language" in reason else "Closed · Being reviewed"
+    _close_chat(c, label, "Chat paused while the team reviews it", reason)
+    await _set_cool(w, c["uid"], c["name"], HOLD, reason, "rex")
+    await _enqueue(w, c["uid"], c["name"], "support_alert", {"cid": c["id"], "uid": c["uid"], "name": c["name"], "reason": reason, "excerpt": excerpt[:300]})
+
+
+async def _user_chats(w, uid):
+    ids = await w.store.get("sup:u:" + uid) or []
+    alive, chats = [], []
+    for cid in ids:
+        c = await w.store.get("sup:" + cid)
+        if c and not (c["status"] == "closed" and _delete_at(c) and _delete_at(c) < H("now")()):
+            alive.append(cid)
+            chats.append(c)
+    if len(alive) != len(ids):
+        await w.store.put("sup:u:" + uid, alive)
+    return chats
 
 
 async def route(w, request, url, path, method, session):
@@ -78,35 +212,33 @@ async def route(w, request, url, path, method, session):
     await w.require_beta("support", session)
 
     if tail == [] and method == "GET":
-        idx = await w.store.get("sup:u:" + uid) or []
-        convs = []
-        for cid in idx[:12]:
-            c = await w.store.get("sup:" + cid)
-            if c:
-                convs.append({k: c.get(k) for k in ("id", "type", "status", "updated", "created")})
-        cool = await w.store.get("sup:cool:" + uid)
-        return jr({"convs": convs, "cooldown": max(0, int(cool["until"] - H("now")())) if cool else 0, "types": SUPPORT_TYPES})
-    if tail == ["kb"] and method == "GET":
-        return jr(await w.store.get("support:kb") or {"items": []})
+        convs = [{k: c.get(k) for k in ("id", "type", "status", "updated", "created")} | {"label": c.get("label") or _sys_label(c)} for c in await _user_chats(w, uid) if not c.get("hidden")]
+        convs.sort(key=lambda r: -r["updated"])
+        cool = await _cool(w, uid)
+        return jr({"convs": convs[:MAX_CHATS], "cooldown": max(0, int(cool["until"] - H("now")())) if cool else 0, "types": SUPPORT_TYPES, "max": MAX_CHATS})
     if tail == ["new"] and method == "POST":
         w.check_mutation(request, url, session)
         if H("rate_limited")("supnew:" + uid, 6, 3600):
             raise err(429, "slow_down", "That's a lot of new chats. Please wait a bit.")
-        cool = await w.store.get("sup:cool:" + uid)
-        if cool and cool["until"] > H("now")():
-            raise err(429, "cooldown", "Support chat is paused for a few minutes. Please try again soon.", )
+        if await _cool(w, uid):
+            raise err(429, "cooldown", "Support chat is paused for you right now. Please try again later.")
+        if len(await _user_chats(w, uid)) >= MAX_CHATS:
+            raise err(429, "limit", "You have reached the limit of %d support chats. Delete a closed one (it can take a while to free up) or reopen an existing chat." % MAX_CHATS)
         body = await w.read_json(request, 512)
         typ = body.get("type") if isinstance(body, dict) and body.get("type") in SUPPORT_TYPES else "help"
-        c = {"id": secrets.token_hex(6), "uid": uid, "name": session["user"]["name"], "type": typ, "status": "bot", "created": H("now")(),
-             "updated": H("now")(), "msgs": [], "strikes": 0}
-        c["msgs"].append(_msg("b", "Hi " + session["user"]["name"] + "! I'm Rex's helper. Tell me what's up and I'll try to sort it out, or I can bring in a real person."))
+        start = helper.begin(typ, session["user"]["name"])
+        c = {"id": secrets.token_hex(6), "uid": uid, "name": session["user"]["name"], "avatar": session["user"].get("avatar_url") or "", "type": typ, "status": "open", "phase": "bot",
+             "created": H("now")(), "updated": H("now")(), "msgs": [_msg("b", t) for t in start["say"]], "flow": start["flow"], "chips": [list(x) for x in start["chips"]]}
+        c["label"] = ""
         await _save(w, c)
         ids = await w.store.get("sup:u:" + uid) or []
-        await w.store.put("sup:u:" + uid, ([c["id"]] + ids)[:20])
+        await w.store.put("sup:u:" + uid, [c["id"]] + ids)
         return jr(_public(c))
-    if len(tail) >= 1 and tail[0] not in ("new", "kb"):
+    if len(tail) >= 1 and tail[0] not in ("new",):
         c = await _load(w, tail[0], uid)
         if len(tail) == 1 and method == "GET":
+            if _unstick(c):
+                await _save(w, c)
             return jr(_public(c))
         if len(tail) == 2 and tail[1] == "msg" and method == "POST":
             w.check_mutation(request, url, session)
@@ -114,62 +246,70 @@ async def route(w, request, url, path, method, session):
                 raise err(429, "slow_down", "Slow down a little.")
             if c["status"] == "closed":
                 raise err(400, "closed", "This chat is closed.")
+            if await _cool(w, uid):
+                raise err(429, "cooldown", "Support chat is paused for you right now.")
             body = await w.read_json(request, 2048)
-            text = H("clean_str")(body.get("text") if isinstance(body, dict) else "", MAX_MSG)
-            reply = H("clean_str")(body.get("bot") if isinstance(body, dict) else "", MAX_MSG)
-            if not text and not reply:
-                raise err(400, "bad_request", "Write a message first.")
-            if text:
+            body = body if isinstance(body, dict) else {}
+            text = H("clean_str")(body.get("text"), MAX_MSG)
+            choice = H("clean_str")(body.get("choice"), 40)
+            phase = c.get("phase")
+            if choice:
+                if not _chip_ok(c, choice):
+                    raise err(400, "bad_choice", "That button isn't available any more.")
+                label = next(x[0] for x in c["chips"] if x[1] == choice)
+                c["msgs"].append(_msg("u", label))
+                text = ""
+            elif text:
                 c["msgs"].append(_msg("u", text))
-            if c["status"] == "open" and text:
-                # a real person is in the conversation: relay it to the support server
-                await w.enqueue("_", {"id": secrets.token_hex(6), "ts": H("now")(), "by": uid, "byname": c["name"], "op": "support_say", "gid": "_",
-                                      "args": {"cid": c["id"], "chan": c.get("chan"), "who": c["name"], "text": text, "from": "user"}})
-            elif c["status"] == "bot" and text and SWEAR.search(text):
-                c["strikes"] = int(c.get("strikes", 0)) + 1
-                if c["strikes"] >= 2:
-                    c["status"] = "closed"
-                    c["reason"] = "language"
-                    c["msgs"].append(_msg("b", "I'm going to end this chat because of the language. You can start a new one in a few minutes."))
-                    await w.store.put("sup:cool:" + uid, {"until": H("now")() + COOLDOWN}, ttl=COOLDOWN + 30)
+            else:
+                raise err(400, "bad_request", "Write a message first.")
+            if phase == "opening":
+                raise err(400, "busy", "Rex is opening your ticket. One moment.")
+            if phase in WAITING:
+                if choice == "end":
+                    _close_chat(c, "Closed · Ended by you", "You ended the chat before a ticket was opened")
+                    c["msgs"].append(_msg("b", "No problem, I haven't opened a ticket. You can start a new chat any time."))
+                elif choice in ("joined", "retry"):
+                    c["tries"] = c.get("tries", 0) + 1
+                    await _open_ticket(w, c)
                 else:
-                    c["msgs"].append(_msg("b", "Let's keep it friendly please. I'm happy to help, but I'll have to end the chat if the language continues."))
-            elif c["status"] == "bot" and reply:
-                c["msgs"].append(_msg("b", reply))
-            await _save(w, c)
-            return jr(_public(c))
-        if len(tail) == 2 and tail[1] == "escalate" and method == "POST":
-            w.check_mutation(request, url, session)
-            if c["status"] != "bot":
+                    c["msgs"].append(_msg("b", "Please use the buttons below so I know what to do."))
+                await _save(w, c)
                 return jr(_public(c))
-            if H("rate_limited")("supesc:" + uid, 3, 3600):
-                raise err(429, "slow_down", "You already asked for a person recently.")
-            c["status"] = "open"
-            c["msgs"].append(_msg("b", "Okay, I've asked a real person to join. Keep this page open, they'll reply here."))
+            if phase in ("ticket", "human"):
+                if text and c.get("chan"):
+                    await _enqueue(w, uid, c["name"], "support_say", {"cid": c["id"], "chan": c.get("chan"), "who": c["name"], "text": text, "from": "user"})
+                await _save(w, c)
+                return jr(_public(c))
+            # Rex answers (always decided here on the server)
+            turn = helper.reply(c, text, choice, await _kb_extra(w))
+            for line in turn["say"]:
+                c["msgs"].append(_msg("b", line))
+            c["chips"] = [list(x) for x in turn["chips"]]
+            if turn["step"]:
+                c["flow"]["step"] = turn["step"]
+            act = turn["action"]
+            if act == "ticket":
+                await _open_ticket(w, c)
+            elif act == "timeout":
+                await _flag(w, c, turn.get("reason") or "inappropriate language", text)
+            elif act == "noise":
+                _close_chat(c, "Closed · Messages were unclear", "Chat closed because Rex couldn't understand the messages", "noise")
+            elif act == "done":
+                _close_chat(c, "Closed · Resolved", "Chat closed")
             await _save(w, c)
-            await w.enqueue("_", {"id": secrets.token_hex(6), "ts": H("now")(), "by": uid, "byname": c["name"], "op": "support_escalate", "gid": "_",
-                                  "args": {"cid": c["id"], "uid": uid, "name": c["name"], "type": c["type"], "typename": SUPPORT_TYPES[c["type"]],
-                                           "log": [{"f": m["f"], "x": m["x"][:300]} for m in c["msgs"][-25:]]}})
             return jr(_public(c))
         if len(tail) == 2 and tail[1] == "close" and method == "POST":
             w.check_mutation(request, url, session)
             return jr(_public(await close(w, c, "user", url)))
+        if len(tail) == 2 and tail[1] == "delete" and method == "POST":
+            w.check_mutation(request, url, session)
+            if c["status"] != "closed":
+                raise err(400, "not_closed", "Close the chat first, then you can delete it.")
+            c["hidden"] = True       # only hidden for them; the owners still see it until the 30 days are up
+            await _save(w, c)
+            return jr({"ok": True})
     raise err(404, "not_found", "Not found.")
-
-
-async def close(w, c, by, url=None):
-    if c["status"] != "closed":
-        was_open = c["status"] == "open"
-        c["status"] = "closed"
-        c["reason"] = by
-        c["msgs"].append(_msg("b", "This chat was closed. Start a new one any time." if by != "staff" else "A team member closed this chat. Start a new one any time."))
-        await _save(w, c)
-        if was_open and c.get("chan"):
-            await w.enqueue("_", {"id": secrets.token_hex(6), "ts": H("now")(), "by": c["uid"], "byname": c["name"], "op": "support_close", "gid": "_",
-                                  "args": {"cid": c["id"], "chan": c["chan"], "by": by}})
-        if was_open and url is not None and c.get("uid"):
-            await fire(w, "support_closed", c["uid"], url)
-    return c
 
 
 async def owner_route(w, request, url, path, method, session):
@@ -177,7 +317,12 @@ async def owner_route(w, request, url, path, method, session):
     jr = H("json_response")
     tail = path.split("/")[4:]  # /api/owner/support/...
     if tail == [] and method == "GET":
-        return jr({"items": await w.store.get("sup:idx") or []})
+        idx = await w.store.get("sup:idx") or []
+        keep = [r for r in idx if not r.get("del") or r["del"] > H("now")()]
+        if len(keep) != len(idx):
+            await w.store.put("sup:idx", keep)
+        cools = [r for r in (await w.store.get("sup:cools") or []) if r["until"] > H("now")()]
+        return jr({"items": keep, "cools": cools})
     if tail == ["kb"] and method == "GET":
         return jr(await w.store.get("support:kb") or {"items": []})
     if tail == ["kb"] and method == "PUT":
@@ -191,10 +336,23 @@ async def owner_route(w, request, url, path, method, session):
                 items.append({"title": H("clean_str")(it.get("title"), 80), "keys": [k for k in q if k], "answer": a})
         await w.store.put("support:kb", {"items": items[:80]})
         return jr({"ok": True, "n": len(items)})
+    if tail == ["timeout"] and method == "POST":
+        w.check_mutation(request, url, session)
+        body = await w.read_json(request, 1024)
+        tuid = H("clean_str")(body.get("uid") if isinstance(body, dict) else "", 30)
+        if not re.match(r"^\d{5,25}$", tuid):
+            raise err(400, "bad_request", "That doesn't look like a Discord user ID.")
+        mins = max(0, min(525600, H("clean_int")(body.get("minutes"), 0)))
+        await _set_cool(w, tuid, H("clean_str")(body.get("name"), 40) or tuid, mins * 60, H("clean_str")(body.get("reason"), 120) or "Set by an owner", session["user"]["name"])
+        return jr({"ok": True, "minutes": mins})
     if tail:
         c = await _load(w, tail[0], staff=True)
         if len(tail) == 1 and method == "GET":
-            return jr(_public(c, True))
+            d = _public(c, True)
+            d["flow"] = {"step": (c.get("flow") or {}).get("step"), "strikes": (c.get("flow") or {}).get("strikes"), "noise": (c.get("flow") or {}).get("noise")}
+            cool = await _cool(w, c["uid"])
+            d["cool"] = int(cool["until"]) if cool else 0
+            return jr(d)
         w.check_mutation(request, url, session)
         if tail[1:] == ["reply"] and method == "POST":
             body = await w.read_json(request, 2048)
@@ -203,20 +361,51 @@ async def owner_route(w, request, url, path, method, session):
                 raise err(400, "bad_request", "Write a reply first.")
             if c["status"] == "closed":
                 raise err(400, "closed", "Reopen the chat first.")
-            c["status"] = "open"
+            c["phase"] = c.get("phase") if c.get("phase") == "ticket" else "human"
+            c["chips"] = []
+            c["label"] = ""
             c["msgs"].append(_msg("s", text))
             await _save(w, c)
-            await w.enqueue("_", {"id": secrets.token_hex(6), "ts": H("now")(), "by": session["user"]["id"], "byname": session["user"]["name"], "op": "support_say",
-                                  "gid": "_", "args": {"cid": c["id"], "chan": c.get("chan"), "who": session["user"]["name"], "text": text, "from": "staff"}})
+            if c.get("chan"):
+                await _enqueue(w, session["user"]["id"], session["user"]["name"], "support_say", {"cid": c["id"], "chan": c.get("chan"), "who": session["user"]["name"], "text": text, "from": "staff"})
             return jr(_public(c, True))
         if tail[1:] == ["close"] and method == "POST":
             return jr(_public(await close(w, c, "staff", url), True))
         if tail[1:] == ["reopen"] and method == "POST":
             c["status"] = "open"
+            c["closed_at"] = 0
             c["reason"] = ""
-            c["msgs"].append(_msg("b", "A team member reopened this chat."))
+            c["phase"] = "ticket" if c.get("chan") else "human"
+            c["chips"] = []
+            c["label"] = ""
+            c["msgs"].append(_div("Chat reopened by the Rex team"))
             await _save(w, c)
             return jr(_public(c, True))
+        if tail[1:] == ["status"] and method == "POST":
+            body = await w.read_json(request, 1024)
+            body = body if isinstance(body, dict) else {}
+            label = H("clean_str")(body.get("label"), 60)
+            c["label"] = label
+            want = body.get("status")
+            if want == "closed" and c["status"] != "closed":
+                _close_chat(c, label or "Closed", "Chat closed by the Rex team")
+            elif want == "open" and c["status"] == "closed":
+                c["status"], c["closed_at"], c["phase"] = "open", 0, ("ticket" if c.get("chan") else "human")
+                c["msgs"].append(_div("Chat reopened by the Rex team"))
+            if body.get("divider"):
+                c["msgs"].append(_div(H("clean_str")(body.get("divider"), 80)))
+            await _save(w, c)
+            return jr(_public(c, True))
+        if tail[1:] == ["keep"] and method == "POST":
+            body = await w.read_json(request, 256)
+            c["keep"] = bool(isinstance(body, dict) and body.get("keep"))
+            await _save(w, c)
+            return jr(_public(c, True))
+        if tail[1:] == ["delete"] and method == "POST":
+            await _purge(w, c)
+            ids = [x for x in (await w.store.get("sup:u:" + c["uid"]) or []) if x != c["id"]]
+            await w.store.put("sup:u:" + c["uid"], ids)
+            return jr({"ok": True})
     raise err(404, "not_found", "Not found.")
 
 
@@ -225,6 +414,12 @@ async def bot_route(w, tail, method, body):
     jr = H("json_response")
     if not isinstance(body, dict):
         raise H("HttpError")(400, "bad_request", "Expected an object.")
+    if tail == ["timeout"]:
+        uid = str(body.get("uid") or "")
+        if not re.match(r"^\d{5,25}$", uid):
+            raise H("HttpError")(400, "bad_request", "Bad user.")
+        await _set_cool(w, uid, uid, max(0, min(525600, H("clean_int")(body.get("minutes"), 0))) * 60, H("clean_str")(body.get("reason"), 120) or "Set by an owner", "owner")
+        return jr({"ok": True})
     cid = str(body.get("id") or "")
     c = await _load(w, cid, staff=True)
     if tail == ["msg"]:
@@ -234,12 +429,35 @@ async def bot_route(w, tail, method, body):
         c["chan"] = H("clean_str")(body.get("chan"), 30)
         c["url"] = H("clean_str")(body.get("url"), 200)
         await _save(w, c)
+    elif tail == ["opened"]:
+        if c.get("phase") != "opening":
+            return jr({"ok": True})
+        if body.get("ok"):
+            c["chan"] = H("clean_str")(body.get("chan"), 30)
+            c["url"] = H("clean_str")(body.get("url"), 200)
+            c["phase"] = "ticket"
+            c["msgs"].append(_msg("b", "I've opened your ticket. The Rex team will reply there:", c["url"]))
+            _close_chat(c, "Closed · Ticket opened on the Rex server", "Ticket opened on the Rex Discord server, chat closed", "ticket")
+        elif body.get("reason") == "not_in_server":
+            c["phase"] = "join"
+            first = not c.get("tries")
+            c["msgs"].append(_msg("b", ("To open a ticket you need to be in the official Rex server first. Join with this link, then press **I have joined**: " + INVITE) if first
+                                  else "I still couldn't see you in the server. Make sure you joined with the same Discord account, then try again. " + INVITE, INVITE))
+            c["chips"] = [["End ticket here", "end"], ["I have joined", "joined"]] if first else [["Rex couldn't see you, try again", "joined"], ["End ticket here", "end"]]
+            c["label"] = ""
+        else:
+            c["phase"] = "retry"
+            c["chips"] = [["Try again", "retry"], ["End ticket here", "end"]]
+            c["msgs"].append(_msg("b", "I couldn't open the ticket just now. You can try again or end the chat."))
+            c["label"] = ""
+        await _save(w, c)
     elif tail == ["closed"]:
         c["chan"] = None   # the channel is already gone, so don't ask the bot to close it again
-        await close(w, c, "staff", url)
+        await close(w, c, "staff")
     else:
         raise H("HttpError")(404, "not_found", "Not found.")
     return jr({"ok": True})
+
 
 # =====================================================================================================================
 # Email: tags (kinds of email people can pick), preferences page, Gmail sending, saved emails, automatic sending
@@ -493,7 +711,7 @@ def eligible(u, send_to):
 
 def _vars(w, origin, key, name, extra=None):
     v = {"name": name or "there", "dashboard_url": origin + "/dashboard", "site_url": origin, "unsubscribe_url": _unsub_url(w, origin, key) if key else "#",
-         "unsubscribe_link": _prefs_url(w, origin, key) if key else origin + "/", "support_url": origin + "/support",
+         "unsubscribe_link": _prefs_url(w, origin, key) if key else origin + "/", "logo_url": origin + "/img/rex-logo.png", "support_url": origin + "/support",
          "date": time.strftime("%B %d, %Y", time.gmtime()), "server": ""}
     v.update(extra or {})
     return v
@@ -795,7 +1013,7 @@ async def owner_email_route(w, request, url, path, method, session):
             raise err(400, "bad_design", str(ex))
         who = session["user"]["name"]
         v = _vars(w, origin, session["user"]["id"], who)
-        doc, text = _mail.render(design, v, H("clean_str")(body.get("subject"), 150))
+        doc, text = _mail.render(design, v, H("clean_str")(body.get("subject"), 150), force_dark=bool(body.get("dark")))
         tok = secrets.token_urlsafe(18)
         await w.store.put("email:pv:" + tok, {"html": doc}, ttl=600)
         return jr({"url": "/api/owner/email/view/" + tok, "text": text, "checks": _mail.checks(design)})
@@ -892,4 +1110,100 @@ async def owner_email_route(w, request, url, path, method, session):
         if g.get("at"):
             await w.store.put("email:gmail", g)
         return jr({"cid": cid, "pos": c["pos"], "total": c["total"], "sent": c["sent"], "failed": c["failed"], "done": c["done"], "paused": paused})
+    raise err(404, "not_found", "Not found.")
+
+
+# =====================================================================================================================
+# Pages (beta): owner-made custom pages at /pages/<name>, edited in the same builder as emails
+# =====================================================================================================================
+PAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
+MAX_PAGES = 60
+_SITE = "https://site.invalid"
+
+
+def _page_design(raw):
+    """Same rules as an email design, plus: empty colours mean 'follow the website theme', and links may point to pages on this site (/premium)."""
+    if not isinstance(raw, dict):
+        raise ValueError("The page design is not valid.")
+    raw = json.loads(json.dumps(raw))
+    for e in raw.get("els") or []:
+        if isinstance(e, dict):
+            for k in ("url", "src", "img"):
+                v = str(e.get(k) or "")
+                if k == "url" and v.startswith("/") and not v.startswith("//") and len(v) < 200 and " " not in v:
+                    e[k] = _SITE + v
+    keep = {k: str(raw.get(k) or "") for k in ("bg", "page", "color", "link")}
+    d = _mail.clean_design(raw)
+    for k, v in keep.items():
+        d[k] = v if re.match(r"^#[0-9a-fA-F]{6}$", v) else ""
+    for e in d["els"]:
+        if e.get("url", "").startswith(_SITE):
+            e["url"] = e["url"][len(_SITE):]
+    src = {str(e.get("id")): e for e in raw.get("els") or [] if isinstance(e, dict)}
+    for e in d["els"]:
+        if e["t"] == "button":
+            r = src.get(e["id"], {})
+            if not str(r.get("bg") or "").strip():
+                e["bg"] = ""
+            if not str(r.get("color") or "").strip():
+                e["color"] = ""
+    d["w"] = max(320, min(1100, H("clean_int")(raw.get("w"), 800)))
+    return d
+
+
+async def _page_beta(w, session):
+    site = await w.get_site()
+    uid = session["user"]["id"] if session else None
+    if not w.beta_on(site, "pages", uid):
+        raise H("HttpError")(404, "not_found", "This page doesn't exist.")
+
+
+async def pages_public(w, request, path, session):
+    """GET /api/pages/<name>"""
+    name = path[len("/api/pages/"):]
+    if not PAGE_NAME.match(name):
+        raise H("HttpError")(404, "not_found", "This page doesn't exist.")
+    await _page_beta(w, session)
+    p = await w.store.get("page:" + name)
+    if not p:
+        raise H("HttpError")(404, "not_found", "This page doesn't exist.")
+    return H("json_response")({"name": p["name"], "title": p["title"], "hide_nav": bool(p.get("hide_nav")), "design": p["design"], "fonts": _fonts()})
+
+
+async def pages_owner_route(w, request, url, path, method, session):
+    err, jr = H("HttpError"), H("json_response")
+    tail = path.split("/")[4:]  # /api/owner/pages/...
+    if tail == [] and method == "GET":
+        return jr({"items": await w.store.get("pages:idx") or [], "max": MAX_PAGES})
+    if len(tail) == 1 and PAGE_NAME.match(tail[0]):
+        name = tail[0]
+        if method == "GET":
+            p = await w.store.get("page:" + name)
+            if not p:
+                raise err(404, "not_found", "That page doesn't exist.")
+            return jr(p)
+        w.check_mutation(request, url, session)
+        idx = await w.store.get("pages:idx") or []
+        if method == "PUT":
+            body = await w.read_json(request, 600 * 1024)
+            if not isinstance(body, dict):
+                raise err(400, "bad_request", "Expected an object.")
+            existing = await w.store.get("page:" + name)
+            if not existing and len(idx) >= MAX_PAGES:
+                raise err(400, "limit", "You can have up to %d pages." % MAX_PAGES)
+            try:
+                design = _page_design(body.get("design"))
+            except ValueError as e:
+                raise err(400, "bad_design", str(e))
+            p = {"name": name, "title": H("clean_str")(body.get("title"), 80) or name, "hide_nav": bool(body.get("hide_nav")), "design": design, "updated": H("now")(),
+                 "created": (existing or {}).get("created") or H("now")()}
+            await w.store.put("page:" + name, p)
+            idx = [r for r in idx if r["name"] != name]
+            idx.insert(0, {"name": name, "title": p["title"], "hide_nav": p["hide_nav"], "updated": p["updated"]})
+            await w.store.put("pages:idx", idx)
+            return jr({"ok": True, "name": name})
+        if method == "DELETE" or (method == "POST" and False):
+            await w.store.delete("page:" + name)
+            await w.store.put("pages:idx", [r for r in idx if r["name"] != name])
+            return jr({"ok": True})
     raise err(404, "not_found", "Not found.")
