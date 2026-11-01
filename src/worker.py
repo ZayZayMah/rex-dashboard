@@ -525,6 +525,8 @@ class Default(WorkerEntrypoint):
             return await self.serve_asset(url, "/email-prefs")
         if path == "/api/unsub" and method in ("GET", "POST"):
             return await features.unsub_route(self, request, url, method)
+        if method == "GET" and re.match(r"^/docs(/[a-z0-9-]{2,40})?/?$", path):
+            return await self.serve_asset(url, "/docs-view")
         if method == "GET" and re.match(r"^/pages/[a-z0-9-]{2,40}$", path):
             return await self.serve_asset(url, "/page")
         if path.startswith("/api/pages/") and method == "GET":

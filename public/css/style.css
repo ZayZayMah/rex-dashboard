@@ -723,3 +723,33 @@ img.av.rex.sm { width: 26px; height: 26px; }
 .pg-wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 60px; }
 body.pg-nonav .pg-wrap { padding-top: 24px; }
 .pg-el.pg-button { text-decoration: none; cursor: pointer; transition: filter .15s, transform .15s; } .pg-el.pg-button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+/* documentation */
+.doc { display: grid; grid-template-columns: 240px minmax(0, 1fr) 210px; gap: 36px; padding-top: 28px; padding-bottom: 70px; align-items: start; }
+.doc-side { position: sticky; top: calc(var(--nav-h, 68px) + 16px); display: grid; gap: 18px; max-height: calc(100vh - var(--nav-h, 68px) - 40px); overflow-y: auto; padding-right: 6px; }
+.doc-group h4, .doc-toc h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.doc-group a { display: block; padding: 7px 12px; border-radius: 10px; color: var(--steel); font-size: 14.5px; text-decoration: none; border-left: 2px solid transparent; }
+.doc-group a:hover { background: var(--plate); color: var(--ice); } .doc-group a.on { background: var(--plate2); color: var(--ice); border-left-color: var(--arc); font-weight: 600; }
+.doc-toggle { display: none; }
+.doc-main { min-width: 0; max-width: 760px; font-size: 16px; line-height: 1.7; color: var(--ice); }
+.doc-crumb { font-size: 13px; color: var(--dim); margin-bottom: 8px; } .doc-crumb a { color: var(--arc); }
+.doc-main h1 { margin: 0 0 12px; font-size: clamp(30px, 4.2vw, 42px); line-height: 1.15; }
+.doc-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.doc-date { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--plate); border: 1px solid var(--edge); color: var(--steel); font-size: 12.5px; }
+.doc-sum { font-size: 18px; color: var(--steel); margin: 0 0 18px; line-height: 1.5; }
+.doc-main h2 { margin: 38px 0 10px; padding-top: 18px; border-top: 1px solid var(--edge); font-size: 24px; scroll-margin-top: calc(var(--nav-h, 68px) + 16px); }
+.doc-main h3 { margin: 24px 0 6px; font-size: 18px; scroll-margin-top: calc(var(--nav-h, 68px) + 16px); }
+.doc-main p { margin: 0 0 14px; } .doc-main ul, .doc-main ol { margin: 0 0 16px; padding-left: 24px; display: grid; gap: 6px; }
+.doc-main a { color: var(--arc); text-underline-offset: 3px; } .doc-main code { background: var(--plate); border: 1px solid var(--edge); padding: 1px 6px; border-radius: 6px; font-size: .9em; }
+.doc-note { margin: 0 0 18px; padding: 14px 16px; border-left: 3px solid var(--arc); background: var(--plate); border-radius: 0 12px 12px 0; }
+.doc-table { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--edge); border-radius: 12px; } .doc-table table { width: 100%; border-collapse: collapse; font-size: 15px; line-height: 1.5; }
+.doc-table th, .doc-table td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--edge); } .doc-table th { background: var(--plate); font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--steel); }
+.doc-table tr:last-child td { border-bottom: 0; } .doc-table td:first-child { white-space: nowrap; }
+.doc-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 44px; }
+.doc-pn { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--edge); border-radius: 14px; text-decoration: none; color: var(--ice); background: var(--plate); } .doc-pn:hover { border-color: var(--arc); } .doc-pn small { color: var(--dim); } .doc-nav a:last-child { text-align: right; }
+.doc-foot { margin-top: 26px; }
+.doc-toc { position: sticky; top: calc(var(--nav-h, 68px) + 16px); display: grid; gap: 2px; font-size: 13.5px; } .doc-toc a { color: var(--steel); text-decoration: none; padding: 4px 0 4px 12px; border-left: 1px solid var(--edge); } .doc-toc a:hover { color: var(--arc); border-left-color: var(--arc); }
+@media (max-width: 1100px) { .doc { grid-template-columns: 220px minmax(0, 1fr); } .doc-toc { display: none; } }
+@media (max-width: 760px) { .doc { grid-template-columns: 1fr; gap: 14px; } .doc-toggle { display: inline-flex; justify-self: start; } .doc-side { display: none; position: static; max-height: none; } .doc-side.open { display: grid; }
+  .doc-main { font-size: 15.5px; } .doc-nav { grid-template-columns: 1fr; } .doc-nav a:last-child { text-align: left; } }
+@media print { .nav, #footer, .doc-side, .doc-toc, .doc-toggle, .doc-nav, .doc-foot { display: none !important; } .doc { display: block; } .doc-main { max-width: none; color: #000; } }

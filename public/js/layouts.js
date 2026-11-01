@@ -4,7 +4,7 @@
 (function () {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = (s) => new DOMParser().parseFromString(s, 'image/svg+xml').documentElement;
-  const NAV_ITEMS = [['/about', 'About', 'about'], ['/commands', 'Commands', 'commands'], ['/premium', 'Premium', 'premium'], ['/live', 'Live stats', 'live'], ['/dashboard', 'Dashboard', 'dashboard']];
+  const NAV_ITEMS = [['/about', 'About', 'about'], ['/commands', 'Commands', 'commands'], ['/premium', 'Premium', 'premium'], ['/live', 'Live stats', 'live'], ['/docs', 'Docs', 'docs'], ['/dashboard', 'Dashboard', 'dashboard']];
   const link = (it, active) => h('a', { href: it[0], class: active === it[2] ? 'active' : '' }, it[1]);
 
   const nav = {

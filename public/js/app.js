@@ -155,16 +155,16 @@ function mountFooter() {
     h('div', { class: 'foot-brand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('div', {}, h('b', {}, 'Rex'), h('div', { class: 'small' }, 'Smart. Helpful. Always here.'))),
     h('div', { class: 'foot-links' },
       h('a', { href: '/about' }, 'About'), h('a', { href: '/commands' }, 'Commands'), h('a', { href: '/premium' }, 'Premium'),
-      h('a', { href: '/live' }, 'Live stats'), h('a', { href: '/dashboard' }, 'Dashboard')),
+      h('a', { href: '/live' }, 'Live stats'), h('a', { href: '/docs' }, 'Docs'), h('a', { href: '/dashboard' }, 'Dashboard')),
     h('span', { class: 'small' }, 'Not affiliated with Discord Inc.')));
 }
 
-const ABOUT_KEYS = ['about', 'commands', 'premium', 'live'];
+const ABOUT_KEYS = ['about', 'commands', 'premium', 'live', 'docs'];
 
 function subnav(active) {
   const item = (href, label, key) => h('a', { href, class: active === key ? 'active' : '' }, label);
   return h('nav', { class: 'subnav', 'aria-label': 'About sections' },
-    item('/about', 'Overview', 'about'), item('/commands', 'Commands', 'commands'), item('/premium', 'Premium', 'premium'), item('/live', 'Live stats', 'live'));
+    item('/about', 'Overview', 'about'), item('/commands', 'Commands', 'commands'), item('/premium', 'Premium', 'premium'), item('/live', 'Live stats', 'live'), item('/docs', 'Docs', 'docs'));
 }
 
 function renderMaintenance(m, isOwnerPage) {
@@ -219,7 +219,8 @@ async function mountNav(active) {
         h('a', { href: '/about' }, 'Overview', h('small', {}, 'What Rex does')),
         h('a', { href: '/commands' }, 'Commands', h('small', {}, 'Every command, explained')),
         h('a', { href: '/premium' }, 'Premium', h('small', {}, 'Tiers and codes')),
-        h('a', { href: '/live' }, 'Live stats', h('small', {}, 'Status and growth')))),
+        h('a', { href: '/live' }, 'Live stats', h('small', {}, 'Status and growth')),
+        h('a', { href: '/docs' }, 'Docs', h('small', {}, 'Guides, terms and policies')))),
     h('a', { href: '/dashboard', class: active === 'dashboard' ? 'active' : '' }, 'Dashboard'),
     me && me.beta && me.beta.support ? h('a', { href: '/support', class: active === 'support' ? 'active' : '' }, 'Support') : null);
 
