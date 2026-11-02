@@ -27,7 +27,7 @@ def H(name):
     return _G[name]
 
 
-SUPPORT_TYPES = {"help": "General help", "bug": "Report a bug", "premium": "Premium or codes", "appeal": "Ban appeal"}
+SUPPORT_TYPES = {"help": "General help", "bug": "Report a bug", "premium": "Premium or codes", "appeal": "Ban appeal", "feedback": "Feedback"}
 MAX_MSG = 600
 MAX_MSGS = 120
 MAX_CHATS = 3            # chats per person that the owners can still see (user-deleted ones count until they auto-delete)
@@ -40,6 +40,8 @@ WAITING = ("join", "retry")
 
 
 def _sys_label(c):
+    if c.get("type") == "feedback":
+        return "Always open · Feedback"
     if c["status"] == "closed":
         return "Closed"
     return {"opening": "Open · Opening your ticket", "join": "Open · Waiting for you to join the server", "retry": "Open · Waiting for you",
@@ -56,6 +58,11 @@ def _delete_at(c):
     if c["status"] == "closed" and not c.get("keep") and c.get("closed_at"):
         return int(c["closed_at"] + KEEP_DAYS * DAY)
     return 0
+
+
+def _theme(body):
+    t = body.get("theme") if isinstance(body, dict) else None
+    return t if t in ("normal", "halloween", "christmas") else "normal"
 
 
 async def _save(w, c):
@@ -168,7 +175,7 @@ async def _open_ticket(w, c):
     c["opening_at"] = H("now")()
     await _enqueue(w, c["uid"], c["name"], "support_open", {"cid": c["id"], "uid": c["uid"], "name": c["name"], "typename": SUPPORT_TYPES[c["type"]],
                                                           "summary": (c.get("flow") or {}).get("data", {}).get("_sum", []),
-                                                          "log": [{"f": m["f"], "x": m["x"][:300]} for m in c["msgs"] if m["f"] in ("u", "b")][-25:]})
+                                                          "log": [{"f": m["f"], "x": m["x"][:1500], "t": m.get("t", 0)} for m in c["msgs"] if m["f"] in ("u", "b")][-20:]})
 
 
 def _unstick(c):
@@ -184,7 +191,8 @@ def _unstick(c):
 async def _flag(w, c, reason, excerpt):
     c["flagged"] = True
     label = "Closed · Being reviewed for inappropriate language" if "language" in reason else "Closed · Being reviewed"
-    _close_chat(c, label, "Chat paused while the team reviews it", reason)
+    if c.get("type") != "feedback":
+        _close_chat(c, label, "Chat paused while the team reviews it", reason)
     await _set_cool(w, c["uid"], c["name"], HOLD, reason, "rex")
     await _enqueue(w, c["uid"], c["name"], "support_alert", {"cid": c["id"], "uid": c["uid"], "name": c["name"], "reason": reason, "excerpt": excerpt[:300]})
 
@@ -214,22 +222,29 @@ async def route(w, request, url, path, method, session):
     if tail == [] and method == "GET":
         convs = [{k: c.get(k) for k in ("id", "type", "status", "updated", "created")} | {"label": c.get("label") or _sys_label(c)} for c in await _user_chats(w, uid) if not c.get("hidden")]
         convs.sort(key=lambda r: -r["updated"])
+        fb = [r for r in convs if r["type"] == "feedback"][:1]
+        convs = [r for r in convs if r["type"] != "feedback"]
         cool = await _cool(w, uid)
-        return jr({"convs": convs[:MAX_CHATS], "cooldown": max(0, int(cool["until"] - H("now")())) if cool else 0, "types": SUPPORT_TYPES, "max": MAX_CHATS})
+        return jr({"feedback": fb[0]["id"] if fb else "", "convs": convs[:MAX_CHATS], "cooldown": max(0, int(cool["until"] - H("now")())) if cool else 0, "types": SUPPORT_TYPES, "max": MAX_CHATS})
     if tail == ["new"] and method == "POST":
         w.check_mutation(request, url, session)
         if H("rate_limited")("supnew:" + uid, 6, 3600):
             raise err(429, "slow_down", "That's a lot of new chats. Please wait a bit.")
         if await _cool(w, uid):
             raise err(429, "cooldown", "Support chat is paused for you right now. Please try again later.")
-        if len(await _user_chats(w, uid)) >= MAX_CHATS:
-            raise err(429, "limit", "You have reached the limit of %d support chats. Delete a closed one (it can take a while to free up) or reopen an existing chat." % MAX_CHATS)
         body = await w.read_json(request, 512)
         typ = body.get("type") if isinstance(body, dict) and body.get("type") in SUPPORT_TYPES else "help"
-        start = helper.begin(typ, session["user"]["name"])
+        mine = await _user_chats(w, uid)
+        if typ == "feedback":
+            have = next((x for x in mine if x.get("type") == "feedback"), None)
+            if have:                      # one permanent feedback chat per person
+                return jr(_public(have))
+        elif len([x for x in mine if x.get("type") != "feedback"]) >= MAX_CHATS:
+            raise err(429, "limit", "You have reached the limit of %d support chats. Delete a closed one (it can take a while to free up) or reopen an existing chat." % MAX_CHATS)
+        start = helper.begin(typ, session["user"]["name"], _theme(body), w.invite_url())
         c = {"id": secrets.token_hex(6), "uid": uid, "name": session["user"]["name"], "avatar": session["user"].get("avatar_url") or "", "type": typ, "status": "open", "phase": "bot",
              "created": H("now")(), "updated": H("now")(), "msgs": [_msg("b", t) for t in start["say"]], "flow": start["flow"], "chips": [list(x) for x in start["chips"]]}
-        c["label"] = ""
+        c["label"] = "Always open" if typ == "feedback" else ""
         await _save(w, c)
         ids = await w.store.get("sup:u:" + uid) or []
         await w.store.put("sup:u:" + uid, [c["id"]] + ids)
@@ -282,13 +297,21 @@ async def route(w, request, url, path, method, session):
                 await _save(w, c)
                 return jr(_public(c))
             # Rex answers (always decided here on the server)
-            turn = helper.reply(c, text, choice, await _kb_extra(w))
+            helper.set_context(w.invite_url(), _theme(body))
+            turn = helper.reply(c, text, choice, await _kb_extra(w), _theme(body))
             for line in turn["say"]:
                 c["msgs"].append(_msg("b", line))
             c["chips"] = [list(x) for x in turn["chips"]]
             if turn["step"]:
                 c["flow"]["step"] = turn["step"]
             act = turn["action"]
+            if c.get("type") == "feedback" and act in ("noise", "done"):
+                act = None
+            if act == "feedback":
+                items = await w.store.get("fb:items") or []
+                items.insert(0, {"id": secrets.token_hex(5), "uid": uid, "name": c["name"], "text": H("clean_str")(turn.get("text"), 600), "item": H("clean_str")(turn.get("item"), 80),
+                                 "ts": H("now")(), "status": "new", "cid": c["id"]})
+                await w.store.put("fb:items", items[:500])
             if act == "ticket":
                 await _open_ticket(w, c)
             elif act == "timeout":
@@ -299,6 +322,8 @@ async def route(w, request, url, path, method, session):
                 _close_chat(c, "Closed · Resolved", "Chat closed")
             await _save(w, c)
             return jr(_public(c))
+        if len(tail) == 2 and tail[1] in ("close", "delete") and method == "POST" and c.get("type") == "feedback":
+            raise err(400, "permanent", "The feedback chat stays open. It can't be closed or deleted.")
         if len(tail) == 2 and tail[1] == "close" and method == "POST":
             w.check_mutation(request, url, session)
             return jr(_public(await close(w, c, "user", url)))
@@ -323,6 +348,23 @@ async def owner_route(w, request, url, path, method, session):
             await w.store.put("sup:idx", keep)
         cools = [r for r in (await w.store.get("sup:cools") or []) if r["until"] > H("now")()]
         return jr({"items": keep, "cools": cools})
+    if tail == ["feedback"] and method == "GET":
+        return jr({"items": await w.store.get("fb:items") or []})
+    if len(tail) == 2 and tail[0] == "feedback" and method == "POST":
+        w.check_mutation(request, url, session)
+        body = await w.read_json(request, 256)
+        want = body.get("status") if isinstance(body, dict) else ""
+        items = await w.store.get("fb:items") or []
+        if want == "delete":
+            items = [x for x in items if x["id"] != tail[1]]
+        elif want in ("new", "done", "planned"):
+            for x in items:
+                if x["id"] == tail[1]:
+                    x["status"] = want
+        else:
+            raise err(400, "bad_request", "Unknown status.")
+        await w.store.put("fb:items", items)
+        return jr({"ok": True, "items": items})
     if tail == ["kb"] and method == "GET":
         return jr(await w.store.get("support:kb") or {"items": []})
     if tail == ["kb"] and method == "PUT":

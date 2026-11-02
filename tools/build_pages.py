@@ -23,6 +23,7 @@ PAGES = [
     ("email-builder.html", "Email builder - Rex", "Design Rex emails.", "emailbuilder", False, "noindex,nofollow"),
     ("docs-view.html", "Docs - Rex", "Guides, terms and policies for the Rex Discord bot.", "docsview", False, ""),
     ("page-builder.html", "Page builder - Rex", "Design Rex pages.", "pagebuilder", False, "noindex,nofollow"),
+    ("apply.html", "Application - Rex", "Fill in a server application.", "apply", False, "noindex,nofollow"),
     ("page.html", "Rex", "A Rex page.", "pageview", False, "noindex"),
     ("email-prefs.html", "Email preferences - Rex", "Choose which Rex emails you get.", "emailprefs", False, "noindex,nofollow"),
     ("owner.html", "Owner mode - Rex", "Rex owner tools.", "owner", False, "noindex"),

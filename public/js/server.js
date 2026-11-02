@@ -49,6 +49,7 @@
       case 'tags': return v.join(', ').slice(0, 160);
       case 'roles': return v.map((id) => (roleById[String(id)] ? '@' + roleById[String(id)].name : 'unknown role')).join(', ').slice(0, 160);
       case 'tickettypes': return v.map((t) => t.label).join(', ');
+      case 'ticketpanels': return (v || []).length + ' extra panel(s)';
       case 'channels': return (v || []).length + ' channel(s)';
       case 'levelroles': return (v || []).length + ' reward(s)';
       case 'card': return v && v.layers && v.layers.length ? 'Image card on' : 'Off';
@@ -193,36 +194,100 @@
     return h('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap' },
       h('button', { type: 'button', class: 'btn ghost sm', disabled: locked ? true : null, onclick: () => input.click() }, icon('plus', 14), ' Upload a file'), thumb, status, input);
   }
-  function ticketTypes(spec, locked) {
+  function typesEditor(rows, onchange, o) {
+    // o: { max, locked, single } - single = Free plan panel: one button that opens a ticket straight away
     const box = h('div', { class: 'tt-list' });
     const cats = guild.channels.filter((c) => c.type === 'category');
     const roles = guild.roles.filter((r) => !r.managed).sort((a, b) => b.position - a.position);
-    let rows = (Array.isArray(draft[spec.key]) ? draft[spec.key] : []).map((t) => Object.assign({ label: '', emoji: '', action: 'form', url: '', category_id: '', staff_role_id: '', welcome: '', max_open: 1, questions: [] }, t, { questions: (t.questions || []).slice(0, 5) }));
-    const push = () => set(spec.key, rows.filter((r) => r.label.trim()).map((r) => ({ label: r.label.trim(), emoji: r.emoji.trim(), action: r.action, url: r.url.trim(), category_id: r.category_id || '', staff_role_id: r.staff_role_id || '', welcome: r.welcome.trim(), max_open: r.max_open || 1, questions: r.questions.map((q) => q.trim()).filter(Boolean) })));
-    const dis = locked ? true : null;
+    const dis = o.locked ? true : null;
+    const blank = () => ({ id: '', label: '', emoji: '', action: o.single ? 'channel' : 'form', url: '', category_id: '', staff_role_id: '', welcome: '', max_open: 1, questions: [''], apply: null });
+    rows.splice(0, rows.length, ...rows.map((t) => Object.assign(blank(), t, { questions: (t.questions || []).slice(0, 5) })));
+    const newApply = () => ({ what: '', max_per_person: 1, cooldown_hours: 24, questions: [{ q: '', kind: 'short', required: true, options: [] }] });
+    const push = () => onchange(rows.filter((r) => r.label.trim()).map((r) => {
+      const out = { id: r.id || '', label: r.label.trim(), emoji: r.emoji.trim(), action: r.action, url: r.url.trim(), category_id: r.category_id || '', staff_role_id: r.staff_role_id || '', welcome: r.welcome.trim(), max_open: r.max_open || 1, questions: r.questions.map((q) => q.trim()).filter(Boolean) };
+      if (r.action === 'apply_dm' || r.action === 'apply_web') { const a = r.apply || newApply(); out.apply = { what: (a.what || '').trim(), max_per_person: a.max_per_person, cooldown_hours: a.cooldown_hours, questions: a.questions.filter((q) => q.q.trim()).map((q) => ({ q: q.q.trim(), kind: q.kind, required: !!q.required, options: q.kind === 'choice' ? q.options.map((x) => x.trim()).filter(Boolean) : [] })) }; }
+      return out;
+    }));
     const field = (label, el) => h('label', { class: 'tt-f' }, h('span', {}, label), el);
-    const sel = (opts, val, on) => { const e = h('select', { disabled: dis }, opts.map((o) => h('option', { value: o[0] }, o[1]))); e.value = String(val || ''); e.addEventListener('change', () => on(e.value)); return e; };
-    const ACTIONS = [['form', 'Form, then ticket'], ['channel', 'Ticket straight away'], ['dm', 'Ticket in DMs'], ['link', 'Open a link']];
-    function paint() {
-      box.replaceChildren(...rows.map((r, i) => h('div', { class: 'tt' },
-        h('div', { class: 'tt-top' },
-          h('b', {}, 'Button ' + (i + 1)),
-          h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, 'aria-label': 'Remove button', onclick: () => { rows.splice(i, 1); paint(); push(); } }, icon('trash', 16))),
+    const sel = (opts, val, on) => { const e = h('select', { disabled: dis }, opts.map((x) => h('option', { value: x[0] }, x[1]))); e.value = String(val == null ? '' : val); e.addEventListener('change', () => on(e.value)); return e; };
+    const num = (val, min, max, on) => h('input', { type: 'number', min, max, value: val, disabled: dis, oninput: (e) => { const n = parseInt(e.target.value, 10); on(Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : min); } });
+    const ACTIONS = [['form', 'Form, then ticket'], ['channel', 'Ticket straight away'], ['dm', 'Ticket in DMs'], ['link', 'Open a link'], ['apply_dm', 'Application (in DMs)'], ['apply_web', 'Application (on the website)']];
+    function applyBox(r, paint) {
+      if (!r.apply) r.apply = newApply();
+      const a = r.apply;
+      return h('div', { class: 'tt-q', style: 'border-top:1px solid var(--line,#ffffff22);padding-top:10px' },
         h('div', { class: 'tt-grid' },
-          field('Button name', h('input', { type: 'text', maxlength: 45, value: r.label, disabled: dis, placeholder: 'e.g. Report a player', oninput: (e) => { r.label = e.target.value; push(); } })),
-          field('Emoji (optional)', h('input', { type: 'text', maxlength: 8, value: r.emoji, disabled: dis, placeholder: '🎫', oninput: (e) => { r.emoji = e.target.value; push(); } })),
-          field('What the button does', sel(ACTIONS, r.action, (v) => { r.action = v; paint(); push(); })),
-          r.action === 'link' ? field('Link', h('input', { type: 'url', maxlength: 300, value: r.url, disabled: dis, placeholder: 'https://', oninput: (e) => { r.url = e.target.value; push(); } })) : null,
-          r.action !== 'link' ? field('Category for the ticket', sel([['', 'Use the default category']].concat(cats.map((c) => [c.id, c.name])), r.category_id, (v) => { r.category_id = v; push(); })) : null,
-          r.action !== 'link' ? field('Staff role', sel([['', 'Use the default staff role']].concat(roles.map((x) => [x.id, x.name])), r.staff_role_id, (v) => { r.staff_role_id = v; push(); })) : null,
-          r.action !== 'link' ? field('Tickets per person', sel([['1', '1'], ['2', '2'], ['3', '3'], ['5', '5']], r.max_open, (v) => { r.max_open = parseInt(v, 10); push(); })) : null),
-        r.action !== 'link' ? field('Welcome message (optional, use {user} and {server})', h('textarea', { maxlength: 500, disabled: dis, rows: 2, oninput: (e) => { r.welcome = e.target.value; push(); } }, r.welcome)) : null,
-        (r.action === 'form' || r.action === 'dm') ? h('div', { class: 'tt-q' }, h('span', { class: 'muted small' }, 'Questions (up to 5)'),
-          ...r.questions.map((q, qi) => h('div', { style: 'display:flex;gap:6px' },
-            h('input', { type: 'text', maxlength: 45, value: q, disabled: dis, placeholder: 'Question ' + (qi + 1), oninput: (e) => { r.questions[qi] = e.target.value; push(); } }),
-            h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { r.questions.splice(qi, 1); paint(); push(); } }, icon('trash', 14)))),
-          r.questions.length < 5 ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { r.questions.push(''); paint(); } }, icon('plus', 14), ' Add a question')) : null) : null)),
-        rows.length < (spec.maxitems || 5) ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { rows.push({ label: '', emoji: '', action: 'form', url: '', category_id: '', staff_role_id: '', welcome: '', max_open: 1, questions: [''] }); paint(); } }, icon('plus', 14), ' Add a ticket button')) : null);
+          field('What are people applying for?', h('input', { type: 'text', maxlength: 100, value: a.what, disabled: dis, placeholder: 'e.g. Moderator', oninput: (e) => { a.what = e.target.value; push(); } })),
+          field('Applications per person (0 = no limit)', num(a.max_per_person, 0, 20, (n) => { a.max_per_person = n; push(); })),
+          field('Hours between applications', num(a.cooldown_hours, 0, 720, (n) => { a.cooldown_hours = n; push(); }))),
+        h('span', { class: 'muted small' }, 'Questions (up to 25). ' + (r.action === 'apply_dm' ? 'Rex asks them one by one in DMs.' : 'People fill them in on one page after signing in.') + ' Results go to your mod log channel.'),
+        ...a.questions.map((q, qi) => h('div', { class: 'tt', style: 'padding:10px' },
+          h('div', { style: 'display:flex;gap:6px;align-items:center' },
+            h('input', { type: 'text', maxlength: 300, value: q.q, disabled: dis, placeholder: 'Question ' + (qi + 1), oninput: (e) => { q.q = e.target.value; push(); } }),
+            h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, 'aria-label': 'Remove question', onclick: () => { a.questions.splice(qi, 1); paint(); push(); } }, icon('trash', 14))),
+          h('div', { class: 'tt-grid', style: 'margin-top:8px' },
+            field('Answer type', sel([['short', 'Short answer'], ['long', 'Long answer'], ['choice', 'Multiple choice']], q.kind, (v) => { q.kind = v; if (v === 'choice' && !q.options.length) q.options = ['', '']; paint(); push(); })),
+            field('Required?', sel([['1', 'Required'], ['0', 'Optional']], q.required ? '1' : '0', (v) => { q.required = v === '1'; push(); }))),
+          q.kind === 'choice' ? field('Options (one per line, up to 10)', h('textarea', { rows: 3, disabled: dis, oninput: (e) => { q.options = e.target.value.split('\n').slice(0, 10); push(); } }, q.options.join('\n'))) : null)),
+        a.questions.length < 25 ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { a.questions.push({ q: '', kind: 'short', required: true, options: [] }); paint(); } }, icon('plus', 14), ' Add a question')) : null);
+    }
+    function paint() {
+      box.replaceChildren(...rows.map((r, i) => {
+        const isApply = r.action === 'apply_dm' || r.action === 'apply_web';
+        return h('div', { class: 'tt' },
+          h('div', { class: 'tt-top' },
+            h('b', {}, 'Button ' + (i + 1)),
+            h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, 'aria-label': 'Remove button', onclick: () => { rows.splice(i, 1); paint(); push(); } }, icon('trash', 16))),
+          h('div', { class: 'tt-grid' },
+            field('Button name', h('input', { type: 'text', maxlength: 45, value: r.label, disabled: dis, placeholder: 'e.g. Report a player', oninput: (e) => { r.label = e.target.value; push(); } })),
+            field('Emoji (optional)', h('input', { type: 'text', maxlength: 8, value: r.emoji, disabled: dis, placeholder: '🎫', oninput: (e) => { r.emoji = e.target.value; push(); } })),
+            o.single ? null : field('What the button does', sel(ACTIONS, r.action, (v) => { r.action = v; if ((v === 'apply_dm' || v === 'apply_web') && !r.apply) r.apply = newApply(); paint(); push(); })),
+            r.action === 'link' ? field('Link', h('input', { type: 'url', maxlength: 300, value: r.url, disabled: dis, placeholder: 'https://', oninput: (e) => { r.url = e.target.value; push(); } })) : null,
+            (r.action !== 'link' && !isApply) ? field('Category for the ticket', sel([['', 'Use the default category']].concat(cats.map((c) => [c.id, c.name])), r.category_id, (v) => { r.category_id = v; push(); })) : null,
+            (r.action !== 'link' && !isApply) ? field('Staff role', sel([['', 'Use the default staff role']].concat(roles.map((x) => [x.id, x.name])), r.staff_role_id, (v) => { r.staff_role_id = v; push(); })) : null,
+            (r.action !== 'link' && !isApply) ? field('Tickets per person', sel([['1', '1'], ['2', '2'], ['3', '3'], ['5', '5']], r.max_open, (v) => { r.max_open = parseInt(v, 10); push(); })) : null),
+          (r.action !== 'link' && !isApply) ? field('Welcome message (optional, use {user} and {server})', h('textarea', { maxlength: 500, disabled: dis, rows: 2, oninput: (e) => { r.welcome = e.target.value; push(); } }, r.welcome)) : null,
+          isApply ? applyBox(r, paint) : null,
+          (r.action === 'form' || r.action === 'dm') ? h('div', { class: 'tt-q' }, h('span', { class: 'muted small' }, 'Questions (up to 5)'),
+            ...r.questions.map((q, qi) => h('div', { style: 'display:flex;gap:6px' },
+              h('input', { type: 'text', maxlength: 45, value: q, disabled: dis, placeholder: 'Question ' + (qi + 1), oninput: (e) => { r.questions[qi] = e.target.value; push(); } }),
+              h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { r.questions.splice(qi, 1); paint(); push(); } }, icon('trash', 14)))),
+            r.questions.length < 5 ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { r.questions.push(''); paint(); } }, icon('plus', 14), ' Add a question')) : null) : null);
+      }),
+      rows.length < o.max ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { rows.push(blank()); paint(); } }, icon('plus', 14), o.single ? ' Add the button' : ' Add a ticket button')) : null);
+    }
+    paint();
+    return box;
+  }
+  function ticketTypes(spec, locked) {
+    const rows = (Array.isArray(draft[spec.key]) ? draft[spec.key] : []).slice();
+    return typesEditor(rows, (v) => set(spec.key, v), { max: spec.maxitems || 5, locked });
+  }
+  function ticketPanels(spec, locked) {
+    const premium = tierOn('premium') || tierOn('ultra') || tierOn('priority');
+    const ultra = tierOn('ultra') || tierOn('priority');
+    const cap = ultra ? 24 : premium ? 4 : 1;
+    const box = h('div', { class: 'tt-list' });
+    let panels = (Array.isArray(draft[spec.key]) ? draft[spec.key] : []).map((p) => Object.assign({ id: '', name: '', title: '', description: '', color: '', types: [] }, p, { types: (p.types || []).slice() }));
+    const dis = locked ? true : null;
+    const push = () => set(spec.key, panels.map((p) => ({ id: p.id, name: p.name.trim() || 'Panel', title: p.title.trim(), description: p.description.trim(), color: p.color.trim(), types: p.types })));
+    const field = (label, el) => h('label', { class: 'tt-f' }, h('span', {}, label), el);
+    function paint() {
+      box.replaceChildren(h('p', { class: 'muted small' }, ultra ? 'Ultra: unlimited panels, up to 5 buttons each.' : premium ? 'Premium: up to 4 extra panels (5 in total with the main one), up to 5 buttons each.' : 'Free: 1 extra panel (2 in total with the main one), with a single button each. Premium unlocks 5 panels with several buttons, Ultra unlimited.'),
+        ...panels.map((p, i) => {
+          const inner = typesEditor(p.types, (v) => { p.types = v; push(); }, { max: premium ? 5 : 1, locked, single: !premium });
+          return h('div', { class: 'tt' },
+            h('div', { class: 'tt-top' }, h('b', {}, 'Panel ' + (i + 2) + (p.name ? ': ' + p.name : '')),
+              h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, 'aria-label': 'Remove panel', onclick: () => { panels.splice(i, 1); paint(); push(); } }, icon('trash', 16))),
+            h('div', { class: 'tt-grid' },
+              field('Panel name (only you see this)', h('input', { type: 'text', maxlength: 45, value: p.name, disabled: dis, oninput: (e) => { p.name = e.target.value; push(); } })),
+              field('Embed title', h('input', { type: 'text', maxlength: 100, value: p.title, disabled: dis, placeholder: 'Support Tickets', oninput: (e) => { p.title = e.target.value; push(); } })),
+              premium ? field('Colour (#RRGGBB)', h('input', { type: 'text', maxlength: 7, value: p.color, disabled: dis, placeholder: '#5865F2', oninput: (e) => { p.color = e.target.value; push(); } })) : null),
+            field('Embed description', h('textarea', { rows: 2, maxlength: 1000, disabled: dis, oninput: (e) => { p.description = e.target.value; push(); } }, p.description)),
+            inner,
+            p.id ? h('p', { class: 'muted small' }, 'Save, then use "Post a panel" below to send this one to a channel.') : h('p', { class: 'muted small' }, 'Save first, then you can post it.'));
+        }),
+        panels.length < cap ? h('div', {}, h('button', { type: 'button', class: 'btn ghost sm', disabled: dis, onclick: () => { panels.push({ id: '', name: '', title: '', description: '', color: '', types: [{ label: 'Open ticket', emoji: '🎫', action: 'channel' }] }); paint(); push(); } }, icon('plus', 14), ' Add a panel')) : h('p', { class: 'muted small' }, 'You are at the panel limit for your plan.'));
     }
     paint();
     return box;
@@ -260,6 +325,7 @@
       case 'user': { const el = h('input', { id: 'f-' + spec.key, type: 'text', inputmode: 'numeric', placeholder: 'Discord user ID', maxlength: 25, disabled: locked ? true : null, oninput: (e) => set(spec.key, e.target.value.trim()) }); el.value = draft[spec.key] ? String(draft[spec.key]) : ''; return el; }
       case 'tags': return tagControl(spec, locked);
       case 'tickettypes': return ticketTypes(spec, locked);
+      case 'ticketpanels': return ticketPanels(spec, locked);
       case 'roles': return rolesControl(spec, locked);
       case 'card': return cardControl(spec, locked);
       case 'channels': return channelsControl(spec, locked);
@@ -312,7 +378,7 @@
   }
   function settingRow(spec, sectionLock) {
     const reason = sectionLock || lockReason(spec), locked = !!reason;
-    const wide = spec.type === 'tickettypes' || spec.type === 'card' || spec.type === 'channels' || spec.type === 'levelroles' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
+    const wide = spec.type === 'tickettypes' || spec.type === 'ticketpanels' || spec.type === 'card' || spec.type === 'channels' || spec.type === 'levelroles' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
     return h('div', { class: 'set-row' + (locked ? ' locked' : '') + (wide ? ' wide' : '') },
       h('div', {}, h('label', { class: 'name', for: 'f-' + spec.key }, nameLine(spec, sectionLock)), h('div', { class: 'desc' }, spec.description),
         hintFor(spec) ? h('div', { class: 'hint' }, hintFor(spec)) : null,
@@ -376,19 +442,21 @@
     const label = kind === 'ticket' ? 'ticket panel' : 'verification panel';
     const chans = guild.channels.filter((c) => c.type === 'text' || c.type === 'announcement');
     const sel = h('select', {}, h('option', { value: '' }, 'Choose a channel'), chans.map((c) => h('option', { value: c.id }, '#' + c.name)));
+    const extra = kind === 'ticket' ? (original.ticket_panels || []).filter((p) => p.id) : [];
+    const which = extra.length ? h('select', { 'aria-label': 'Which panel' }, h('option', { value: '' }, 'Main panel'), extra.map((p) => h('option', { value: p.id }, p.name || p.title || p.id))) : null;
     const out = h('div', { class: 'hint', role: 'status' });
     const btn = h('button', { type: 'button', class: 'btn', onclick: async () => {
       if (!sel.value) { out.textContent = 'Pick a channel first.'; return; }
       if (dirtyKeys().length) { out.textContent = 'Save your changes first, so the panel uses them.'; return; }
       btn.disabled = true; out.textContent = 'Asking Rex...';
       try {
-        const r = await api('/api/guilds/' + gid + '/panel', { method: 'POST', body: { kind, channel: sel.value } });
+        const r = await api('/api/guilds/' + gid + '/panel', { method: 'POST', body: { kind, channel: sel.value, panel: which ? which.value : '' } });
         const res = await waitForResult(r.id);
         out.textContent = res.ok ? (res.notes && res.notes[0]) || 'Posted.' : (Object.values(res.errors || {})[0] || 'Rex could not post it.');
       } catch (e) { out.textContent = e.message; }
       btn.disabled = false;
     } }, 'Post the ' + label);
-    return h('div', { class: 'group frame', style: 'margin-top:16px' }, h('h3', {}, 'Publish the ' + label), h('p', { class: 'muted small' }, 'Posts a fresh panel in the channel you pick, using the settings above.'), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, sel, btn), out);
+    return h('div', { class: 'group frame', style: 'margin-top:16px' }, h('h3', {}, 'Publish the ' + label), h('p', { class: 'muted small' }, 'Posts a fresh panel in the channel you pick, using the settings above.'), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, which, sel, btn), out);
   }
   function tierStatus() {
     return h('div', { class: 'tier-status' }, ['premium', 'priority', 'ultra'].map((t) => {

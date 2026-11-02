@@ -32,6 +32,7 @@ from pyodide.ffi import to_js
 from workers import Response, WorkerEntrypoint
 
 import features
+import apply
 from schema import (
     SNOWFLAKE,
     clean_str,
@@ -283,7 +284,7 @@ def sanitize_guild(raw):
     if isinstance(raw.get("values"), dict):
         for key, value in list(raw["values"].items())[:200]:
             if isinstance(key, str) and len(key) <= 80:
-                values[key] = sanitize_value(value)
+                values[key] = value if key in ("premium_ticket_panels", "ticket_panels") and isinstance(value, list) and len(json.dumps(value)) < 200000 else sanitize_value(value)
     return {
         "id": gid,
         "name": clean_str(raw.get("name"), 100) or "Unknown server",
@@ -527,6 +528,22 @@ class Default(WorkerEntrypoint):
             return await features.unsub_route(self, request, url, method)
         if method == "GET" and re.match(r"^/docs(/[a-z0-9-]{2,40})?/?$", path):
             return await self.serve_asset(url, "/docs-view")
+        if method == "GET" and re.match(r"^/support/c/[0-9a-f]{12}$", path):
+            session = await self.get_session(request)
+            cid = path.rsplit("/", 1)[1]
+            note = lambda t, m: html_response(f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>{t}</title><body style='font:16px system-ui;background:#04070f;color:#e8f7ff;padding:48px 20px;max-width:560px;margin:auto'><h1>{t}</h1><p>{m}</p><p><a style='color:#2ee6b6' href='/'>Back to Rex</a></p></body>", status=403)
+            if not session:
+                return note("Log in first", "This is a Rex support chat. <a style='color:#2ee6b6' href='/auth/login'>Log in with Discord</a> and open the link again.")
+            chat = await self.store.get("sup:" + cid)
+            if not chat:
+                return note("Chat not found", "That support chat doesn't exist any more.")
+            if self.is_owner(session):
+                return redirect("/owner?support=" + cid)
+            if chat.get("uid") == session["user"]["id"]:
+                return redirect("/support?chat=" + cid)
+            return note("No access", "You don't have access to this chat.")
+        if method == "GET" and re.match(r"^/apply/(results/[a-f0-9]{8,32}|\d{15,25}/[a-z0-9]{4,12})$", path):
+            return await self.serve_asset(url, "/apply")
         if method == "GET" and re.match(r"^/pages/[a-z0-9-]{2,40}$", path):
             return await self.serve_asset(url, "/page")
         if path.startswith("/api/pages/") and method == "GET":
@@ -559,6 +576,9 @@ class Default(WorkerEntrypoint):
                 "Add these in Cloudflare under <b>Workers &amp; Pages &rarr; rex &rarr; Settings &rarr; "
                 "Variables and Secrets</b>, then reload:</p>" f"<ul>{items}</ul></body>", status=503)
         state = secrets.token_urlsafe(24)
+        nxt = (parse_qs(url.query).get("next") or [""])[0]
+        if re.match(r"^/apply/[A-Za-z0-9/_-]{1,100}$", nxt):
+            state += "." + base64.urlsafe_b64encode(nxt.encode()).decode().rstrip("=")
         params = {
             "client_id": self.cfg("DISCORD_CLIENT_ID"),
             "response_type": "code",
@@ -651,7 +671,15 @@ class Default(WorkerEntrypoint):
         await self.touch_watch(uid, force=True)
         if not prev:
             await features.fire(self, "first_login", uid, url, rec=rec)
-        return redirect("/dashboard", make_cookie(SESSION_COOKIE, token, SESSION_TTL))
+        back = "/dashboard"
+        if "." in state:
+            try:
+                cand = base64.urlsafe_b64decode(state.split(".", 1)[1] + "==").decode()
+                if re.match(r"^/apply/[A-Za-z0-9/_-]{1,100}$", cand):
+                    back = cand
+            except Exception:
+                pass
+        return redirect(back, make_cookie(SESSION_COOKIE, token, SESSION_TTL))
 
     # ---- users are spread over 16 shards so logins never overwrite each other
     @staticmethod
@@ -890,6 +918,10 @@ class Default(WorkerEntrypoint):
             return await features.prefs_route(self, request, url, path, method, session)
         if path == "/api/support" or path.startswith("/api/support/"):
             return await features.route(self, request, url, path, method, session)
+        if path.startswith("/api/apply/"):
+            r = await apply.route(self, request, url, path, method, session)
+            if r is not None:
+                return r
 
         parts = path.split("/")  # ['', 'api', 'guilds', '<id>', 'settings']
         if len(parts) in (4, 5) and parts[2] == "guilds":
@@ -982,8 +1014,8 @@ class Default(WorkerEntrypoint):
         queue = await self.store.get("q:all") or {}
         results = await self.store.get("res:" + gid) or []
         t = now()
-        pending = [{"id": e["id"], "ts": e["ts"], "by": e.get("byname", ""), "keys": list(e["changes"].keys())}
-                   for e in queue.get(gid, []) if t - e["ts"] < PENDING_MAX_AGE]
+        pending = [{"id": e["id"], "ts": e["ts"], "by": e.get("byname", ""), "keys": list((e.get("changes") or {}).keys())}
+                   for e in queue.get(gid, []) if t - e["ts"] < PENDING_MAX_AGE and not e.get("op")]
         body = {"values": guild.get("values", {}), "pending": pending, "results": results}
         if lite:
             return json_response(body)
@@ -1191,7 +1223,8 @@ class Default(WorkerEntrypoint):
             raise HttpError(400, "bad_request", "Choose a panel and a channel.")
         rid = secrets.token_hex(6)
         await self.enqueue(gid, {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "op": "publish_panel",
-                                 "args": {"kind": kind, "channel": channel, "reason": clean_str(body.get("reason"), 200)}})
+                                 "args": {"kind": kind, "channel": channel, "reason": clean_str(body.get("reason"), 200),
+                                          "panel": clean_str(body.get("panel"), 12) if re.match(r"^[a-z0-9]{0,12}$", str(body.get("panel") or "")) else ""}})
         return json_response({"queued": True, "id": rid}, status=202)
 
     async def api_redeem(self, request, url, session, gid):

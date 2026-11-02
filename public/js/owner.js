@@ -124,11 +124,31 @@
 
   /* ---- support (beta) */
   async function supportTab() {
-    const wrap = h('div', { class: 'stack' }), listBox = h('div', { class: 'sup-list' }), view = h('div', { class: 'well' }, h('p', { class: 'muted' }, 'Pick a chat on the left.'));
+    const wrap = h('div', { class: 'stack' }), listBox = h('div', { class: 'sup-list' }), view = h('div', { class: 'well' }, h('p', { class: 'muted' }, 'Pick a chat above.'));
     let sel = null, items = [], timer = null, shown = 0;
     let cools = [];
-    const paintList = () => listBox.replaceChildren(...(items.length ? items.map((c) => h('button', { type: 'button', class: 'sup-row' + (sel === c.id ? ' sel' : ''), onclick: () => pick(c.id) },
-      h('div', { style: 'min-width:0;text-align:left' }, h('b', {}, (c.flag ? '🚩 ' : '') + c.name), h('div', { class: 'muted small ell' }, c.label + (c.hidden ? ' · deleted by user' : '') + (c.keep ? ' · kept' : ''))), h('span', { class: 'pill ' + (c.status === 'closed' ? 'off' : 'on') }, c.status === 'closed' ? 'Closed' : 'Open'))) : [h('p', { class: 'muted' }, 'No chats yet.')]));
+    let open = true, fbItems = [];
+    const preview = (c) => (c.last ? c.last : 'No messages yet');
+    const paintList = () => {
+      const chats = items.filter((c) => c.type !== 'feedback');
+      const cur = chats.find((c) => c.id === sel);
+      if (cur && !open) {
+        listBox.replaceChildren(h('button', { type: 'button', class: 'sup-pick', onclick: () => { open = true; paintList(); } },
+          h('span', { class: 'sup-pick-name' }, (cur.flag ? '🚩 ' : '') + cur.name), h('span', { class: 'pill ' + (cur.status === 'closed' ? 'off' : 'on') }, cur.status === 'closed' ? 'Closed' : 'Open'), h('span', { class: 'muted small' }, 'Change chat ▾')));
+        return;
+      }
+      listBox.replaceChildren(...(chats.length ? chats.map((c) => h('button', { type: 'button', class: 'sup-row2' + (sel === c.id ? ' sel' : ''), onclick: () => { open = false; pick(c.id); } },
+        h('div', { class: 'sup-row2-top' }, h('b', { class: 'ell' }, (c.flag ? '🚩 ' : '') + c.name), h('span', { class: 'pill ' + (c.status === 'closed' ? 'off' : 'on') }, c.status === 'closed' ? 'Closed' : 'Open')),
+        h('div', { class: 'muted small ell' }, preview(c)),
+        h('div', { class: 'muted small ell' }, c.label + (c.hidden ? ' · deleted by user' : '') + (c.keep ? ' · kept' : '')))) : [h('p', { class: 'muted' }, 'No chats yet.')]));
+    };
+    const fbBox = h('div', { class: 'stack' });
+    const paintFb = () => fbBox.replaceChildren(...(fbItems.length ? fbItems.map((f) => h('details', { class: 'fb-item' },
+      h('summary', {}, h('span', { class: 'fb-sum ell' }, f.text), h('span', { class: 'pill ' + (f.status === 'done' ? 'off' : 'on') }, f.status === 'planned' ? 'Planned' : f.status === 'done' ? 'Done' : 'New')),
+      h('div', { class: 'fb-body' }, h('p', { style: 'white-space:pre-wrap' }, f.text), h('p', { class: 'muted small' }, 'From ' + f.name + ' (ID ' + f.uid + ') · ' + new Date(f.ts * 1000).toLocaleString() + (f.item ? ' · Rex pointed them to: ' + f.item : '')),
+        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+          ['new', 'planned', 'done'].filter((x) => x !== f.status).map((x) => h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { fbItems = (await api('/api/owner/support/feedback/' + f.id, { method: 'POST', body: { status: x } })).items; paintFb(); } catch (e) { toast(e.message, 'bad'); } } }, 'Mark ' + x)),
+          h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (!(await rexDialog.confirm('Delete this suggestion?', '', 'Delete', true))) return; try { fbItems = (await api('/api/owner/support/feedback/' + f.id, { method: 'POST', body: { status: 'delete' } })).items; paintFb(); } catch (e) { toast(e.message, 'bad'); } } }, 'Delete'))))) : [h('p', { class: 'muted' }, 'No suggestions yet.')]));
     async function refresh() { try { const d = await api('/api/owner/support'); items = d.items; cools = d.cools || []; paintList(); paintCools(); } catch (e) { /* ignore */ } }
     async function pick(id) {
       sel = id; shown = 0; paintList();
@@ -171,12 +191,17 @@
       h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { kbItems.splice(i, 1); paintKb(); } }, 'Remove'))));
     paintKb();
     const kbStatus = h('span', { class: 'muted small' });
-    wrap.append(h('div', { class: 'sup-split' }, h('div', { class: 'frame' }, h('h3', {}, 'Chats'), listBox), view),
+    try { fbItems = (await api('/api/owner/support/feedback')).items || []; } catch (e) { fbItems = []; }
+    paintFb();
+    wrap.append(h('div', { class: 'frame sup-top' }, h('h3', {}, 'Chats'), listBox), view,
+      h('details', { class: 'frame', open: fbItems.some((f) => f.status === 'new') ? true : null }, h('summary', { style: 'cursor:pointer;font-weight:700' }, 'Feedback (' + fbItems.filter((f) => f.status === 'new').length + ' new, ' + fbItems.length + ' total)'), h('p', { class: 'muted small' }, 'Suggestions Rex could not match to a feature that already exists. Open one to read it.'), fbBox),
       h('div', { class: 'frame' }, h('h3', {}, 'Timeouts'), h('p', { class: 'muted small' }, 'Rex pauses people for 10 minutes when it flags them and DMs you to choose how long. You can also do it yourself.'), coolBox, h('button', { class: 'btn ghost sm', type: 'button', style: 'margin-top:10px', onclick: () => timeoutDialog('', '') }, 'Timeout someone by ID')),
       h('div', { class: 'frame' }, h('h3', {}, 'What the helper can answer'), h('p', { class: 'muted small' }, 'Rex already knows the basics. Add your own answers here and they take effect straight away.'), kbBox,
         h('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:12px' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => { kbItems.push({ title: '', keys: [], answer: '' }); paintKb(); } }, 'Add an answer'),
           h('button', { class: 'btn', type: 'button', onclick: async () => { try { const r = await api('/api/owner/support/kb', { method: 'PUT', body: { items: kbItems } }); kbStatus.textContent = 'Saved ' + r.n + ' answers.'; toast('Saved', 'good'); } catch (e) { kbStatus.textContent = e.message; } } }, 'Save answers'), kbStatus)));
     await refresh();
+    const deep = new URLSearchParams(location.search).get('support');
+    if (deep && /^[0-9a-f]{12}$/.test(deep)) { open = false; pick(deep); }
     return wrap;
   }
 

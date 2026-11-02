@@ -10,7 +10,7 @@ A ticket on the Discord server is only offered after the onboarding has real ans
 import random
 import re
 
-from helper_data import KB
+from helper_kb import KB
 
 R = random.choice
 INVITE = "https://discord.gg/2JSVqkVdeq"
@@ -133,21 +133,123 @@ def meaningful(text):
 
 
 # ----------------------------------------------------------------------------------------------- knowledge lookup
+_KEYW = []          # per item: list of keyword lists
+_IDX = {}           # word -> {(item, key)}
+for _i, _it in enumerate(KB):
+    _rows = []
+    for _j, _key in enumerate(_it["keys"]):
+        _kw = [w for w in _n(_key).split() if w and w not in STOP]
+        _rows.append(_kw)
+        for _w in _kw:
+            _IDX.setdefault(_w, set()).add((_i, _j))
+    _KEYW.append(_rows)
+_FUZZ = {}
+
+
+def _vocab_hits(w):
+    """Every word in the knowledge base this word could mean (itself, or a close spelling)."""
+    if w in _FUZZ:
+        return _FUZZ[w]
+    hits = [w] if w in _IDX else []
+    if len(w) >= 4:
+        hits += [k for k in _IDX if k != w and abs(len(k) - len(w)) <= 2 and _close(w, k)]
+    _FUZZ[w] = hits
+    return hits
+
+
+WEAK = {"rex", "bot", "discord", "server", "servers"}
+
+
+def _score(words, kw, exact=False):
+    if exact:
+        return 3.0
+    hits = [k for k in kw if any(_close(w, k) for w in words)]
+    if not hits:
+        return 0
+    wt = lambda k: 0.3 if k in WEAK else 1.0
+    got, total = sum(wt(k) for k in hits), sum(wt(k) for k in kw)
+    s = got / total * (1.4 if len(kw) > 1 else 1) * (1.3 if len(hits) == len(kw) else 1)
+    if all(k in WEAK for k in kw):
+        s *= 0.5
+    return s * (1 + 0.2 * (len(hits) - 1))
+
+
 def find_answer(text, extra=None):
     words = [w for w in _n(text).split() if w and w not in STOP]
     if not words:
         return None
+    m = re.search(r"(?:^|\s)/([a-z][a-z-]*)", str(text).lower())
+    if m:                              # "/warn" always means that command
+        for it in KB:
+            if it["title"] == "Command " + m.group(1):
+                return it
+    norm = _n(text)
+    cand = set()
+    for w in words:
+        for k in _vocab_hits(w):
+            cand |= _IDX[k]
     best, score = None, 0
-    for it in list(KB) + list(extra or []):
+    for i, j in sorted(cand):
+        s = _score(words, _KEYW[i][j], _n(KB[i]["keys"][j]) == norm)
+        if s > score:
+            score, best = s, KB[i]
+    for it in extra or []:       # answers the owners added themselves win ties because they are checked last with >=
         for key in it.get("keys", []):
             kw = [w for w in _n(key).split() if w and w not in STOP]
-            if not kw:
-                continue
-            hit = sum(1 for k in kw if any(_close(w, k) for w in words))
-            s = hit / len(kw) * (1.4 if len(kw) > 1 else 1) * (1.3 if hit == len(kw) else 1)
-            if hit and s > score:
+            s = _score(words, kw) if kw else 0
+            if s and s >= score:
                 score, best = s, it
     return best if score >= 0.9 else None
+
+
+def _ans(item):
+    a = item["answer"]
+    return fill(R(a) if isinstance(a, (list, tuple)) else a)
+
+
+CTX = {"ADD": "/dashboard", "SUPPORT": INVITE}
+THEME = ["normal"]
+
+
+def set_context(add=None, theme="normal"):
+    CTX["ADD"] = add or "/dashboard"
+    THEME[0] = theme if theme in ("normal", "halloween", "christmas") else "normal"
+
+
+def fill(text):
+    return str(text).replace("{ADD}", CTX["ADD"]).replace("{SUPPORT}", CTX["SUPPORT"])
+
+
+FLAVOR = {
+    "halloween": {
+        "hello": ["Boo! 🎃", "Spooky greetings! 👻", "The cobwebs parted and there you were! 🕸️", "Welcome to the haunted help desk! 🦇"],
+        "found": ["Here's what crawled out of my crypt:", "My cauldron says:", "From the haunted archives:", "A little spell for you:", "The spirits whispered this answer:"],
+        "ok": ["Wickedly good, glad that helped! 🎃", "Another mystery solved! 👻", "Mwahaha, success! 🦇", "Spooktacular, glad it worked!"],
+        "more": ["Any more ghostly questions?", "Anything else lurking in the shadows?", "Want me to dig up anything else?"],
+        "thanks": ["Happy haunting! 🎃", "Anytime, you spooky legend! 👻", "My pleasure, creature of the night! 🦇"],
+        "bye": ["Stay spooky! 🎃", "Fly home safely, little bat! 🦇", "See you in the graveyard! 👻"],
+        "topic": ["What brings you to my haunted help desk? 🕸️", "What mystery can I solve for you? 🎃", "Speak, mortal. What do you need? 👻"],
+        "greet": ["Boo! 👻 Just kidding, hi!", "Hello, fellow creature of the night! 🦇", "Hey there, brave soul! 🎃"],
+        "how": ["Hauntingly good, thanks for asking! 🎃 Now, how can I help?", "Bone-tired but ready to help! 💀"],
+    },
+    "christmas": {
+        "hello": ["Ho ho ho! 🎄", "Season's greetings! ❄️", "Welcome to the workshop! 🎁", "Jingle all the way in! 🔔"],
+        "found": ["Fresh from Santa's list:", "The elves found this for you:", "Wrapped up just for you:", "Here's a little gift of an answer:", "Tinsel-tested and ready:"],
+        "ok": ["Merry good news, glad that helped! 🎄", "Ho ho ho, sorted! 🎅", "That's a gift worth giving, glad it worked! 🎁", "Jolly good!"],
+        "more": ["Anything else on your wish list?", "Want me to check the list twice for anything else?", "Any more questions for the elves?"],
+        "thanks": ["Merry Christmas! 🎄", "Happy to help, it's the season of giving! 🎁", "You're welcome, have a cosy one! ☃️"],
+        "bye": ["Merry Christmas and happy holidays! 🎄", "Stay warm out there! ❄️", "See you by the fireplace! 🔥"],
+        "topic": ["How can the elves help you today? 🎄", "What's on your wish list? 🎁", "What can I do for you this festive day? ❄️"],
+        "greet": ["Merry hello! 🎄", "Hi there, and happy holidays! ❄️", "Hey, welcome to the workshop! 🎁"],
+        "how": ["Feeling festive, thanks for asking! 🎄 How can I help?", "Cosy and cheerful! ☃️ What can I do for you?"],
+    },
+}
+
+
+def T(kind, default):
+    """A line for this kind of moment, in the voice of the current website theme. The facts never change, only the voice."""
+    bits = FLAVOR.get(THEME[0], {}).get(kind)
+    return R(bits) if bits else R(default)
 
 
 def kb_by_title(title):
@@ -180,6 +282,8 @@ SMALL = {
 
 
 def say(kind):
+    if kind in ("greet", "how", "thanks"):
+        return T(kind, SMALL[kind])
     return R(SMALL[kind])
 
 
@@ -199,6 +303,7 @@ LEAFS = {
 
 ASK = {
     "topic": ["What do you need help with?", "Happy to help! What's this about?", "Let's get started. What's it about?", "What can I help you with today?"],
+    "narrow": ["I don't have a ready answer for that one yet. Which area is it closest to?", "Hmm, I'm not sure about that yet. Which of these is nearest?", "Let me narrow it down. Which topic fits best?"],
     "leaf": ["Got it. What are you trying to do?", "Okay. Which of these is closest?", "Thanks. What exactly is happening?"],
     "describe": ["Could you tell me a bit more? A sentence or two is perfect.", "Describe it in your own words and I'll see what I can find.", "Tell me a little more about what's going on."],
     "helpful": ["Was this information useful?", "Did that help?", "Does that answer your question?", "Did that solve it?"],
@@ -218,12 +323,16 @@ def new_flow(typ):
     return {"step": "start", "data": {}, "noise": 0, "strikes": 0, "good": 0, "last": "", "dupe": 0, "typ": typ}
 
 
-def begin(typ, name):
+def begin(typ, name, theme="normal", add=None):
+    set_context(add, theme)
     first = name.split(" ")[0] if name else "there"
+    flair = T("hello", [""]) if THEME[0] != "normal" else ""
     hello = {"help": f"Hi {first}! I'm **Rex**. I'll ask a couple of quick questions so I can help properly.",
              "bug": f"Hi {first}! I'm **Rex**. Sorry something's broken, let's get it written up so it can be fixed.",
              "premium": f"Hi {first}! I'm **Rex**. Let's sort out your Premium question.",
-             "appeal": f"Hi {first}, I'm **Rex**. I'll take a few details about your appeal first so the team can review it properly."}[typ]
+             "appeal": f"Hi {first}, I'm **Rex**. I'll take a few details about your appeal first so the team can review it properly.",
+             "feedback": f"Hi {first}! I'm **Rex**. This is your permanent feedback chat. It never closes, so come back with ideas any time."}[typ]
+    hello = (flair + " " + hello).strip()
     f = new_flow(typ)
     t = _first(typ)
     f["step"] = t["step"]
@@ -232,7 +341,9 @@ def begin(typ, name):
 
 def _first(typ):
     if typ == "help":
-        return _turn([R(ASK["topic"])], TOPICS, "topic")
+        return _turn([T("topic", ASK["topic"])], TOPICS, "topic")
+    if typ == "feedback":
+        return _turn(["Got an idea or a request? Press **New suggestion** and tell me about it."], [("New suggestion", "fb_new"), ("What happens to my suggestion?", "fb_info")], "fb_start")
     if typ == "bug":
         return _turn(["What kind of problem is it?"], [("A command", "command"), ("The website / dashboard", "website"), ("Rex is offline", "offline"), ("Something else", "other")], "b_kind")
     if typ == "premium":
@@ -286,7 +397,7 @@ def _kind(low):
         return "wait"
     if UNSURE.search(low) and short:
         return "unsure"
-    if REPEAT.search(low) and len(words) <= 5:
+    if REPEAT.search(low) and (len(words) <= 2 or re.match(r"^(i don'?t understand|what do you mean|what does that mean|say that again|come again|can you repeat|repeat that|i'?m confused|i am confused)", low)):
         return "repeat"
     if HUMAN.search(low) and re.search(r"\b(human|person|staff|team|owner|mod|moderator|admin|agent|someone|representative|support|ticket|escalate)\b", low):
         return "human"
@@ -294,7 +405,7 @@ def _kind(low):
         return "bye"
     if GREET.search(low) and len(words) <= 4:
         return "greet"
-    if WHAT_CAN.search(low) and len(words) <= 6:
+    if WHAT_CAN.search(low) and len(words) <= 4:
         return "what"
     return None
 
@@ -316,10 +427,22 @@ def _step_prompt(f):
     """What to say (and which buttons) for the step we're on."""
     s, d, typ = f["step"], f["data"], f["typ"]
     if s in ("start", "topic"):
-        return _turn([R(ASK["topic"])], TOPICS)
+        return _turn([T("topic", ASK["topic"])], TOPICS)
     if s == "leaf":
         return _turn([R(ASK["leaf"])], [(l, v) for l, v in LEAFS.get(d.get("topic"), LEAFS["setup"])])
-    if s in ("describe", "describe2"):
+    if s == "narrow":
+        return _turn([R(ASK["narrow"])], [c for c in TOPICS if c[1] != "other"] + [("None of these", "none")])
+    if s == "fb_start":
+        return _first("feedback")
+    if s == "fb_text":
+        return _turn(["Tell me your suggestion in a sentence or two. The clearer it is, the more the team can use it."])
+    if s == "fb_check":
+        return _turn(["Is that what you were after?"], [("Yes, that covers it", "fb_yes"), ("No, something different", "fb_no")])
+    if s == "fb_confirm":
+        return _turn(["Here's your suggestion:\n\n> " + str(d.get("fb", ""))[:500] + "\n\nShall I send it to the team?"], [("Send it", "fb_send"), ("Write it again", "fb_new"), ("Never mind", "fb_cancel")])
+    if s == "describe2":
+        return _turn([R(["What's still not working? Tell me what you tried and what you see.", "Can you tell me what exactly is going wrong now?"])])
+    if s == "describe":
         return _turn([R(ASK["describe"])])
     if s == "helpful":
         return _turn([R(ASK["helpful"])], [("Yes", "yes"), ("Not really", "no"), ("Partly", "partly")])
@@ -351,9 +474,11 @@ def _step_prompt(f):
     return _first(typ)
 
 
-def reply(c, text, choice, extra_kb=None):
+def reply(c, text, choice, extra_kb=None, theme=None):
     """c: the chat. Returns a turn dict: say (list of strings), chips, step, data (merged), action (None|ticket|timeout|close_noise), flow bookkeeping applied by caller."""
     f = c["flow"]
+    set_context(CTX["ADD"], theme if theme else f.get("theme", "normal"))
+    f["theme"] = THEME[0]
     text = str(text or "").strip()
     typ = f["typ"]
     d = f["data"]
@@ -398,7 +523,25 @@ def _on_input(f, typ, d, text, is_choice, choice, extra_kb):
     low = _n(text) if not is_choice else ""
     kind = None if is_choice else _kind(low)
 
+    if typ == "feedback":
+        if is_choice and choice in ("fb_new", "fb_info", "fb_yes", "fb_no", "fb_send", "fb_cancel"):
+            return _STEPS.get(step if choice not in ("fb_new", "fb_info") else "fb_start", _s_default)(f, typ, d, text, is_choice, choice, kind, extra_kb)
+        if kind in ("done", "bye", "thanks", "cancel") or (is_choice and choice == "done"):
+            kind = kind or "done"
+            f["step"] = "fb_start" if kind == "cancel" else f["step"]
+            return _turn([T("thanks", ["Anytime! This chat stays open, come back whenever you have an idea. 💙"]) if kind != "cancel" else "Okay, cancelled. Nothing was sent."], _first("feedback")["chips"] if kind == "cancel" or step == "fb_start" else _step_prompt(f)["chips"], f["step"])
+        if kind == "human":
+            return _again(f, "This chat is just for suggestions. If you need a person, start a **General help** chat from the Support page and I'll open a ticket.")
     # buttons shared by several steps
+    if is_choice and choice == "drop":
+        d["task_done"] = True
+        d.pop("task", None), d.pop("task_label", None)
+        pk = d.pop("parked", None)
+        item = kb_by_title(pk) if pk else None
+        if item:
+            return _answer_turn(f, d, item, "Okay, moving on. About your other question:")
+        f["step"] = "more"
+        return _turn(["Okay, let's drop that one."] + [T("more", ASK["more"])], [("Yes, something else", "more"), ENDC], "more")
     if is_choice and choice in ("done",):
         f["good"] += 0
         return _turn([R(["Glad I could help! Take care. 💙", "You're welcome, have a great day!", "Anytime! Come back if you need anything."])], step="end", action="done")
@@ -422,6 +565,16 @@ def _on_input(f, typ, d, text, is_choice, choice, extra_kb):
         return _turn([R(["No problem, I've stopped here. You can start a new chat any time.", "Okay, cancelled. Nothing was sent to anyone."])], [("Start over", "more"), ENDC], "more")
     if kind == "human" and step not in ("offer", "confirm"):
         return _human_request(f, typ, d)
+
+    # ---- stay on the original task until it has been handled (or dropped)
+    if (not is_choice and kind is None and typ in ("help",) and step in ("helpful", "describe2", "offer", "confirm", "narrow", "leaf")
+            and d.get("task") and not d.get("task_done") and meaningful(text)):
+        item = find_answer(text, extra_kb)
+        if item and item["title"] not in (d.get("task"), d.get("answered")):
+            d["parked"] = item["title"]
+            base = _step_prompt(f)
+            return _turn([R(["Let's finish **%s** first, then I'll get to that.", "One thing at a time: let's wrap up **%s** first, and I'll come back to your other question.", "Good question! I've noted it. First let's sort out **%s**."]) % d.get("task_label", "this"), *base["say"]],
+                         list(base["chips"]) + [("Drop this and move on", "drop")], step)
 
     # ---- per step logic
     return _STEPS.get(step, _s_default)(f, typ, d, text, is_choice, choice, kind, extra_kb)
@@ -469,12 +622,18 @@ def _s_topic(f, typ, d, text, is_choice, choice, kind, extra_kb):
     return _s_describe(f, typ, d, text, False, None, kind, extra_kb)
 
 
-def _answer_turn(f, d, item):
+def _answer_turn(f, d, item, lead=None):
     f["good"] += 1
     f["step"] = "helpful"
     d["answered"] = item["title"]
-    return _turn([R(["Here's what I found:", "This should help:", "Good question. Here you go:", "I think this is what you need:"]), item["answer"], R(ASK["helpful"])],
-                 [("Yes", "yes"), ("Not really", "no"), ("Partly", "partly")], "helpful")
+    if not d.get("task"):
+        d["task"], d["task_done"] = item["title"], False
+    d["task_label"] = d.get("task_label") or item["title"].replace("Command ", "/")
+    hist = d.setdefault("_hist", [])
+    hist.append(item["title"])
+    del hist[:-8]
+    first = lead or T("found", ["Here's what I found:", "This should help:", "Good question. Here you go:", "I think this is what you need:"])
+    return _turn([first, _ans(item), R(ASK["helpful"])], [("Yes", "yes"), ("Not really", "no"), ("Partly", "partly")], "helpful")
 
 
 def _s_leaf(f, typ, d, text, is_choice, choice, kind, extra_kb):
@@ -510,8 +669,33 @@ def _s_describe(f, typ, d, text, is_choice, choice, kind, extra_kb):
         return _again(f, R(["Could you give me a little more detail? A full sentence helps me a lot.", "I need a bit more to go on. What exactly is happening?"]))
     f["good"] += 1
     _add_sum(d, "Problem", text)
+    d["task"], d["task_done"], d["task_label"] = d.get("task") or "your problem", False, text[:60]
+    if not d.get("narrowed") and typ == "help":
+        d["narrowed"] = True
+        f["step"] = "narrow"
+        return _turn([R(["Thanks for explaining."]) , R(ASK["narrow"])], [c for c in TOPICS if c[1] != "other"] + [("None of these", "none")], "narrow")
     f["step"] = "offer"
     return _turn([R(["Thanks for explaining. I don't have a ready answer for that one.", "Thanks, that helps. I don't have an answer for that in my notes.", "Got it. That's one I can't solve on my own."]), R(ASK["offer"])], [OPEN_T, NO_T], "offer")
+
+
+def _s_narrow(f, typ, d, text, is_choice, choice, kind, extra_kb):
+    topics = {v for _, v in TOPICS if v != "other"}
+    if not is_choice:
+        choice = _chip_match(text, [c for c in TOPICS if c[1] != "other"])
+        if choice is None:
+            item = find_answer(text, extra_kb) if meaningful(text) else None
+            if item:
+                return _answer_turn(f, d, item)
+            if kind == "no":
+                choice = "none"
+    if choice in topics:
+        d["topic"] = choice
+        f["step"] = "leaf"
+        return _turn([R(ASK["leaf"])], LEAFS[choice], "leaf")
+    if choice == "none" or kind in ("no", "unsure"):
+        f["step"] = "offer"
+        return _turn([R(["Okay, thanks for trying. I can't solve this one on my own."]), R(ASK["offer"])], [OPEN_T, NO_T], "offer")
+    return _again(f, "Please pick the closest one, or choose None of these.")
 
 
 def _s_helpful(f, typ, d, text, is_choice, choice, kind, extra_kb):
@@ -529,8 +713,14 @@ def _s_helpful(f, typ, d, text, is_choice, choice, kind, extra_kb):
         else:
             return _again(f, R(["Sorry, I wasn't sure what you meant. Did that answer help?", "Just checking: was that useful?", "Quick check: did that solve it?"]))
     if yn == "yes":
+        d["task_done"] = True
+        d.pop("task", None), d.pop("task_label", None)
+        pk = d.pop("parked", None)
+        item = kb_by_title(pk) if pk else None
+        if item:
+            return _answer_turn(f, d, item, "Glad that worked! Now, about your other question:")
         f["step"] = "more"
-        return _turn([R(["Great, I'm glad that helped! 🎉", "Awesome, happy that worked!", "Perfect, glad we got that sorted.", "Nice! Glad I could help."]), R(ASK["more"])], [("Yes, something else", "more"), ENDC], "more")
+        return _turn([T("ok", ["Great, I'm glad that helped! 🎉", "Awesome, happy that worked!", "Perfect, glad we got that sorted.", "Nice! Glad I could help."]), T("more", ASK["more"])], [("Yes, something else", "more"), ENDC], "more")
     f["step"] = "describe2"
     return _turn([R(["Sorry about that. Let me try again.", "Thanks for telling me. Let's dig a little deeper.", "No worries, let's look closer."]), R(["What's still not working? Tell me what you tried and what you see.", "Can you tell me what exactly is going wrong now?"])], step="describe2")
 
@@ -713,8 +903,78 @@ def _p_what_done(f, typ, d, text, is_choice, choice, kind, extra_kb):
     return r
 
 
+
+# ---- feedback chat (one permanent chat, never closed)
+def _fb_start_turn(say_list):
+    t = _first("feedback")
+    return _turn(say_list + [], t["chips"], "fb_start")
+
+
+def _fb_take(f, d, text, extra_kb):
+    d["fb"] = text[:600]
+    item = find_answer(text, extra_kb)
+    if item:
+        d["fb_item"] = item["title"]
+        f["step"] = "fb_check"
+        return _turn([R(["Good news: Rex may already do this! Here's how:", "I think Rex already has something like that. This should help:", "Rex might already cover this one. Take a look:"]), _ans(item), "Is that what you were after?"],
+                     [("Yes, that covers it", "fb_yes"), ("No, something different", "fb_no")], "fb_check")
+    f["step"] = "fb_confirm"
+    return _turn(["Thanks! That sounds new to me.", "Here's your suggestion:\n\n> " + d["fb"][:500] + "\n\nShall I send it to the team?"], [("Send it", "fb_send"), ("Write it again", "fb_new"), ("Never mind", "fb_cancel")], "fb_confirm")
+
+
+def _s_fb_start(f, typ, d, text, is_choice, choice, kind, extra_kb):
+    if choice == "fb_info":
+        return _turn(["I first check whether Rex already does what you're asking for, and show you how if so. If it's new, your idea is saved on the team's feedback list where the owners can read it. You can send as many as you like."], [("New suggestion", "fb_new")], "fb_start")
+    if choice == "fb_new" or (not is_choice and kind == "yes"):
+        d.clear()
+        f["step"] = "fb_text"
+        return _turn([R(["Great, I'm listening!", "Go ahead, what's your idea?", "Sure! What would you like to see?"]), "Tell me your suggestion in a sentence or two."], step="fb_text")
+    if not is_choice and meaningful(text):
+        d.clear()
+        return _fb_take(f, d, text, extra_kb)
+    return _again(f)
+
+
+def _s_fb_text(f, typ, d, text, is_choice, choice, kind, extra_kb):
+    if is_choice:
+        return _again(f)
+    if not meaningful(text):
+        return _again(f, "Could you add a little more detail? A full sentence helps the team a lot.")
+    return _fb_take(f, d, text, extra_kb)
+
+
+def _s_fb_check(f, typ, d, text, is_choice, choice, kind, extra_kb):
+    yn = {"fb_yes": "yes", "fb_no": "no"}.get(choice) or _yesno(kind, text, is_choice, choice)
+    if yn == "yes":
+        d.clear()
+        f["step"] = "fb_start"
+        return _turn([R(["Great, glad it's already there! 🎉", "Perfect, enjoy it!"]), "Got another idea?"], _first("feedback")["chips"], "fb_start")
+    if yn == "no":
+        f["step"] = "fb_confirm"
+        return _turn(["Okay, then it's worth telling the team.", "Here's your suggestion:\n\n> " + str(d.get("fb", ""))[:500] + "\n\nShall I send it?"], [("Send it", "fb_send"), ("Write it again", "fb_new"), ("Never mind", "fb_cancel")], "fb_confirm")
+    return _again(f, "Please tell me if that covers it.")
+
+
+def _s_fb_confirm(f, typ, d, text, is_choice, choice, kind, extra_kb):
+    yn = {"fb_send": "yes", "fb_cancel": "no"}.get(choice) or _yesno(kind, text, is_choice, choice)
+    if choice == "fb_new":
+        return _s_fb_start(f, typ, d, "", True, "fb_new", None, extra_kb)
+    if yn == "yes":
+        body = d.get("fb", "")
+        d.clear()
+        f["step"] = "fb_start"
+        return _turn([R(["Thank you! Your suggestion is with the team. 💙", "Sent! The team will see it on their feedback list. Thank you!", "Got it, passed on to the team. Thanks for helping make Rex better!"]), "Got another idea?"],
+                     _first("feedback")["chips"], "fb_start", action="feedback", text=body, item=d.get("fb_item", ""))
+    if yn == "no":
+        d.clear()
+        f["step"] = "fb_start"
+        return _turn(["No problem, I haven't sent it."], _first("feedback")["chips"], "fb_start")
+    return _again(f)
+
+
 _STEPS = {
-    "topic": _s_topic, "start": _s_topic, "leaf": _s_leaf, "describe": _s_describe, "describe2": _s_describe2, "helpful": _s_helpful, "more": _s_more, "offer": _s_offer, "confirm": _s_confirm,
+    "topic": _s_topic, "start": _s_topic, "leaf": _s_leaf, "narrow": _s_narrow,
+    "fb_start": lambda *a: _s_fb_start(*a), "fb_text": lambda *a: _s_fb_text(*a), "fb_check": lambda *a: _s_fb_check(*a), "fb_confirm": lambda *a: _s_fb_confirm(*a), "describe": _s_describe, "describe2": _s_describe2, "helpful": _s_helpful, "more": _s_more, "offer": _s_offer, "confirm": _s_confirm,
     "b_kind": _s_b_kind, "b_where": _text_step("b_what", "Where"), "b_what": _s_b_what, "b_freq": _s_b_freq,
     "p_issue": _s_p_issue, "p_server": _text_step("p_what", "Server", 1), "p_what": _p_what_done,
     "a_what": _s_a_what, "a_scope": _s_a_scope, "a_where": _text_step("a_when", "Server", 1), "a_when": _text_step("a_why", "When / reason"), "a_why": _text_step("a_extra", "Why it should be lifted", 4),

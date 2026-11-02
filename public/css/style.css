@@ -753,3 +753,17 @@ body.pg-nonav .pg-wrap { padding-top: 24px; }
 @media (max-width: 760px) { .doc { grid-template-columns: 1fr; gap: 14px; } .doc-toggle { display: inline-flex; justify-self: start; } .doc-side { display: none; position: static; max-height: none; } .doc-side.open { display: grid; }
   .doc-main { font-size: 15.5px; } .doc-nav { grid-template-columns: 1fr; } .doc-nav a:last-child { text-align: left; } }
 @media print { .nav, #footer, .doc-side, .doc-toc, .doc-toggle, .doc-nav, .doc-foot { display: none !important; } .doc { display: block; } .doc-main { max-width: none; color: #000; } }
+
+/* owner support list: chat names on top, preview below, collapses to one bar once a chat is open */
+.sup-top { position: relative; z-index: 1; }
+.sup-row2 { display: block; width: 100%; text-align: left; padding: 10px 12px; background: var(--plate); border: 1px solid var(--edge); border-radius: 12px; color: var(--ice); font: inherit; cursor: pointer; min-width: 0; }
+.sup-row2.sel { border-color: var(--accent, #2ee6b6); }
+.sup-row2-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; margin-bottom: 4px; }
+.sup-row2 .ell, .sup-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sup-pick { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; background: var(--plate); border: 1px solid var(--edge); border-radius: 12px; color: var(--ice); font: inherit; cursor: pointer; text-align: left; }
+.sup-pick-name { font-weight: 700; flex: 1; }
+.fb-item { border: 1px solid var(--edge); border-radius: 12px; padding: 10px 12px; background: var(--plate); }
+.fb-item summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; min-width: 0; }
+.fb-sum { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-body { margin-top: 10px; }
+.sup-link { color: var(--accent, #2ee6b6); text-decoration: underline; }
