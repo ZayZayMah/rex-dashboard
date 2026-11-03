@@ -274,7 +274,7 @@ def sanitize_guild(raw):
         if isinstance(c, dict) and isinstance(c.get("id"), str) and SNOWFLAKE.match(c["id"]) \
                 and c.get("type") in ("text", "announcement", "category", "voice"):
             channels.append({"id": c["id"], "name": clean_str(c.get("name"), 100), "type": c["type"],
-                             "parent": clean_str(c.get("parent"), 100)})
+                             "parent": clean_str(c.get("parent"), 100), "public": bool(c.get("public"))})
     for r in (raw.get("roles") or [])[:250]:
         if isinstance(r, dict) and isinstance(r.get("id"), str) and SNOWFLAKE.match(r["id"]):
             roles.append({"id": r["id"], "name": clean_str(r.get("name"), 100),
@@ -284,7 +284,7 @@ def sanitize_guild(raw):
     if isinstance(raw.get("values"), dict):
         for key, value in list(raw["values"].items())[:200]:
             if isinstance(key, str) and len(key) <= 80:
-                values[key] = value if key in ("premium_ticket_panels", "ticket_panels") and isinstance(value, list) and len(json.dumps(value)) < 200000 else sanitize_value(value)
+                values[key] = value if key in ("premium_ticket_panels", "ticket_panels", "application_forms") and isinstance(value, list) and len(json.dumps(value)) < 200000 else sanitize_value(value)
     return {
         "id": gid,
         "name": clean_str(raw.get("name"), 100) or "Unknown server",

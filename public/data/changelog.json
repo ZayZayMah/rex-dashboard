@@ -1,0 +1,18 @@
+{
+ "build": "b51a6d63b9",
+ "entries": [
+  {
+   "id": "w-2026-11-03-apps",
+   "date": "2026-11-03",
+   "title": "Applications page",
+   "big": false,
+   "items": [
+    "📝 The old Staff Applications tab is now **Applications**: build forms, set DM or website mode, questions with minimum length, accept/deny messages and a role.",
+    "🎟️ Ticket panels can use an **Application form** button.",
+    "⚠️ Picking a public channel as the mod log asks for confirmation.",
+    "🤖 New settings: Stop new bots on join (Protection & AutoMod).",
+    "💬 The support helper now knows all of this and far more."
+   ]
+  }
+ ]
+}

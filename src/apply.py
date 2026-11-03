@@ -17,7 +17,11 @@ SNOW = re.compile(r"^\d{15,25}$")
 
 
 def _find(guild, tid):
+    """Returns a normalised form {label, mode, apply:{...}} for a website application, or None."""
     vals = (guild or {}).get("values") or {}
+    for f in vals.get("application_forms") or []:
+        if isinstance(f, dict) and f.get("id") == tid and f.get("mode") == "web":
+            return {"id": tid, "label": f.get("name") or f.get("what"), "apply": f}
     pools = [vals.get("premium_ticket_panels") or []]
     for p in vals.get("ticket_panels") or []:
         if isinstance(p, dict):
@@ -72,7 +76,7 @@ async def route(w, request, url, path, method, session):
         rec = await _record(w, gid, tid, uid)
         if method == "GET":
             return jr({"guild": guild["name"], "title": t.get("label"), "what": a.get("what") or t.get("label"),
-                       "questions": [{"q": q["q"], "kind": q.get("kind", "short"), "required": bool(q.get("required", True)), "options": q.get("options") or []} for q in a.get("questions", [])],
+                       "questions": [{"q": q["q"], "kind": q.get("kind", "short"), "required": bool(q.get("required", True)), "options": q.get("options") or [], "min_len": int(q.get("min_len") or 0)} for q in a.get("questions", [])],
                        "blocked": _limit(t, rec)})
         if method == "POST":
             w.check_mutation(request, url, session)
@@ -95,6 +99,9 @@ async def route(w, request, url, path, method, session):
                         raise err(400, "bad_request", f"Pick one of the options for: {q['q'][:60]}")
                 if not v and q.get("required", True):
                     raise err(400, "bad_request", f"Please answer: {q['q'][:80]}")
+                lo = int(q.get("min_len") or 0)
+                if v and lo and len(v) < lo and q.get("kind") != "choice":
+                    raise err(400, "bad_request", f"Your answer must be at least {lo} characters (yours is {len(v)}): {q['q'][:60]}")
                 if len(v) > (4000 if q.get("kind") == "long" else 500):
                     raise err(400, "bad_request", f"Your answer is too long: {q['q'][:60]}")
                 answers.append(v)

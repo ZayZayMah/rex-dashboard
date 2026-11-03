@@ -83,9 +83,9 @@ E("Ticket panels", "second ticket panel|make a second panel|new ticket panel|mak
 E("Ticket closing", "close ticket|delete ticket|ticket transcript|transcript|reopen ticket|dm on close|ticket closed dm|ticket must be closed|cant delete ticket|how to delete a ticket|ticket logs|transcripts|save ticket chat|ticket history",
   "A ticket has to be **closed** before it can be deleted, and the transcript is saved when it closes (view them in the [Dashboard](/dashboard) → Transcripts; kept 30 days, or until deleted on Ultra). Turn on *DM the ticket owner when it closes* in **Tickets** if you want them told.",
   "Press **Close** in the ticket, then **Delete** once it's closed. Closing saves the transcript and logs it in your mod log. There's also a setting to DM the person when their ticket closes.")
-E("Apply tickets", "applications|apply ticket|staff applications|application form|apply button|job application|how do i make an application|application questions|apply via dm|apply on website|application cooldown|application limit|recruitment|staff apps|mod applications|form builder|application results",
-  "Premium servers can add an **Application** button to a ticket panel (Dashboard → **Tickets**). Pick *Application (in DMs)* or *(on the website)*, write the questions (short, long or multiple choice, required or optional) and set how many applications each person can send and the cooldown. Results go to your mod log.",
-  "Applications are a Premium feature: add a button with the Application action. In DMs Rex asks the questions one by one (`STOP` cancels); on the website people sign in and fill one page, and staff get a link in the mod log.")
+E("Apply tickets", "apply ticket|job application|apply via dm|apply on website|recruitment|staff apps|form builder|application results",
+  "Applications now have their own page: [Dashboard](/dashboard) → **Applications**. Build a form (questions, minimum lengths, limits, accept/deny messages, a role), choose DMs or website, then add it to any ticket panel with the **Application form** button (Premium). Results go to your mod log with Reply / Accept / Deny buttons.",
+  "Build forms on the **Applications** page, then attach one to a ticket panel (Tickets → button → *Application form*). In DMs Rex asks the questions one by one (`STOP` cancels); on the website people sign in and fill one page, and staff get a link in the mod log.")
 E("Ban appeals", "ban appeal|appeal ban|how to appeal|appeal button|i was banned|banned from server|unban me|appeal a ban|appeals|appeal not working|appeal limit|ban appeal dm|appeal ticket|appeal blacklist|i got banned",
   "When Rex bans someone it DMs them an **Appeal Ban** button. The appeal opens in the server that banned them and the staff there answer it: replies are passed back to the DM. Each server sets the appeal limit and cooldown in the [Dashboard](/dashboard) → **Ban Appeals**. The Rex team can't lift a ban in a server it doesn't run.",
   "If you were banned from a server by Rex, press **Appeal Ban** in the DM it sent. Your messages go to that server's staff, and theirs come back to you. Only that server's staff can lift it. Rex blacklist appeals are different: I can open a ticket for those.")
@@ -216,3 +216,11 @@ _cmd_entries()
 for it in _OLD:
     if not any(k["title"] == it["title"] for k in KB):
         KB.append({"title": it["title"], "keys": list(it["keys"]), "answer": [it["answer"]] if isinstance(it["answer"], str) else list(it["answer"]), "tags": []})
+
+
+# generated per-setting / per-page topics + the newer hand-written ones
+import json as _json  # noqa: E402
+import helper_kb2  # noqa: E402,F401  (hand-written first so they win ties)
+from helper_settings import TOPICS as _GEN_TOPICS  # noqa: E402
+for _t in _GEN_TOPICS:
+    KB.append({"title": _t["title"], "keys": list(_t["keys"]), "answer": list(_t["answer"]), "tags": list(_t.get("tags", []))})

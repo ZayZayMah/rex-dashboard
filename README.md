@@ -93,3 +93,9 @@ Pages are plain files in `public/data/docs/*.md` (first lines: `title:`, `update
 - **Feedback chat**: a single permanent chat per person (not part of the 3-chat limit, cannot be closed or deleted). Unmatched suggestions are stored in KV `fb:items` and shown in Owner > Support > Feedback (mark new/planned/done, delete).
 - **Owner support layout**: chat names on top with a preview underneath; the list collapses to one bar once a chat is open.
 - Dashboard (Tickets): "More ticket panels" (Free 1 extra with a single button, Premium 4, Ultra up to 24), Apply buttons with a question builder, "DM the ticket owner when it closes", and a panel picker in "Publish the ticket panel".
+
+## Release notes: Applications, bot gate, helper
+- `application_forms` setting (kind `applyforms`) + ticket button action `apply` with `form_id`.
+- `/apply/<guild>/<form id>` works for forms in website mode (also old embedded apply buttons).
+- `public/data/changelog.json` feeds the bot's update log. Edit its `entries` for each release and run `python3 tools/stamp_build.py` before deploying.
+- Helper: `tools/build_helper_settings.py` regenerates `src/helper_settings.py` from `tools/data/settings.json` (export from the bot's `SECTIONS`). Hand-written topics live in `src/helper_kb.py` and `src/helper_kb2.py`.

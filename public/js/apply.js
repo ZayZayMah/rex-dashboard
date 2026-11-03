@@ -23,7 +23,7 @@
   document.title = f.title + ' - Rex';
   if (f.blocked) return root.replaceChildren(stateScreen('You can\'t apply right now', f.blocked));
   const inputs = f.questions.map((q) => {
-    if (q.kind === 'long') return h('textarea', { rows: 5, maxlength: 4000, required: q.required ? true : null });
+    if (q.kind === 'long') return h('textarea', { rows: 5, maxlength: 4000, placeholder: q.min_len ? 'At least ' + q.min_len + ' characters' : '', required: q.required ? true : null });
     if (q.kind === 'choice') return h('select', { required: q.required ? true : null }, h('option', { value: '' }, 'Choose one'), q.options.map((o) => h('option', { value: o }, o)));
     return h('input', { type: 'text', maxlength: 500, required: q.required ? true : null });
   });
@@ -31,6 +31,7 @@
   const form = h('form', { class: 'stack', novalidate: true, onsubmit: async (e) => {
     e.preventDefault();
     for (let i = 0; i < f.questions.length; i++) if (f.questions[i].required && !inputs[i].value.trim()) { toast('Please answer: ' + f.questions[i].q.slice(0, 60), 'bad'); inputs[i].focus(); return; }
+    for (let i = 0; i < f.questions.length; i++) { const q = f.questions[i], v = inputs[i].value.trim(); if (q.min_len && v && q.kind !== 'choice' && v.length < q.min_len) { toast('Must be at least ' + q.min_len + ' characters (' + v.length + ' so far): ' + q.q.slice(0, 50), 'bad'); inputs[i].focus(); return; } }
     btn.disabled = true;
     try {
       await api('/api/apply/' + parts[1] + '/' + parts[2], { method: 'POST', body: { answers: inputs.map((x) => x.value) } });

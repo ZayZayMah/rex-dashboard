@@ -10,7 +10,7 @@ import re
 SNOWFLAKE = re.compile(r"^\d{15,25}$")
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 TIERS = ("free", "premium", "priority", "ultra")
-TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes", "ticketpanels", "roles", "builder", "card", "channels", "levelroles")
+TYPES = ("toggle", "text", "url", "number", "select", "channel", "role", "user", "tags", "tickettypes", "ticketpanels", "applyforms", "roles", "builder", "card", "channels", "levelroles")
 TEXT_KINDS = ("text", "announcement")
 
 
@@ -207,10 +207,12 @@ def validate_value(spec, raw, guild):
             if name.lower() in seen:
                 raise ValueError(f"{label}: two buttons are called '{name}'.")
             seen.add(name.lower())
-            action = item.get("action") if item.get("action") in ("form", "channel", "dm", "link", "apply_dm", "apply_web") else "form"
+            action = item.get("action") if item.get("action") in ("form", "channel", "dm", "link", "apply", "apply_dm", "apply_web") else "form"
             qs = [clean_str(q, 45) for q in (item.get("questions") or []) if isinstance(q, str)]
             mo = item.get("max_open", 1)
             extra = {"id": clean_str(item.get("id"), 12)}
+            if action == "apply":
+                extra["form_id"] = clean_str(item.get("form_id"), 12)
             if action in ("apply_dm", "apply_web") and isinstance(item.get("apply"), dict) and len(json.dumps(item["apply"], separators=(",", ":"))) <= 30000:
                 extra["apply"] = item["apply"]
             out.append({**extra, "label": name, "emoji": clean_str(item.get("emoji"), 8), "action": action,
@@ -219,6 +221,13 @@ def validate_value(spec, raw, guild):
                         "max_open": mo if isinstance(mo, int) and not isinstance(mo, bool) and 1 <= mo <= 5 else 1,
                         "questions": [q for q in qs if q][:5]})
         return out
+
+    if kind == "applyforms":
+        if not isinstance(raw, list) or len(raw) > int(spec.get("maxitems", 25)) or any(not isinstance(p, dict) for p in raw):
+            raise ValueError(f"{label}: too many forms or invalid data.")
+        if len(json.dumps(raw, separators=(",", ":"))) > 200000:
+            raise ValueError(f"{label} is too large.")
+        return raw  # the bot checks every field
 
     if kind == "ticketpanels":
         if not isinstance(raw, list) or len(raw) > int(spec.get("maxitems", 24)) or any(not isinstance(p, dict) for p in raw):

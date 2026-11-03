@@ -1,0 +1,1290 @@
+[
+ {
+  "id": "welcome",
+  "name": "Welcome & Leave",
+  "description": "Greet new members, say goodbye, and hand out a starter role.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "welcome_channel",
+    "label": "Welcome channel",
+    "type": "channel",
+    "description": "Where welcome messages are posted.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "welcome_message",
+    "label": "Welcome message",
+    "type": "text",
+    "description": "Use {user} for the member and {server} for the server name.",
+    "tier": "free",
+    "group": "",
+    "default": "Welcome {user} to {server}!",
+    "options": []
+   },
+   {
+    "key": "welcome_embed",
+    "label": "Send as embed",
+    "type": "toggle",
+    "description": "Wrap the welcome message in a styled embed.",
+    "tier": "premium",
+    "group": "Welcome style",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "welcome_embed_title",
+    "label": "Embed title",
+    "type": "text",
+    "description": "Title of the welcome embed. Empty = no title.",
+    "tier": "premium",
+    "group": "Welcome style",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "welcome_embed_color",
+    "label": "Embed colour",
+    "type": "text",
+    "description": "Hex colour such as #2EE6B6. Empty = default.",
+    "tier": "premium",
+    "group": "Welcome style",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "welcome_image",
+    "label": "Embed image",
+    "type": "url",
+    "description": "Large image shown in the welcome embed. Empty = no image.",
+    "tier": "ultra",
+    "group": "Welcome style",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "welcome_card",
+    "label": "Welcome image card",
+    "type": "card",
+    "description": "Design a picture with the member's avatar and name that is posted with the welcome. Leave it empty to turn it off.",
+    "tier": "ultra",
+    "group": "Welcome style",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "leave_channel",
+    "label": "Leave channel",
+    "type": "channel",
+    "description": "Where goodbye messages are posted.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "leave_message",
+    "label": "Leave message",
+    "type": "text",
+    "description": "Use {user} and {server}.",
+    "tier": "free",
+    "group": "",
+    "default": "{user} has left the server.",
+    "options": []
+   },
+   {
+    "key": "leave_embed",
+    "label": "Send as embed",
+    "type": "toggle",
+    "description": "Wrap the goodbye message in a styled embed.",
+    "tier": "premium",
+    "group": "Goodbye style",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "leave_embed_title",
+    "label": "Embed title",
+    "type": "text",
+    "description": "Title of the goodbye embed. Empty = no title.",
+    "tier": "premium",
+    "group": "Goodbye style",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "leave_embed_color",
+    "label": "Embed colour",
+    "type": "text",
+    "description": "Hex colour such as #E0526B. Empty = default.",
+    "tier": "premium",
+    "group": "Goodbye style",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "leave_image",
+    "label": "Embed image",
+    "type": "url",
+    "description": "Large image shown in the goodbye embed. Empty = no image.",
+    "tier": "ultra",
+    "group": "Goodbye style",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "leave_card",
+    "label": "Goodbye image card",
+    "type": "card",
+    "description": "Design a picture posted with the goodbye message. Leave it empty to turn it off.",
+    "tier": "ultra",
+    "group": "Goodbye style",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "autorole",
+    "label": "Auto role",
+    "type": "role",
+    "description": "Role given to every new member.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "modapps",
+  "name": "Applications",
+  "description": "Build application forms (staff, partners, anything), run them in DMs or on the website, and review them with Reply / Accept / Deny buttons.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "application_forms",
+    "label": "Application forms",
+    "type": "applyforms",
+    "description": "Each form has its own questions, limits and accept/deny messages. Run it in DMs or on the website, then add it to any ticket panel as an Apply button (Tickets page) or post it from here. Applications arrive in your Mod log channel with Reply / Accept / Deny buttons.",
+    "tier": "free",
+    "group": "Application forms",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "mod_applications_enabled",
+    "label": "Applications open",
+    "type": "toggle",
+    "description": "Turn staff applications on or off.",
+    "tier": "free",
+    "group": "",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "mod_application_channel",
+    "label": "Review channel",
+    "type": "channel",
+    "description": "Where new applications arrive for staff.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "mod_application_panel_channel",
+    "label": "Apply panel channel",
+    "type": "channel",
+    "description": "Where the apply button is posted.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "mod_application_role",
+    "label": "Role given when accepted",
+    "type": "role",
+    "description": "Given to people whose application is accepted.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "logs",
+  "name": "Logs & Reports",
+  "description": "Where moderation actions and member reports are sent.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "modlog",
+    "label": "Mod log channel",
+    "type": "channel",
+    "description": "Bans, kicks, timeouts, warnings and other actions are logged here.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "report_channel",
+    "label": "Report channel",
+    "type": "channel",
+    "description": "Where /report submissions arrive for staff.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "tickets",
+  "name": "Tickets",
+  "description": "Private support tickets for your members.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "ticket_category",
+    "label": "Ticket category",
+    "type": "channel",
+    "description": "New tickets are created inside this category.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ticket_panel_title",
+    "label": "Panel title",
+    "type": "text",
+    "description": "Title shown on the ticket panel (applies to panels you post from now on).",
+    "tier": "free",
+    "group": "",
+    "default": "Support Tickets",
+    "options": []
+   },
+   {
+    "key": "ticket_panel_description",
+    "label": "Panel description",
+    "type": "text",
+    "description": "Text shown on the ticket panel.",
+    "tier": "free",
+    "group": "",
+    "default": "Click a button below to create a private ticket.",
+    "options": []
+   },
+   {
+    "key": "ticket_panel_embed_color",
+    "label": "Panel colour",
+    "type": "text",
+    "description": "Hex colour of the ticket panel, such as #5865F2. Empty = default.",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "premium_ticket_panels",
+    "label": "Ticket types",
+    "type": "tickettypes",
+    "description": "Up to 5 buttons on one panel. Each button can open a form, open a ticket straight away, run the ticket in DMs, open a link, or start an application (in DMs or on the website), with its own category and staff role. Post the panel with /ticket (Post Ticket Panel or Quick Setup).",
+    "tier": "premium",
+    "group": "Ticket types",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "ticket_panels",
+    "label": "More ticket panels",
+    "type": "ticketpanels",
+    "description": "Extra panels you can post in other channels. Free: 1 extra panel with a single button (2 panels in total). Premium: up to 4 extra panels (5 in total) with up to 5 buttons each. Ultra: unlimited. Post any panel from the Dashboard (Post a panel) or with /ticket.",
+    "tier": "free",
+    "group": "More panels",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "ticket_dm_on_close",
+    "label": "DM the ticket owner when it closes",
+    "type": "toggle",
+    "description": "Rex sends the person a DM when staff close their ticket or appeal.",
+    "tier": "free",
+    "group": "When a ticket closes",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ticket_welcome_message",
+    "label": "Ticket welcome message",
+    "type": "text",
+    "description": "First message in every new ticket. Use {user}.",
+    "tier": "free",
+    "group": "",
+    "default": "Welcome {user}! Tell us how we can help.",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "appeals",
+  "name": "Ban Appeals",
+  "description": "Control how people banned by Rex in this server can appeal.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "appeals_enabled",
+    "label": "Allow ban appeals",
+    "type": "toggle",
+    "description": "Banned members get an Appeal button in their DM.",
+    "tier": "free",
+    "group": "",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "appeal_category",
+    "label": "Appeal category",
+    "type": "channel",
+    "description": "Appeal tickets are created in this category of YOUR server. Empty = the ticket category.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.appeal",
+    "label": "Appeal staff role",
+    "type": "role",
+    "description": "Who can see and answer appeals. Empty = the ticket staff role.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "appeal_limit",
+    "label": "Appeals per person",
+    "type": "number",
+    "description": "How many appeal tickets one person may open for a ban from this server. 0 = unlimited.",
+    "tier": "free",
+    "group": "",
+    "default": 3,
+    "options": []
+   },
+   {
+    "key": "appeal_cooldown_hours",
+    "label": "Hours between appeals",
+    "type": "number",
+    "description": "Minimum wait before the same person can appeal again. 0 = no wait.",
+    "tier": "free",
+    "group": "",
+    "default": 24,
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "commands",
+  "name": "Custom Commands",
+  "description": "Build your own slash commands from blocks: messages, embeds, roles, channels, forms, tickets and more.",
+  "tier": "premium",
+  "settings": [
+   {
+    "key": "builder_commands",
+    "label": "Your commands",
+    "type": "builder",
+    "description": "Custom slash commands for this server. Premium: 5. Ultra and Priority: unlimited.",
+    "tier": "premium",
+    "group": "",
+    "default": null,
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "events",
+  "name": "Events",
+  "description": "Run blocks automatically when someone joins, leaves, gets banned, opens a ticket, changes a setting, or on a timer.",
+  "tier": "premium",
+  "settings": [
+   {
+    "key": "builder_events",
+    "label": "Your events",
+    "type": "builder",
+    "description": "Automations for this server. Premium: 5. Ultra and Priority: unlimited.",
+    "tier": "premium",
+    "group": "",
+    "default": null,
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "levels",
+  "name": "Levels & XP",
+  "description": "Rewards for chatting and talking in voice.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "levels_enabled",
+    "label": "Levels enabled",
+    "type": "toggle",
+    "description": "Turn the whole level system on or off.",
+    "tier": "free",
+    "group": "",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "level_channel",
+    "label": "Level-up channel",
+    "type": "channel",
+    "description": "Where level-up messages go. Empty = the channel the member is chatting in.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "xp_per_message",
+    "label": "XP per message",
+    "type": "number",
+    "description": "How much XP each message earns.",
+    "tier": "free",
+    "group": "",
+    "default": 5,
+    "options": []
+   },
+   {
+    "key": "xp_per_level",
+    "label": "XP per level",
+    "type": "number",
+    "description": "XP needed for each level.",
+    "tier": "free",
+    "group": "",
+    "default": 350,
+    "options": []
+   },
+   {
+    "key": "xp_cooldown",
+    "label": "Message XP cooldown (seconds)",
+    "type": "number",
+    "description": "Minimum seconds between XP gains. 0 = none.",
+    "tier": "free",
+    "group": "",
+    "default": 0,
+    "options": []
+   },
+   {
+    "key": "voice_xp",
+    "label": "Voice XP per interval",
+    "type": "number",
+    "description": "XP for time spent in voice. 0 turns voice XP off.",
+    "tier": "free",
+    "group": "",
+    "default": 0,
+    "options": []
+   },
+   {
+    "key": "level_roles",
+    "label": "Level rewards",
+    "type": "levelroles",
+    "description": "Give a role when someone reaches a level.",
+    "tier": "free",
+    "group": "",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "voice_xp_cooldown",
+    "label": "Voice XP interval (seconds)",
+    "type": "number",
+    "description": "How often voice XP is given while someone is in a voice channel.",
+    "tier": "free",
+    "group": "",
+    "default": 60,
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "community",
+  "name": "Community & Games",
+  "description": "Economy, games and the counting channel.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "economy_enabled",
+    "label": "Economy enabled",
+    "type": "toggle",
+    "description": "Coins, daily rewards and work.",
+    "tier": "free",
+    "group": "",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "games_enabled",
+    "label": "Games enabled",
+    "type": "toggle",
+    "description": "Rex games that earn coins.",
+    "tier": "free",
+    "group": "",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "publisher_channels",
+    "label": "Auto-publish channels",
+    "type": "channels",
+    "description": "Announcement channels where Rex publishes every message so followers get it.",
+    "tier": "free",
+    "group": "",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "counting_channel",
+    "label": "Counting channel",
+    "type": "channel",
+    "description": "Members count upwards together. Changing the channel restarts the count at 0.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "verification",
+  "name": "Verification",
+  "description": "Role given to members who verify. Pick the role and channel, then publish the verify panel from here.",
+  "tier": "free",
+  "settings": [
+   {
+    "key": "verification_channel",
+    "label": "Verification channel",
+    "type": "channel",
+    "description": "Where the verify panel is posted.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "verification_role",
+    "label": "Verified role",
+    "type": "role",
+    "description": "Given when a member completes verification.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "roblox_verification_channel",
+    "label": "Roblox verification channel",
+    "type": "channel",
+    "description": "Where the Roblox verify panel is posted.",
+    "tier": "free",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "roblox_verification_role",
+    "label": "Roblox verified role",
+    "type": "role",
+    "description": "Given when a member links Roblox (Premium).",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "protection",
+  "name": "Protection & AutoMod",
+  "description": "Spam, link, swear and alt-account protection.",
+  "tier": "premium",
+  "settings": [
+   {
+    "key": "anti_spam",
+    "label": "Anti-spam",
+    "type": "toggle",
+    "description": "Acts on 5 messages in 5 seconds or 3 identical messages.",
+    "tier": "premium",
+    "group": "Message protection",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "anti_link",
+    "label": "Anti-link",
+    "type": "toggle",
+    "description": "Removes links from regular members.",
+    "tier": "premium",
+    "group": "Message protection",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "allowed_links",
+    "label": "Allowed domains",
+    "type": "tags",
+    "description": "Domains that are still allowed. Separate with commas, e.g. youtube.com, discord.com",
+    "tier": "premium",
+    "group": "Message protection",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "anti_swear",
+    "label": "Anti-swear",
+    "type": "toggle",
+    "description": "Removes messages containing blocked words.",
+    "tier": "premium",
+    "group": "Message protection",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "automod",
+    "label": "AutoMod",
+    "type": "toggle",
+    "description": "Rex's automatic moderation.",
+    "tier": "premium",
+    "group": "Message protection",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "automod_words",
+    "label": "Extra blocked words",
+    "type": "tags",
+    "description": "Added to Rex's built-in list. Separate with commas.",
+    "tier": "premium",
+    "group": "Message protection",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "anti_ping_enabled",
+    "label": "Anti-ping on",
+    "type": "toggle",
+    "description": "Turn all anti-ping protection on or off without losing your list.",
+    "tier": "premium",
+    "group": "Anti-ping",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "anti_ping_user",
+    "label": "Anti-ping protected user",
+    "type": "user",
+    "description": "Pings of this member are blocked. Paste their Discord user ID, or leave empty.",
+    "tier": "premium",
+    "group": "Anti-ping",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "anti_ping_roles",
+    "label": "Anti-ping protected roles",
+    "type": "roles",
+    "description": "Members with these roles are protected from being pinged. Pick as many as you need.",
+    "tier": "premium",
+    "group": "Anti-ping",
+    "default": null,
+    "options": []
+   },
+   {
+    "key": "anti_ping_message",
+    "label": "Message shown to the sender",
+    "type": "text",
+    "description": "Shown by Discord when a message is blocked. Empty = default.",
+    "tier": "premium",
+    "group": "Anti-ping",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "anti_ping_timeout",
+    "label": "Timeout for pingers (minutes)",
+    "type": "number",
+    "description": "Time out whoever pings a protected member. 0 = just block.",
+    "tier": "premium",
+    "group": "Anti-ping",
+    "default": 0,
+    "options": []
+   },
+   {
+    "key": "automod_native",
+    "label": "Use Discord AutoMod",
+    "type": "toggle",
+    "description": "Rex builds real Discord AutoMod rules for anti-ping, blocked words, links and swearing, so blocked messages never appear to anyone.",
+    "tier": "premium",
+    "group": "Discord AutoMod",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "anti_alt",
+    "label": "Anti-alt",
+    "type": "toggle",
+    "description": "Reports very new accounts when they join.",
+    "tier": "premium",
+    "group": "Join protection",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "anti_alt_channel",
+    "label": "Anti-alt alert channel",
+    "type": "channel",
+    "description": "Where young accounts are reported.",
+    "tier": "premium",
+    "group": "Join protection",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "bot_gate_enabled",
+    "label": "Stop new bots on join",
+    "type": "toggle",
+    "description": "Part of the anti-raid system. When a bot joins, Rex strips its roles and permissions and asks a moderator to Allow (give everything back) or Remove (kick) it. Off by default.",
+    "tier": "premium",
+    "group": "Stop new bots",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "bot_gate_channel",
+    "label": "Approval channel",
+    "type": "channel",
+    "description": "Where the Allow / Remove request is posted. Empty = your Mod log channel.",
+    "tier": "premium",
+    "group": "Stop new bots",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "bot_gate_role",
+    "label": "Role that can approve bots",
+    "type": "role",
+    "description": "People with this role can press Allow / Remove. Moderators, admins and the owner always can.",
+    "tier": "premium",
+    "group": "Stop new bots",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "bot_gate_user",
+    "label": "Person who can approve bots",
+    "type": "user",
+    "description": "Discord user ID of one extra person who can approve or remove bots.",
+    "tier": "premium",
+    "group": "Stop new bots",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "honeypot_channel",
+    "label": "Honeypot channel",
+    "type": "channel",
+    "description": "A channel normal members should never talk in.",
+    "tier": "premium",
+    "group": "Honeypot",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "honeypot_action",
+    "label": "Honeypot action",
+    "type": "select",
+    "description": "What happens to anyone who posts in the honeypot.",
+    "tier": "premium",
+    "group": "Honeypot",
+    "default": "warn",
+    "options": [
+     "Warn",
+     "Timeout",
+     "Ban"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "staff",
+  "name": "Staff Roles",
+  "description": "Which roles Rex treats as staff.",
+  "tier": "premium",
+  "settings": [
+   {
+    "key": "staff_roles.admin",
+    "label": "Admin",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.owner",
+    "label": "Owner",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.moderator",
+    "label": "Moderator",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.ticket",
+    "label": "Ticket staff",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.trial_ticket",
+    "label": "Trial ticket staff",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.normal_ticket",
+    "label": "Normal ticket staff",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.overall_staff",
+    "label": "Overall staff",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "staff_roles.member",
+    "label": "Member",
+    "type": "role",
+    "description": "",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "analytics",
+  "name": "Analytics",
+  "description": "Advanced analytics and reports.",
+  "tier": "premium",
+  "settings": [
+   {
+    "key": "stats_channel",
+    "label": "Analytics channel",
+    "type": "channel",
+    "description": "Where Rex sends analytics and activity reports.",
+    "tier": "premium",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "priority",
+  "name": "Priority",
+  "description": "Case management, raid and spam preferences for Priority servers.",
+  "tier": "priority",
+  "settings": [
+   {
+    "key": "priority_raid_threshold",
+    "label": "Raid join threshold",
+    "type": "number",
+    "description": "Joins that count as a raid.",
+    "tier": "priority",
+    "group": "",
+    "default": 8,
+    "options": []
+   },
+   {
+    "key": "priority_account_age_days",
+    "label": "New account age (days)",
+    "type": "number",
+    "description": "Accounts younger than this are flagged.",
+    "tier": "priority",
+    "group": "",
+    "default": 7,
+    "options": []
+   },
+   {
+    "key": "priority_spam_mode",
+    "label": "Spam response",
+    "type": "select",
+    "description": "Preferred response to spam.",
+    "tier": "priority",
+    "group": "",
+    "default": "off",
+    "options": [
+     "Off",
+     "Delete",
+     "Timeout"
+    ]
+   },
+   {
+    "key": "priority_appeal_message",
+    "label": "Appeal instructions",
+    "type": "text",
+    "description": "Shown to banned members who ask how to appeal. Empty = default text.",
+    "tier": "priority",
+    "group": "",
+    "default": "",
+    "options": []
+   }
+  ]
+ },
+ {
+  "id": "ultra",
+  "name": "Security",
+  "description": "Raid alerts, deep logging and optional automatic enforcement.",
+  "tier": "ultra",
+  "settings": [
+   {
+    "key": "ultra_appeal_template",
+    "label": "Appeal prompt",
+    "type": "text",
+    "description": "What people are asked when they appeal a moderation action. Empty = default.",
+    "tier": "ultra",
+    "group": "",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_log_channel",
+    "label": "Alert channel",
+    "type": "channel",
+    "description": "Ultra alerts go here. Empty = your mod log channel.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_options.raid_alerts",
+    "label": "Join-burst alerts",
+    "type": "toggle",
+    "description": "Alert when many members join quickly.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "ultra_options.raid_threshold",
+    "label": "Burst size (joins)",
+    "type": "select",
+    "description": "Joins that trigger an alert.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": 8,
+    "options": [
+     "5",
+     "8",
+     "12",
+     "15"
+    ]
+   },
+   {
+    "key": "ultra_options.raid_window_seconds",
+    "label": "Burst window (seconds)",
+    "type": "select",
+    "description": "Time window for the burst.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": 20,
+    "options": [
+     "10",
+     "20",
+     "30",
+     "60"
+    ]
+   },
+   {
+    "key": "ultra_options.new_account_alerts",
+    "label": "New-account alerts",
+    "type": "toggle",
+    "description": "Alert when very new accounts join.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "ultra_options.new_account_age_days",
+    "label": "New-account cutoff (days)",
+    "type": "select",
+    "description": "Accounts younger than this are flagged.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": 7,
+    "options": [
+     "1",
+     "3",
+     "7",
+     "14",
+     "30"
+    ]
+   },
+   {
+    "key": "ultra_options.mention_spam_alerts",
+    "label": "Mention-flood alerts",
+    "type": "toggle",
+    "description": "Alert on mass mentions.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "ultra_options.invite_link_alerts",
+    "label": "Invite-link alerts",
+    "type": "toggle",
+    "description": "Alert when invite links are posted.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "ultra_options.repeated_message_alerts",
+    "label": "Repeated-message alerts",
+    "type": "toggle",
+    "description": "Alert on copy-paste spam.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "ultra_options.channel_delete_alerts",
+    "label": "Channel-deletion alerts",
+    "type": "toggle",
+    "description": "Alert when channels are deleted.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "ultra_options.role_delete_alerts",
+    "label": "Role-deletion alerts",
+    "type": "toggle",
+    "description": "Alert when roles are deleted.",
+    "tier": "ultra",
+    "group": "Alerts",
+    "default": true,
+    "options": []
+   },
+   {
+    "key": "ultra_options.message_edit_logs",
+    "label": "Log message edits",
+    "type": "toggle",
+    "description": "Keep a log of edited messages.",
+    "tier": "ultra",
+    "group": "Logging",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ultra_options.message_delete_logs",
+    "label": "Log message deletions",
+    "type": "toggle",
+    "description": "Keep a log of deleted messages.",
+    "tier": "ultra",
+    "group": "Logging",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ultra_options.delete_invite_links",
+    "label": "Delete invite links",
+    "type": "toggle",
+    "description": "Automatically remove invite links.",
+    "tier": "ultra",
+    "group": "Automatic enforcement",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ultra_options.delete_mention_floods",
+    "label": "Delete mass-mention messages",
+    "type": "toggle",
+    "description": "Automatically remove mention floods.",
+    "tier": "ultra",
+    "group": "Automatic enforcement",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ultra_options.delete_repeated_messages",
+    "label": "Delete repeated spam",
+    "type": "toggle",
+    "description": "Automatically remove repeated messages.",
+    "tier": "ultra",
+    "group": "Automatic enforcement",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ultra_options.timeout_mention_floods",
+    "label": "Timeout mention flooders",
+    "type": "toggle",
+    "description": "Time out members who flood mentions.",
+    "tier": "ultra",
+    "group": "Automatic enforcement",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ultra_options.timeout_repeated_messages",
+    "label": "Timeout repeat spammers",
+    "type": "toggle",
+    "description": "Time out members who repeat messages.",
+    "tier": "ultra",
+    "group": "Automatic enforcement",
+    "default": false,
+    "options": []
+   },
+   {
+    "key": "ultra_options.ultra_timeout_seconds",
+    "label": "Timeout length",
+    "type": "select",
+    "description": "How long automatic timeouts last.",
+    "tier": "ultra",
+    "group": "Automatic enforcement",
+    "default": 300,
+    "options": [
+     "1 minute",
+     "5 minutes",
+     "10 minutes",
+     "30 minutes",
+     "1 hour"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "branding",
+  "name": "Bot Branding",
+  "description": "Change how Rex looks in this server only: its name, picture, banner and bio, and the colour of its embeds.",
+  "tier": "ultra",
+  "settings": [
+   {
+    "key": "ultra_branding.embed_color",
+    "label": "Embed colour",
+    "type": "text",
+    "description": "Replaces Rex's default blue on its embeds in this server. Example #E0526B. Empty = default.",
+    "tier": "premium",
+    "group": "Colours",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_branding.nickname",
+    "label": "Bot name",
+    "type": "text",
+    "description": "Rex's display name in this server. Empty = default.",
+    "tier": "ultra",
+    "group": "Profile",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_branding.avatar_url",
+    "label": "Bot picture",
+    "type": "url",
+    "description": "Upload a picture or paste a link. Shown as Rex's avatar in this server only.",
+    "tier": "ultra",
+    "group": "Profile",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_branding.banner_url",
+    "label": "Bot banner",
+    "type": "url",
+    "description": "Wide image on Rex's profile card in this server.",
+    "tier": "ultra",
+    "group": "Profile",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_branding.bio",
+    "label": "Bot bio",
+    "type": "text",
+    "description": "The About me text on Rex's profile in this server (190 characters).",
+    "tier": "ultra",
+    "group": "Profile",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_branding.status_text",
+    "label": "Footer text",
+    "type": "text",
+    "description": "Shown in the footer of Ultra panels and logs.",
+    "tier": "ultra",
+    "group": "Embeds",
+    "default": "",
+    "options": []
+   },
+   {
+    "key": "ultra_branding.image_url",
+    "label": "Embed image",
+    "type": "url",
+    "description": "Image used in Ultra embeds. Upload one or paste a link.",
+    "tier": "ultra",
+    "group": "Embeds",
+    "default": "",
+    "options": []
+   }
+  ]
+ }
+]
