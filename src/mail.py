@@ -119,11 +119,11 @@ def _box(raw, W, default):
             "w": _num(raw.get("w"), 8, W, default["w"]), "h": _num(raw.get("h"), 4, 3000, default["h"])}
 
 
-def clean_design(raw):
+def clean_design(raw, maxw=700, maxels=MAX_ELS):
     """Validate and normalise a design coming from the browser. Raises ValueError with a friendly message."""
     if not isinstance(raw, dict):
         raise ValueError("The email design is not valid.")
-    W = _num(raw.get("w"), 480, 700, 600)
+    W = _num(raw.get("w"), 480, maxw, 600)
     out = {"v": 1, "w": W, "bg": _col(raw.get("bg"), "#eef2f9"), "page": _col(raw.get("page"), "#ffffff"), "font": raw.get("font") if raw.get("font") in FONTS else "arial",
            "color": _col(raw.get("color"), "#33415c"), "link": _col(raw.get("link"), "#2f8cff"), "outer": _num(raw.get("outer"), 0, 60, 24),
            "radius": _num(raw.get("radius"), 0, 40, 16), "pre": _txt(raw.get("pre"), 160), "mh": _num(raw.get("mh"), 200, 4000, 600), "dh": _num(raw.get("dh"), 200, 6000, 600),
@@ -132,8 +132,8 @@ def clean_design(raw):
     els = raw.get("els")
     if not isinstance(els, list):
         raise ValueError("The email has no elements.")
-    if len(els) > MAX_ELS:
-        raise ValueError(f"An email can have up to {MAX_ELS} elements.")
+    if len(els) > maxels:
+        raise ValueError(f"A design can have up to {maxels} elements.")
     seen = set()
     for i, e in enumerate(els):
         if not isinstance(e, dict) or e.get("t") not in TYPES:
@@ -448,9 +448,13 @@ def _element(node, cx):
     if t == "rect":
         kids = ""
         if node["kids"]:
+            def _shift(n, dx, dy):
+                n["b"]["x"] -= dx
+                n["b"]["y"] -= dy
+                for g in n["kids"]:
+                    _shift(g, dx, dy)
             for k in node["kids"]:
-                k["b"]["x"] -= b["x"] + bw
-                k["b"]["y"] -= b["y"] + bw
+                _shift(k, b["x"] + bw, b["y"] + bw)
             kids = _rows(node["kids"], w - 2 * bw, cx)
         img = _fill_url(e.get("img"), cx.v)
         imgcss = f"background-image:url('{html.escape(img)}');background-size:cover;background-position:center;" if img and URL.match(img) else ""

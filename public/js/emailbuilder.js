@@ -417,7 +417,7 @@
       F('Page colour (optional panel behind everything)', colorIn(() => D.page, (v) => edit(() => { D.page = v; }, true), { fallback: '#0c1729', none: 'theme' })),
       F('Default text colour', colorIn(() => D.color, (v) => edit(() => { D.color = v; }, true), { none: 'theme' })), F('Link colour', colorIn(() => D.link, (v) => edit(() => { D.link = v; }, true), { none: 'theme' })),
       F('Default font', sel2(meta.fonts.map((f) => [f.id, f.label]), () => D.font, (v) => edit(() => { D.font = v; }))),
-      F('Width (px)', numIn(() => D.w, (v) => edit(() => { D.w = v; }), 320, 1100, 10)), F('Corner roundness (page panel)', numIn(() => D.radius, (v) => edit(() => { D.radius = v; }, true), 0, 40)),
+      F('Width (px)', numIn(() => D.w, (v) => edit(() => { D.w = v; }), 320, 1600, 10)), F('Stretch to fill wide screens', sel2([['', 'No, keep this width'], ['1', 'Yes, scale up to fill the screen']], () => (D.fill ? '1' : ''), (v) => edit(() => { D.fill = v === '1'; }))), F('Corner roundness (page panel)', numIn(() => D.radius, (v) => edit(() => { D.radius = v; }, true), 0, 40)),
       h('p', { class: 'eb-help' }, 'Links: use https://… or a page on this site like /premium. Pages open from their link only, so nothing on the site points to them.'));
     return wr;
   }

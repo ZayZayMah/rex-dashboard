@@ -51,7 +51,7 @@
     // scale the whole page down on narrow screens so the layout never breaks
     const fit = mk('div', { class: 'pg-fit' }); fit.style.cssText = 'width:100%;overflow:hidden;position:relative;';
     const holder = mk('div', {}); holder.style.cssText = 'margin:0 auto;position:relative;'; holder.append(canvas); fit.append(holder);
-    const apply = () => { const avail = fit.clientWidth || W, k = Math.min(1, avail / W); canvas.style.transform = 'scale(' + k + ')'; holder.style.width = Math.round(W * k) + 'px'; holder.style.height = Math.round(H * k) + 'px'; };
+    const apply = () => { const avail = fit.clientWidth || W, k = D.fill ? Math.min(2.2, avail / W) : Math.min(1, avail / W); canvas.style.transform = 'scale(' + k + ')'; holder.style.width = Math.round(W * k) + 'px'; holder.style.height = Math.round(H * k) + 'px'; };
     if (window.ResizeObserver) new ResizeObserver(apply).observe(fit); else window.addEventListener('resize', apply);
     setTimeout(apply, 0);
     return fit;

@@ -1181,7 +1181,8 @@ def _page_design(raw):
                 if k == "url" and v.startswith("/") and not v.startswith("//") and len(v) < 200 and " " not in v:
                     e[k] = _SITE + v
     keep = {k: str(raw.get(k) or "") for k in ("bg", "page", "color", "link")}
-    d = _mail.clean_design(raw)
+    d = _mail.clean_design(raw, 1600, 140)
+    d["fill"] = bool(raw.get("fill"))
     for k, v in keep.items():
         d[k] = v if re.match(r"^#[0-9a-fA-F]{6}$", v) else ""
     for e in d["els"]:
@@ -1195,7 +1196,7 @@ def _page_design(raw):
                 e["bg"] = ""
             if not str(r.get("color") or "").strip():
                 e["color"] = ""
-    d["w"] = max(320, min(1100, H("clean_int")(raw.get("w"), 800)))
+    d["w"] = max(320, min(1600, H("clean_int")(raw.get("w"), 800)))
     return d
 
 

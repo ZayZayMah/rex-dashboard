@@ -10,6 +10,7 @@
   const fonts = Object.fromEntries((page.fonts || []).map((f) => [f.id, f]));
   const gf = (page.fonts || []).filter((f) => f.gf).map((f) => 'family=' + f.gf).join('&');
   if (gf) document.head.append(h('link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?' + gf + '&display=swap' }));
+  if (page.design.fill) document.body.classList.add('wide');
   const mobile = window.matchMedia('(max-width: 700px)').matches;
-  app.replaceChildren(h('div', { class: 'pg-wrap' }, window.rexRenderPage(page.design, { fonts, mobile })));
+  app.replaceChildren(h('div', { class: 'pg-wrap' + (page.design.fill ? ' pg-fill' : '') }, window.rexRenderPage(page.design, { fonts, mobile })));
 })();
