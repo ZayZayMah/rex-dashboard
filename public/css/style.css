@@ -767,3 +767,14 @@ body.pg-nonav .pg-wrap { padding-top: 24px; }
 .fb-sum { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fb-body { margin-top: 10px; }
 .sup-link { color: var(--accent, #2ee6b6); text-decoration: underline; }
+
+/* ---- /updates */
+.upd { gap: 16px; }
+.upd-card { padding: 20px 22px; border-radius: 14px; background: var(--plate); border: 1px solid var(--edge); }
+.upd-card.big { border-color: var(--arc); }
+.upd-card h3 { margin: 6px 0 6px; }
+.upd-meta { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--steel); }
+.upd-badge { padding: 2px 9px; border-radius: 99px; background: var(--arc); color: #04101d; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.upd-sum { margin: 0 0 8px; }
+.upd-list { margin: 6px 0 12px; padding-left: 20px; display: grid; gap: 4px; }
+.upd-fixday h4 { margin: 14px 0 2px; color: var(--steel); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }

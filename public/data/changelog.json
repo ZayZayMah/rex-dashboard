@@ -1,17 +1,45 @@
 {
- "build": "b51a6d63b9",
+ "build": "aa3371a713",
  "entries": [
   {
    "id": "w-2026-11-03-apps",
    "date": "2026-11-03",
+   "kind": "website",
+   "topic": "applications",
    "title": "Applications page",
-   "big": false,
+   "summary": "Build application forms with questions, limits and accept/deny messages, then add them to any ticket panel.",
    "items": [
     "📝 The old Staff Applications tab is now **Applications**: build forms, set DM or website mode, questions with minimum length, accept/deny messages and a role.",
     "🎟️ Ticket panels can use an **Application form** button.",
     "⚠️ Picking a public channel as the mod log asks for confirmation.",
-    "🤖 New settings: Stop new bots on join (Protection & AutoMod).",
-    "💬 The support helper now knows all of this and far more."
+    "🤖 New setting: Stop new bots on join (Protection & AutoMod)."
+   ],
+   "fixes": [
+    "Website applications now enforce the minimum answer length."
+   ]
+  },
+  {
+   "id": "w-2026-11-03-updates",
+   "date": "2026-11-03",
+   "kind": "website",
+   "topic": "updates",
+   "title": "Updates page",
+   "summary": "A new /updates page lists every new feature (kept for 30 days) with links to details, and the small fixes at the bottom.",
+   "items": [
+    "📰 New **/updates** page, linked in the menu and footer.",
+    "🧩 Premade, editable Updates and Bug fixes pages and emails live in their own group in the page and email builders."
+   ]
+  },
+  {
+   "id": "w-2026-11-03-helper",
+   "date": "2026-11-03",
+   "kind": "website",
+   "topic": "support",
+   "title": "Smarter support helper",
+   "summary": "The support helper now knows every dashboard setting and page, the new applications and the bot gate.",
+   "items": [
+    "💬 About 6,000 more answers covering every setting and page.",
+    "🔎 Better matching for questions about applications and bots."
    ]
   }
  ]

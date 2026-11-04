@@ -15,7 +15,7 @@
   if (B.support && B.support !== 'off') TABS.push(['support', 'Support']);
   if (B.email && B.email !== 'off') TABS.push(['email', 'Email']);
   if (B.pages && B.pages !== 'off') TABS.push(['pages', 'Pages']);
-  TABS.push(['audit', 'Audit'], ['health', 'Health']);
+  TABS.push(['updates', 'Updates'], ['audit', 'Audit'], ['health', 'Health']);
   let tab = (location.hash || '#tools').slice(1);
   if (!TABS.some((t) => t[0] === tab)) tab = 'tools';
   const nav = h('div', { class: 'tabs', role: 'tablist' });
@@ -212,17 +212,66 @@
     async function copy(n) { try { await navigator.clipboard.writeText(link(n)); toast('Link copied', 'good'); } catch (e) { rexDialog.alert('Page link', link(n)); } }
     async function load() {
       let d; try { d = await api('/api/owner/pages'); } catch (e) { list.replaceChildren(h('p', { class: 'muted' }, e.message)); return; }
-      list.replaceChildren(...(d.items.length ? d.items.map((p) => h('div', { class: 'sup-row' },
-        h('div', { style: 'text-align:left;min-width:0' }, h('b', {}, p.title), h('div', { class: 'muted small ell' }, '/pages/' + p.name + (p.hide_nav ? ' · no navigation bar' : ''))),
+      const pkey = (p) => p.premade === 'features' ? 'page_features' : p.premade === 'fixes' ? 'page_fixes' : 'topic:' + p.name;
+      const row = (p) => h('div', { class: 'sup-row' },
+        h('div', { style: 'text-align:left;min-width:0' }, h('b', {}, p.title), h('div', { class: 'muted small ell' }, '/pages/' + p.name + (p.hide_nav ? ' · no navigation bar' : '') + (p.premade ? (p.detached ? ' · edited by hand, no longer updates itself' : ' · updates itself') : ''))),
         h('div', { style: 'margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end' },
+          p.premade && p.detached ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await api('/api/owner/updates/follow', { method: 'POST', body: { item: pkey(p) } }); toast('This page follows the updates again', 'good'); load(); } catch (e) { toast(e.message, 'bad'); } } }, 'Follow updates again') : null,
           h('button', { class: 'btn ghost sm', type: 'button', onclick: () => copy(p.name) }, 'Copy link'),
           h('a', { class: 'btn ghost sm', href: '/pages/' + p.name, target: '_blank', rel: 'noopener' }, 'Open'),
           h('a', { class: 'btn sm', href: '/page-builder?name=' + p.name }, 'Edit'),
-          h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (!(await rexDialog.confirm('Remove /pages/' + p.name + '?', 'The link will stop working straight away.', 'Remove', true))) return; try { await api('/api/owner/pages/' + p.name, { method: 'DELETE' }); toast('Removed', 'good'); load(); } catch (e) { toast(e.message, 'bad'); } } }, 'Remove')))) : [h('p', { class: 'muted' }, 'No pages yet. Create one to get started.')]));
+          p.premade ? null : h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (!(await rexDialog.confirm('Remove /pages/' + p.name + '?', 'The link will stop working straight away.', 'Remove', true))) return; try { await api('/api/owner/pages/' + p.name, { method: 'DELETE' }); toast('Removed', 'good'); load(); } catch (e) { toast(e.message, 'bad'); } } }, 'Remove')));
+      const prem = d.items.filter((p) => p.premade), mine = d.items.filter((p) => !p.premade);
+      list.replaceChildren(
+        ...(prem.length ? [h('h4', { style: 'margin:6px 0 2px' }, 'Premade'), h('p', { class: 'muted small', style: 'margin:0 0 6px' }, 'Made by Rex from your updates. They change by themselves after each update until you edit one by hand.'), ...prem.map(row)] : []),
+        h('h4', { style: 'margin:14px 0 2px' }, 'Your pages'),
+        ...(mine.length ? mine.map(row) : [h('p', { class: 'muted' }, 'No pages of your own yet. Create one to get started.')]));
     }
     wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' }, h('h3', { style: 'margin:0' }, 'Custom pages'), h('a', { class: 'btn', href: '/page-builder' }, 'New page')),
       h('p', { class: 'muted small' }, 'Pages open from their link only (nothing on the site points to them). They follow the website theme and are built in the same editor as emails.'), list));
     await load();
+    return wrap;
+  }
+
+  /* ---- updates */
+  async function updatesTab() {
+    const d = await api('/api/owner/updates');
+    const wrap = h('div', { class: 'stack' });
+    const feats = d.features.map((f) => Object.assign({}, f, { items: (f.items || []).slice() })), fixes = d.fixes.map((x) => Object.assign({}, x));
+    let intro = d.intro || '';
+    const today = new Date().toISOString().slice(0, 10);
+    const lf = (label, el) => h('label', { class: 'tt-f' }, h('span', {}, label), el);
+    const fl = h('div', { class: 'stack' }), xl = h('div', { class: 'stack' });
+    const paint = () => {
+      fl.replaceChildren(...feats.map((f, i) => h('div', { class: 'well' },
+        h('div', { class: 'row-2' }, lf('Title', h('input', { type: 'text', maxlength: 90, value: f.title, oninput: (e) => { f.title = e.target.value; } })), lf('Date', h('input', { type: 'date', value: f.date, oninput: (e) => { f.date = e.target.value; } }))),
+        h('div', { class: 'row-2' }, lf('Page it links to (/pages/…)', h('input', { type: 'text', maxlength: 40, value: f.topic || '', placeholder: 'e.g. support', oninput: (e) => { f.topic = e.target.value.trim().toLowerCase(); } })),
+          lf('Short summary (empty = first bullet)', h('input', { type: 'text', maxlength: 220, value: f.summary || '', oninput: (e) => { f.summary = e.target.value; } }))),
+        lf('Details, one bullet per line', h('textarea', { rows: 4, oninput: (e) => { f.items = e.target.value.split('\n').filter((x) => x.trim()); } }, f.items.join('\n'))),
+        h('div', { style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap' },
+          h('label', {}, h('input', { type: 'checkbox', checked: !!f.pinned, onchange: (e) => { f.pinned = e.target.checked; } }), ' Keep after 30 days'),
+          h('label', {}, h('input', { type: 'checkbox', checked: !!f.big, onchange: (e) => { f.big = e.target.checked; } }), ' Big update'),
+          h('button', { class: 'btn danger sm', type: 'button', onclick: () => { feats.splice(i, 1); paint(); } }, 'Remove')))),
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { feats.unshift({ id: 'm' + Date.now().toString(36), title: '', date: today, topic: '', summary: '', items: [], pinned: false, big: false }); paint(); } }, 'Add a feature'));
+      xl.replaceChildren(...fixes.map((x, i) => h('div', { class: 'row-2', style: 'align-items:end' },
+        lf('Fix', h('input', { type: 'text', maxlength: 240, value: x.text, oninput: (e) => { x.text = e.target.value; } })),
+        h('div', { style: 'display:flex;gap:8px' }, h('input', { type: 'date', value: x.date, oninput: (e) => { x.date = e.target.value; } }), h('button', { class: 'btn danger sm', type: 'button', onclick: () => { fixes.splice(i, 1); paint(); } }, 'Remove')))),
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { fixes.unshift({ id: '', text: '', date: today }); paint(); } }, 'Add a fix'));
+    };
+    paint();
+    const state = (k) => d.detached[k] ? 'edited by hand' : 'updates itself';
+    wrap.append(
+      h('div', { class: 'frame' }, h('h3', {}, 'Updates'),
+        h('p', { class: 'muted small' }, 'This feeds the public /updates page and the premade pages and emails. New entries arrive by themselves each time you update the bot or the website, and are kept for ' + d.keep_days + ' days. Edit anything here and press Save.'),
+        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('a', { class: 'btn ghost sm', href: '/updates', target: '_blank', rel: 'noopener' }, 'Open /updates'), h('a', { class: 'btn ghost sm', href: '/pages/updates', target: '_blank', rel: 'noopener' }, 'Premade page'), h('a', { class: 'btn ghost sm', href: '/pages/bug-fixes', target: '_blank', rel: 'noopener' }, 'Bug fixes page')),
+        h('ul', { class: 'upd-list' },
+          h('li', {}, 'Updates page (premade): ' + state('page_features')), h('li', {}, 'Bug fixes page (premade): ' + state('page_fixes')),
+          h('li', {}, 'Updates email (premade): ' + state('email_features')), h('li', {}, 'Bug fixes email (premade): ' + state('email_fixes'))),
+        h('p', { class: 'muted small' }, 'Edit the premade pages in the Pages tab and the premade emails in the Email tab, under "Premade".')),
+      h('div', { class: 'frame' }, lf('Line under the heading (empty = default)', h('input', { type: 'text', maxlength: 300, value: intro, oninput: (e) => { intro = e.target.value; } }))),
+      h('div', { class: 'frame' }, h('h3', {}, 'New features'), fl),
+      h('div', { class: 'frame' }, h('h3', {}, 'Minor updates and bug fixes'), xl),
+      h('button', { class: 'btn', type: 'button', onclick: async (ev) => { ev.currentTarget.disabled = true; try { await api('/api/owner/updates', { method: 'PUT', body: { intro, features: feats.filter((f) => f.title.trim()), fixes: fixes.filter((x) => x.text.trim()) } }); toast('Saved. Pages and emails are refreshed.', 'good'); } catch (e) { toast(e.message, 'bad'); } ev.currentTarget.disabled = false; } }, 'Save'));
     return wrap;
   }
 
@@ -259,10 +308,19 @@
     const rule = (t) => t.send_when === 'manual' ? 'Sent by you, by hand' : (st.events[t.send_when] || t.send_when) + ' → ' + label(t.send_to) + ' → ' + (st.send_at[t.when_at || 'now'] || '').toLowerCase() + (t.when_at === 'time' ? ' ' + t.at_time + ' UTC' : '') + (t.enabled ? '' : ' (paused)');
     const statusLine = h('div', { class: 'hint', role: 'status' });
     const rows = h('div', { class: 'stack' });
-    const paintRows = () => rows.replaceChildren(...(st.templates.length ? st.templates.map((t) => h('div', { class: 'well mail-row' },
-      h('div', {}, h('b', {}, t.name), h('div', { class: 'muted small' }, t.subject), h('div', { class: 'small' }, rule(t)), h('div', { class: 'muted small' }, 'Sent ' + (t.sent || 0) + ' time' + (t.sent === 1 ? '' : 's') + ' · edited ' + timeAgo(t.updated))),
-      h('div', { class: 'mail-acts' }, h('a', { class: 'btn sm', href: '/email-builder?id=' + t.id }, 'Edit'), h('button', { class: 'btn ghost sm', type: 'button', onclick: () => sendDialog(t) }, 'Send…'),
-        h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Delete "' + t.name + '"?', 'This cannot be undone. Automatic sending of it stops.', 'Delete', true)) { await api('/api/owner/email/templates/' + t.id, { method: 'DELETE', body: {} }); st.templates = st.templates.filter((x) => x.id !== t.id); paintRows(); } } }, 'Delete')))) : [h('p', { class: 'muted' }, 'No saved emails yet. Press "New email" to design one.')]));
+    const mrow = (t) => h('div', { class: 'well mail-row' },
+      h('div', {}, h('b', {}, t.name), h('div', { class: 'muted small' }, t.subject), h('div', { class: 'small' }, rule(t)), h('div', { class: 'muted small' }, 'Sent ' + (t.sent || 0) + ' time' + (t.sent === 1 ? '' : 's') + ' · edited ' + timeAgo(t.updated) + (t.premade ? (t.detached ? ' · edited by hand, no longer updates itself' : ' · updates itself') : ''))),
+      h('div', { class: 'mail-acts' },
+        t.premade && t.detached ? h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await api('/api/owner/updates/follow', { method: 'POST', body: { item: 'email_' + t.premade } }); toast('This email follows the updates again', 'good'); location.reload(); } catch (e) { toast(e.message, 'bad'); } } }, 'Follow updates again') : null,
+        h('a', { class: 'btn sm', href: '/email-builder?id=' + t.id }, 'Edit'), h('button', { class: 'btn ghost sm', type: 'button', onclick: () => sendDialog(t) }, 'Send…'),
+        t.premade ? null : h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Delete "' + t.name + '"?', 'This cannot be undone. Automatic sending of it stops.', 'Delete', true)) { await api('/api/owner/email/templates/' + t.id, { method: 'DELETE', body: {} }); st.templates = st.templates.filter((x) => x.id !== t.id); paintRows(); } } }, 'Delete')));
+    const paintRows = () => {
+      const prem = st.templates.filter((t) => t.premade), mine = st.templates.filter((t) => !t.premade);
+      rows.replaceChildren(
+        ...(prem.length ? [h('h4', { style: 'margin:4px 0 2px' }, 'Premade'), h('p', { class: 'muted small', style: 'margin:0 0 6px' }, 'Made by Rex from your updates, with the page links inside. They change by themselves after each update until you edit one by hand. You choose when to send them.'), ...prem.map(mrow)] : []),
+        h('h4', { style: 'margin:14px 0 2px' }, 'Your emails'),
+        ...(mine.length ? mine.map(mrow) : [h('p', { class: 'muted' }, 'No saved emails of your own yet. Press "New email" to design one.')]));
+    };
     async function sendDialog(t) {
       const aud = h('select', {}, [...st.tags.map((x) => ['tag:' + x.id, 'People with tag: ' + x.name + ' (' + (A.tags[x.id] || 0) + ')']), ['everyone', 'Everyone except people who unsubscribed (' + A.everyone + ')'], ['essential', 'Essential: everyone, even if they unsubscribed (' + (A.everyone + A.off) + ')'], ['people', 'Specific people (Discord IDs or email addresses)'], ['test', 'A test to one address']].map(([v, n]) => h('option', { value: v }, n)));
       if (t.send_to && [...aud.options].some((op) => op.value === t.send_to)) aud.value = t.send_to;
@@ -433,6 +491,7 @@
       else if (tab === 'support') node = await supportTab();
       else if (tab === 'email') node = await emailTab();
       else if (tab === 'pages') node = await pagesTab();
+      else if (tab === 'updates') node = await updatesTab();
       else if (tab === 'audit') node = await auditTab();
       else node = await healthTab();
       pane.replaceChildren(node);

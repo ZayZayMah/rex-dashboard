@@ -546,6 +546,9 @@ class Default(WorkerEntrypoint):
             return await self.serve_asset(url, "/apply")
         if method == "GET" and re.match(r"^/pages/[a-z0-9-]{2,40}$", path):
             return await self.serve_asset(url, "/page")
+        if path == "/api/updates" and method == "GET":
+            import updates
+            return await updates.public_route(self, request, url, path, method)
         if path.startswith("/api/pages/") and method == "GET":
             return await features.pages_public(self, request, path, await self.get_session(request))
         if path.startswith("/api/img/") and method == "GET":
@@ -1424,6 +1427,9 @@ class Default(WorkerEntrypoint):
             return json_response(await self.get_site())
         if path == "/api/owner/email" or path.startswith("/api/owner/email/"):
             return await features.owner_email_route(self, request, url, path, method, session)
+        if path == "/api/owner/updates" or path.startswith("/api/owner/updates/"):
+            import updates
+            return await updates.owner_route(self, request, url, path, method, session)
         if path == "/api/owner/pages" or path.startswith("/api/owner/pages/"):
             return await features.pages_owner_route(self, request, url, path, method, session)
         if path == "/api/owner/support" or path.startswith("/api/owner/support/"):
@@ -1524,6 +1530,11 @@ class Default(WorkerEntrypoint):
 
         if tail == ["heartbeat"] and method == "POST":
             await features.flush_due(self, urlparse(request.url))
+            try:
+                import updates
+                await updates.sync(self, urlparse(request.url))
+            except Exception:
+                pass
             stats = sanitize_stats(await self.read_json(request, 64 * 1024))
             previous = await self.store.get("stats:latest") or {}
             hist = list(previous.get("hist") or [])
@@ -1532,6 +1543,9 @@ class Default(WorkerEntrypoint):
             stats["hist"] = hist[-96:]
             await self.store.put("stats:latest", stats)
             return json_response({"ok": True})
+        if tail == ["updates"] and method == "POST":
+            import updates
+            return await updates.bot_route(self, urlparse(request.url), await self.read_json(request, 128 * 1024))
         if tail[:1] == ["support"] and method == "POST":
             return await features.bot_route(self, tail[1:], method, await self.read_json(request, 64 * 1024))
         if tail == ["ownertools"] and method == "POST":

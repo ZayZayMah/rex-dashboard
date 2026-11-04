@@ -71,6 +71,9 @@ E("Mod log setup", "set mod log|mod log channel|moderation log|set up mod log|wh
   "Choose the channel on the Logs & Reports page and save. You can also use the setup menus in Discord.")
 
 # ------------------------------------------------------------------------------------------------ update log
+E("Updates page", "updates page|/updates|where are the updates|website updates|new features page|bug fixes page|premade page|premade email|update email|what's new page|whats new page|minor fixes|where can i see new features|edit the updates page",
+  "The [Updates page](/updates) lists new features (kept for 30 days) with Read more links to /pages/{topic}, and the minor fixes at the bottom. It fills itself each time Rex or the website is updated. Owners can edit it in Owner → Updates, and the premade Updates / Bug fixes pages and emails sit under *Premade* in the page and email builders.",
+  "Open [/updates](/updates) for the newest features and fixes. Owners: Owner → Updates edits the entries; Pages and Email tabs hold the premade versions, which keep updating until you edit them by hand (press *Follow updates again* to re-sync).")
 E("Update log", "update log|updates|changelog|change log|what changed|latest update|new features|release notes|patch notes|whats new|what's new|recent changes|update log not updating|update log empty|update log outdated",
   "The update log now fills itself from every bot and website release, even small ones, and shows them newest first. An owner can post it in a channel with `/ownertools` and it keeps editing itself every minute.",
   "Check the update log channel in the support server, or the [About](/about) page. Minor fixes appear as *Minor bot update* / *Minor website update*.",

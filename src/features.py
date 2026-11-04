@@ -760,7 +760,7 @@ def _vars(w, origin, key, name, extra=None):
 
 
 def _tpl_row(t):
-    return {k: t.get(k) for k in ("id", "name", "subject", "send_to", "send_when", "when_at", "at_time", "enabled", "updated", "sent")}
+    return {k: t.get(k) for k in ("id", "name", "subject", "send_to", "send_when", "when_at", "at_time", "enabled", "updated", "sent", "premade", "detached")}
 
 
 def _clean_tpl(body, prev, tag_ids):
@@ -1016,10 +1016,16 @@ async def owner_email_route(w, request, url, path, method, session):
             raise err(404, "not_found", "That email doesn't exist.")
         tpl = _clean_tpl(body, prev, {t["id"] for t in await get_tags(w)})
         tpl["id"] = tid
+        if prev.get("premade"):     # a hand-edited premade email stops following the updates until an owner turns that back on
+            tpl["premade"], tpl["detached"] = prev["premade"], True
+            import updates
+            await updates.mark_detached(w, "email", "email_" + prev["premade"])
         await w.store.put("email:tpl:" + tid, tpl)
         await _index_put(w, tpl)
         return jr({"ok": True, "id": tid, "template": _tpl_row(tpl)})
     if len(tail) == 2 and tail[0] == "templates" and method == "DELETE":
+        if tail[1] in ("feed00feed01", "feed00feed02"):
+            raise err(400, "premade", "This is a premade email, so it can't be deleted. You can edit it, and it keeps your edits.")
         if re.match(r"^[a-f0-9]{12}$", tail[1]):
             await w.store.delete("email:tpl:" + tail[1])
             await w.store.put("email:tpls", [t for t in (await w.store.get("email:tpls") or []) if t["id"] != tail[1]])
@@ -1205,8 +1211,9 @@ async def pages_public(w, request, path, session):
     name = path[len("/api/pages/"):]
     if not PAGE_NAME.match(name):
         raise H("HttpError")(404, "not_found", "This page doesn't exist.")
-    await _page_beta(w, session)
     p = await w.store.get("page:" + name)
+    if not p or not p.get("premade"):
+        await _page_beta(w, session)      # premade update pages are public; owner-made pages follow the beta switch
     if not p:
         raise H("HttpError")(404, "not_found", "This page doesn't exist.")
     return H("json_response")({"name": p["name"], "title": p["title"], "hide_nav": bool(p.get("hide_nav")), "design": p["design"], "fonts": _fonts()})
@@ -1239,12 +1246,20 @@ async def pages_owner_route(w, request, url, path, method, session):
                 raise err(400, "bad_design", str(e))
             p = {"name": name, "title": H("clean_str")(body.get("title"), 80) or name, "hide_nav": bool(body.get("hide_nav")), "design": design, "updated": H("now")(),
                  "created": (existing or {}).get("created") or H("now")()}
+            pm = (existing or {}).get("premade")
+            if pm:
+                p["premade"], p["detached"] = pm, True
+                import updates
+                await updates.mark_detached(w, "page", {"features": "page_features", "fixes": "page_fixes"}.get(pm, "topic:" + name))
             await w.store.put("page:" + name, p)
             idx = [r for r in idx if r["name"] != name]
-            idx.insert(0, {"name": name, "title": p["title"], "hide_nav": p["hide_nav"], "updated": p["updated"]})
+            idx.insert(0, {"name": name, "title": p["title"], "hide_nav": p["hide_nav"], "updated": p["updated"], "premade": p.get("premade"), "detached": p.get("detached")})
             await w.store.put("pages:idx", idx)
             return jr({"ok": True, "name": name})
         if method == "DELETE" or (method == "POST" and False):
+            cur = await w.store.get("page:" + name)
+            if cur and cur.get("premade"):
+                raise err(400, "premade", "This is a premade page, so it can't be deleted. You can edit it, and it keeps your edits.")
             await w.store.delete("page:" + name)
             await w.store.put("pages:idx", [r for r in idx if r["name"] != name])
             return jr({"ok": True})

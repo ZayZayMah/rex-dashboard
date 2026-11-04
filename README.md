@@ -99,3 +99,9 @@ Pages are plain files in `public/data/docs/*.md` (first lines: `title:`, `update
 - `/apply/<guild>/<form id>` works for forms in website mode (also old embedded apply buttons).
 - `public/data/changelog.json` feeds the bot's update log. Edit its `entries` for each release and run `python3 tools/stamp_build.py` before deploying.
 - Helper: `tools/build_helper_settings.py` regenerates `src/helper_settings.py` from `tools/data/settings.json` (export from the bot's `SECTIONS`). Hand-written topics live in `src/helper_kb.py` and `src/helper_kb2.py`.
+
+## /updates, premade pages and emails
+- `src/updates.py`: merges entries from `public/data/changelog.json`, the bot (`POST /api/bot/updates`) and owners; keeps features 30 days (max 24, pinned stay) and fixes 30 days (max 60).
+- Entry fields: `id, date, kind (website|bot|minor), topic (-> /pages/<topic>), title, summary, items[], fixes[], big`. Add one per release, then run `python3 tools/stamp_build.py`.
+- Premade pages `updates`, `bug-fixes`, topic pages and emails (ids `feed00feed01`, `feed00feed02`) regenerate until edited by hand (then "detached"; owners press *Follow updates again*). They cannot be deleted. Premade pages are public even when the Pages beta is off.
+- Syncs on every bot heartbeat, on /updates views and when an owner opens Owner → Updates.
