@@ -627,7 +627,7 @@ html[data-theme='christmas'] .tabs button { background: #fff; color: var(--steel
 .chat { display: grid; gap: 10px; }
 .chat-head { display: flex; align-items: center; gap: 12px; }
 .chat-log { height: min(56vh, 520px); overflow-y: auto; background: rgba(0, 0, 0, .22); border: 1px solid var(--edge); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-.msg { display: flex; gap: 10px; align-items: flex-start; max-width: 92%; }
+.imsg { display: flex; gap: 10px; align-items: flex-start; max-width: 92%; }
 .msg .av { width: 34px; height: 34px; border-radius: 50%; background: var(--plate); border: 1px solid var(--edge2); display: grid; place-items: center; font-weight: 700; flex: none; }
 .msg.u { align-self: flex-end; flex-direction: row-reverse; } .msg.u .bd { background: rgba(var(--glow), .2); }
 .msg .bd { background: var(--plate); border-radius: 14px; padding: 8px 12px; min-width: 0; }
@@ -823,3 +823,34 @@ body.pg-nonav .pg-wrap { padding-top: 24px; }
 
 /* pages that use the whole screen */
 body.wide .wrap { width: min(2400px, 100% - clamp(24px, 5vw, 120px)); }
+
+/* ---- owner Inbox and the email generators */
+.grow { flex: 1; min-width: 0; }
+.inbox { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 16px; align-items: start; }
+.inbox-side { background: var(--plate); border: 1px solid var(--edge); border-radius: 16px; overflow: hidden; position: sticky; top: 90px; max-height: calc(100vh - 120px); display: flex; flex-direction: column; }
+.inbox-tools { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--edge); } .inbox-tools input { flex: 1; min-width: 0; }
+.inbox-list { overflow: auto; }
+.inbox-row { display: block; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--edge); padding: 12px 14px; color: var(--ice); cursor: pointer; font: inherit; }
+.inbox-row:hover, .inbox-row.on { background: rgba(var(--glow), .1); }
+.inbox-row .ir-top { display: flex; justify-content: space-between; gap: 8px; } .inbox-row .ir-top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.inbox-row.unread .ir-top b, .inbox-row.unread .ir-sub { font-weight: 800; } .inbox-row.unread::before { content: ''; float: left; width: 8px; height: 8px; border-radius: 50%; background: var(--volt); margin: 6px 8px 0 -4px; }
+.inbox-row .ir-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .inbox-row .ir-snip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-view { min-width: 0; display: grid; gap: 14px; }
+.inbox-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+.inbox-back { display: none; }
+.mboxes { display: grid; gap: 10px; }
+.mbox { background: var(--plate); border: 1px solid var(--edge); border-radius: 14px; padding: 14px 16px; } .mbox.mine { border-color: var(--volt); }
+.mbox-head { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; margin-bottom: 8px; }
+.mbox-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; } .mbox-body details { margin-top: 8px; } .mbox-body summary { cursor: pointer; color: var(--steel); font-size: 13px; }
+.composer textarea { width: 100%; margin-top: 10px; }
+.fu-list { display: grid; gap: 8px; margin-top: 10px; }
+.fu-row { background: var(--plate2); border: 1px solid var(--edge); border-radius: 12px; padding: 10px 12px; opacity: .78; } .fu-row.on { opacity: 1; border-color: var(--edge2); }
+.fu-top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; } .fu-row textarea { width: 100%; margin-top: 8px; }
+.fu-frame { width: 100%; height: 640px; border: 1px solid var(--edge); border-radius: 12px; background: #fff; }
+.fu-preview { margin-top: 6px; }
+.ann-list { display: grid; gap: 10px; } .ann-card { display: grid; gap: 8px; }
+@media (max-width: 860px) {
+  .inbox { grid-template-columns: 1fr; } .inbox-side { position: static; max-height: 70vh; }
+  .inbox.reading .inbox-side { display: none; } .inbox:not(.reading) .inbox-view { display: none; } .inbox-back { display: block; }
+  .fu-frame { height: 520px; }
+}

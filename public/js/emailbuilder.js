@@ -54,7 +54,7 @@
     { id: 'dark', label: 'Dark rounded', desc: 'Deep navy, soft corners, logo up top.', bg: '#070b14', card: '#101827', head: '#16233d', title: '#ffffff', text: '#c7d2ea', muted: '#7f8db0', accent: '#2f8cff', btn: '#2f8cff', btnText: '#ffffff', font: 'poppins', body: 'inter', radius: 28, layout: 'center', decor: [] },
     { id: 'light', label: 'Clean light', desc: 'Bright and friendly with the logo.', bg: '#eef2f9', card: '#ffffff', head: '#2f8cff', title: '#ffffff', text: '#33415c', muted: '#6b7a99', accent: '#2f8cff', btn: '#2f8cff', btnText: '#ffffff', font: 'poppins', body: 'arial', radius: 16, layout: 'center', logoBg: '#ffffff', decor: [] },
     { id: 'halloween', label: 'Halloween', desc: 'Spooky purple and pumpkin orange.', bg: '#120a1a', card: '#1c1126', head: '#2a1238', title: '#ff8a1f', text: '#e8d9f5', muted: '#9a85ad', accent: '#ff7a00', btn: '#ff7a00', btnText: '#1c1126', font: 'creepster', body: 'nunito', radius: 20, layout: 'center', decor: ['🎃', '🦇', '👻', '🕸️'] },
-    { id: 'christmas', label: 'Christmas', desc: 'Red and green with snow and presents.', bg: '#0f3b2a', card: '#fffaf0', head: '#b3122f', title: '#ffffff', text: '#2b3a33', muted: '#6c7a72', accent: '#1f8a4c', btn: '#1f8a4c', btnText: '#ffffff', font: 'mountains', body: 'georgia', radius: 18, layout: 'center', logoBg: '#ffffff', decor: ['🎄', '❄️', '🎁', '⛄'] },
+    { id: 'christmas', label: 'Christmas', desc: 'Evergreen night, warm gold and cream, like the website.', bg: '#07120d', card: '#0f2219', head: '#132b20', card2: '#132b20', line: '#35604a', gold: '#e9cf8c', title: '#f5f0e2', text: '#bac6b8', muted: '#84978b', accent: '#d9b45f', btn: '#d9b45f', btnText: '#1d1503', font: 'fraunces', body: 'figtree', radius: 14, layout: 'center', border: '#d9b45f', logoBg: '#0a1812', decor: ['✦', '❄', '✦'] },
     { id: 'newyear', label: 'New Year', desc: 'Midnight blue and gold fireworks.', bg: '#05070f', card: '#0b1020', head: '#0f1730', title: '#f5c542', text: '#d5dbea', muted: '#7e89a8', accent: '#f5c542', btn: '#f5c542', btnText: '#0b1020', font: 'abril', body: 'lato', radius: 14, layout: 'center', decor: ['🎆', '🥂', '✨', '🎉'] },
     { id: 'valentine', label: "Valentine's", desc: 'Soft pinks and hearts.', bg: '#fdeef3', card: '#ffffff', head: '#e0457b', title: '#ffffff', text: '#5b2a3c', muted: '#a06a7d', accent: '#e0457b', btn: '#e0457b', btnText: '#ffffff', font: 'playfair', body: 'lora', radius: 24, layout: 'center', logoBg: '#ffffff', decor: ['💖', '💌', '🌹', '💘'] },
     { id: 'spring', label: 'Spring / Easter', desc: 'Pastel green, tulips and eggs.', bg: '#eaf7ee', card: '#ffffff', head: '#8fd3a8', title: '#1f5136', text: '#36513f', muted: '#6f8f7a', accent: '#3fae6b', btn: '#3fae6b', btnText: '#ffffff', font: 'fredoka', body: 'nunito', radius: 26, layout: 'center', logoBg: '#ffffff', decor: ['🌷', '🐣', '🌼', '🥚'] },
@@ -496,25 +496,6 @@
       h('button', { type: 'button', class: 'eb-save', onclick: () => { Object.assign(M, c); dirty = true; syncBar(); close(); toast('Automation updated. Remember to Save.', 'good'); } }, 'Done')]);
   }
 
-  /* ---------- generate a ready-to-edit email for a tag (e.g. bug fixes) */
-  function generate(tagId, notes, themeId) {
-    const tag = meta.tags.find((t) => t.id === tagId) || { id: tagId, name: tagId };
-    const th = THEMES.find((x) => x.id === themeId) || THEMES[0];
-    const look = { bug_fixes: ['Bug fixes in Rex', 'We squashed some bugs. Here is what is fixed:'], new_features: ['New in Rex', 'Rex just got better. Here is what is new:'], announcements: ['News from Rex', 'We have some news to share:'] }[tagId] || [tag.name + ' from Rex', 'Here is the latest:'];
-    const items = notes.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 12);
-    const list = items.length ? items.map((x) => '• ' + x).join('\n') : '• First thing\n• Second thing';
-    const d = themed(th, { title: look[0], sub: tag.name, body: 'Hi {first_name},\n\n' + look[1], box: list });
-    return { d, subject: look[0], name: tag.name + ' – ' + new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), send_to: 'tag:' + tag.id };
-  }
-  function askNotes(tagId) {
-    return new Promise((resolve) => {
-      const ta = h('textarea', { rows: 6, placeholder: 'One item per line, e.g.\nFixed the welcome card not showing\nFixed ticket buttons on mobile', maxlength: 1500 });
-      const th = sel2(THEMES.map((x) => [x.id, x.label]), () => 'dark', () => {}); th.value = 'dark';
-      modal('Generate a “' + tagName(tagId) + '” email', h('div', { class: 'eb-pad' }, h('p', { class: 'eb-help' }, 'What changed? You can leave this empty and write it in the builder. It is sent to people who kept the “' + tagName(tagId) + '” tag on.'), ta, F('Theme', th)),
-        (close) => [h('button', { type: 'button', class: 'eb-ghost', onclick: () => { close(); resolve(null); } }, 'Cancel'), h('button', { type: 'button', class: 'eb-save', onclick: () => { const v = th.value; close(); resolve({ notes: ta.value, theme: v }); } }, 'Generate')]);
-    });
-  }
-
   function paintAll() { paintCanvas(); layers(); props(); syncBar(); }
 
   /* ---------- load */
@@ -537,18 +518,104 @@
       document.body.append(m); nameBox.focus();
     });
   }
+  /* ---------- start screen: announcement wizard, Follow Up, templates, themes */
+  const gen = await MailGen.meta();
+  const palOf = (t) => ({ bg: t.bg, card: t.card, head: t.head, title: t.title, text: t.text, muted: t.muted, accent: t.accent, btn: t.btn, btnText: t.btnText, font: t.font, body: t.body, radius: t.radius, decor: t.decor, logoBg: t.logoBg || '', gold: t.gold || '', card2: t.card2 || '', line: t.line || '' });
+  const LOOKS = [['auto', 'Automatic (Rex dark, Christmas in December)'], ['p:dark', 'Rex dark'], ['p:light', 'Rex light'], ['p:christmas', 'Christmas'], ...THEMES.filter((t) => !['dark', 'light', 'christmas'].includes(t.id)).map((t) => ['t:' + t.id, t.label])];
+  function lookPal(v) {
+    if (v === 'auto') { const d = new Date(); v = d.getMonth() === 11 && d.getDate() <= 26 ? 'p:christmas' : 'p:dark'; }
+    if (v.startsWith('p:')) return gen.palettes[v.slice(2)];
+    return palOf(THEMES.find((t) => t.id === v.slice(2)) || THEMES[0]);
+  }
+  let LOOK = 'auto', STYLE = 'classic';
+  const lookSel = () => sel2(LOOKS, () => LOOK, (v) => { LOOK = v; });
+  const styleSel = () => sel2(Object.entries(gen.variants), () => STYLE, (v) => { STYLE = v; });
+  const SAMPLE_ITEM = { title: 'Your headline here', brief: 'One line that sums it up.', long: 'Write the full details here. Keep it friendly and to the point.', image: '', link: '{site_url}', link_label: 'Read more' };
+  const SAMPLES = {
+    spotlight: [SAMPLE_ITEM], story: [SAMPLE_ITEM],
+    digest: [SAMPLE_ITEM, { title: 'Second announcement', brief: 'A short description.', long: '' }, { title: 'Third announcement', brief: 'Another short description.', long: '' }],
+    grid: [{ title: 'First thing', brief: 'A short description.' }, { title: 'Second thing', brief: 'A short description.' }, { title: 'Third thing', brief: 'A short description.' }, { title: 'Fourth thing', brief: 'A short description.' }],
+    alert: [{ title: 'Scheduled maintenance', brief: 'Rex will be offline for a short while.', long: 'Say when it starts, how long it takes and what people should expect.' }],
+    list: [1, 2, 3, 4, 5].map((n) => ({ title: 'Item ' + n, brief: 'A short line about it.' })),
+  };
+  const annTag = () => (meta.tags.find((t) => t.id === 'announcements') ? 'tag:announcements' : 'everyone');
+  async function fromTemplate(layout) {
+    const r = await MailGen.build({ kind: 'announcement', items: SAMPLES[layout], layout, variant: STYLE, palette: lookPal(LOOK), button_label: layout === 'alert' ? '' : 'Open my dashboard', button_url: '{dashboard_url}' });
+    return { d: r.design, subject: r.subject, name: gen.layouts[layout].label, send_to: annTag() };
+  }
+
+  function wide(title, intro, bodyNodes, actions) {
+    const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card eb-wide' }, h('h2', {}, title), intro ? h('p', { class: 'eb-help' }, intro) : null, ...bodyNodes, h('div', { class: 'eb-row' }, actions(() => m.remove()))));
+    document.body.append(m); return m;
+  }
+  function wizard(kind) {
+    return new Promise((resolve) => {
+      const isAnn = kind === 'announce';
+      const note = h('p', { class: 'eb-help' }), pre = h('div', { class: 'fu-preview', hidden: true });
+      let layout = 'auto', subject = '', btnLabel = '', btnUrl = '', busy = false;
+      const upd = () => { clearTimeout(upd.t); upd.t = setTimeout(async () => { if (!isAnn) return; try { const r = await MailGen.build(payload()); note.textContent = r.why ? 'Layout picked for you: ' + gen.layouts[r.layout].label + ' (' + r.why + ').' : 'Layout: ' + gen.layouts[r.layout].label + '.'; if (r.trimmed) note.textContent += ' Some of the last announcements were left out to keep the email a safe size.'; } catch (e) { /* ignore */ } }, 350); };
+      const ann = isAnn ? MailGen.announceForm(upd) : null, fu = isAnn ? null : MailGen.followupForm(gen, () => {});
+      const payload = () => isAnn ? { kind: 'announcement', items: ann.items(), layout, variant: STYLE, palette: lookPal(LOOK), button_label: btnLabel, button_url: btnUrl, subject }
+        : { kind: 'followup', sections: fu.sections(), variant: STYLE, palette: lookPal(LOOK), subject: subject || 'your message' };
+      const layoutSel = isAnn ? sel2([['auto', 'Automatic (chosen from what you add)'], ...Object.entries(gen.layouts).map(([k, v]) => [k, v.label + ' – ' + v.desc])], () => layout, (v) => { layout = v; upd(); }) : null;
+      const inp = (ph, set, max) => h('input', { type: 'text', maxlength: max || 150, placeholder: ph, oninput: (e) => { set(e.target.value); upd(); } });
+      const look = lookSel(), style = styleSel();
+      look.addEventListener('change', upd); style.addEventListener('change', upd);
+      const opts = h('div', { class: 'row-2' }, F('Look', look), F('Layout style', style));
+      const body = isAnn
+        ? [h('div', { class: 'ann-wrap' }, ann.el), F('Template', layoutSel), note, opts, F('Subject line (optional)', inp('e.g. Big news from Rex', (v) => { subject = v; }, 150)),
+           h('div', { class: 'row-2' }, F('Button text (optional)', inp('e.g. Open my dashboard', (v) => { btnLabel = v; }, 40)), F('Button link', inp('https://… (default: your dashboard)', (v) => { btnUrl = v; }, 400))), pre]
+        : [F('What is it about? (used in the subject, optional)', inp('e.g. your login problem', (v) => { subject = v; }, 150)), fu.el, opts, pre];
+      const finish = async (go) => {
+        if (busy) return; busy = true;
+        try {
+          const r = await MailGen.build(payload());
+          if (!go) { const p = await api('/api/owner/email/render', { method: 'POST', body: { design: r.design, subject: r.subject } }); pre.hidden = false; pre.replaceChildren(h('iframe', { src: p.url, sandbox: '', title: 'Preview', class: 'fu-frame' })); busy = false; return; }
+          m.remove(); resolve(isAnn ? { d: r.design, subject: r.subject, name: 'Announcement – ' + new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), send_to: annTag() } : { d: r.design, subject: r.subject, name: 'Follow Up', send_to: 'everyone' });
+        } catch (e) { toast(e.message, 'bad'); busy = false; }
+      };
+      const m = wide(isAnn ? 'Announcement email' : 'Follow Up email', isAnn ? 'Fill in whatever you like. Nothing is required, and you can change everything in the builder afterwards.' : 'Switch on the parts you want. Each one has text you can edit now or later in the builder.', body, (close) => [
+        h('button', { type: 'button', class: 'eb-ghost', onclick: () => { close(); resolve(null); } }, 'Back'), h('button', { type: 'button', class: 'eb-ghost', onclick: () => finish(false) }, 'Preview'), h('button', { type: 'button', class: 'eb-save', onclick: () => finish(true) }, 'Create email')]);
+      upd();
+    });
+  }
   async function pickStart() {
     return new Promise((resolve) => {
       const pick = (k) => () => { m.remove(); resolve(k); };
       const sw = (th) => { const a = h('div', { class: 'eb-sw' }), b = h('div', { class: 'eb-sw-h' }, h('span', { class: 'eb-sw-t' }, 'Aa'), th.decor[0] ? h('span', {}, th.decor[0]) : null), c = h('div', { class: 'eb-sw-b' }), bt = h('i', { class: 'eb-sw-btn' });
         a.style.background = th.bg; a.style.borderRadius = Math.min(th.radius, 18) + 'px'; b.style.background = th.head; b.style.color = th.title; b.querySelector('.eb-sw-t').style.fontFamily = (FONT[th.font] || FONT.arial).css; c.style.background = th.card; bt.style.background = th.btn; c.append(bt); a.append(b, c); return a; };
-      const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card eb-wide' }, h('h2', {}, 'Start a new email'), h('p', { class: 'eb-help' }, 'Pick a theme. Everything in it (layout, colours, fonts, logo) can be changed afterwards.'),
+      const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card eb-wide' }, h('h2', {}, 'Start a new email'),
+        h('div', { class: 'eb-starts eb-big' },
+          h('button', { type: 'button', class: 'eb-start', onclick: pick('announce') }, h('b', {}, '📣 Announcement'), h('span', {}, 'Answer a few questions (none required) and the best layout is picked for you. Add as many announcements as you like.')),
+          h('button', { type: 'button', class: 'eb-start', onclick: pick('followup') }, h('b', {}, '💬 Follow Up'), h('span', {}, 'A reply-style email with switchable parts: thanks, issue addressing, what we did, next steps, conclusion…'))),
+        h('h4', { class: 'eb-h4' }, 'Or pick a template (no questions)'),
+        h('div', { class: 'row-2' }, F('Look', lookSel()), F('Layout style', styleSel())),
+        h('div', { class: 'eb-starts' }, Object.entries(gen.layouts).map(([k, v]) => h('button', { type: 'button', class: 'eb-start', onclick: pick('tpl:' + k) }, h('b', {}, v.label), h('span', {}, v.desc))),
+          Object.entries(PRESETS).map(([k, p]) => h('button', { type: 'button', class: 'eb-start', onclick: pick(k) }, h('b', {}, p.label), h('span', {}, p.desc)))),
+        h('h4', { class: 'eb-h4' }, 'Or start from a theme'), h('p', { class: 'eb-help' }, 'Uses the layout style above. Colours, fonts, logo and decorations can all be changed afterwards.'),
         h('div', { class: 'eb-themes' }, THEMES.map((th) => h('button', { type: 'button', class: 'eb-theme', onclick: pick('theme:' + th.id) }, sw(th), h('b', {}, th.label), h('span', {}, th.desc)))),
-        h('h4', { class: 'eb-h4' }, 'Ready-made emails'), h('div', { class: 'eb-starts' }, Object.entries(PRESETS).map(([k, p]) => h('button', { type: 'button', class: 'eb-start', onclick: pick(k) }, h('b', {}, p.label), h('span', {}, p.desc)))),
-        h('h4', { class: 'eb-h4' }, 'Or generate one for a tag'), h('div', { class: 'eb-starts' }, meta.tags.map((t) => h('button', { type: 'button', class: 'eb-start', onclick: pick('gen:' + t.id) }, h('b', {}, 'Generate: ' + t.name), h('span', {}, 'A ready-to-edit email for people with this tag.')))),
         h('button', { type: 'button', class: 'eb-ghost', onclick: () => { location.href = '/owner#email'; } }, '← Back')));
       document.body.append(m);
     });
+  }
+  async function chooseStart() {
+    let first = qs.get('new') || '';
+    for (;;) {
+      const k = first === 'announce' || first === 'followup' ? first : await pickStart();
+      first = first === 'templates' ? '' : (['announce', 'followup'].includes(first) ? '' : first);
+      try {
+        if (k === 'announce' || k === 'followup') { const r = await wizard(k); if (r) return r; continue; }
+        if (k.startsWith('tpl:')) return await fromTemplate(k.slice(4));
+        if (k.startsWith('theme:')) {
+          const th = THEMES.find((x) => x.id === k.slice(6));
+          if (STYLE === 'classic') return { d: themed(th), subject: '', name: th.label };
+          const r = await MailGen.build({ kind: 'announcement', items: SAMPLES.story, layout: 'story', variant: STYLE, palette: palOf(th), button_label: 'Open my dashboard', button_url: '{dashboard_url}' });
+          return { d: r.design, subject: r.subject, name: th.label + ' – ' + gen.variants[STYLE] };
+        }
+        const p = PRESETS[k].make();
+        return { d: p.d, subject: p.subject, name: k === 'blank' ? '' : PRESETS[k].label, send_when: k === 'welcome' ? 'first_login' : k === 'notice' ? 'server_blacklisted' : '', send_to: k === 'welcome' ? 'target' : k === 'notice' ? 'essential' : '' };
+      } catch (e) { toast(e.message, 'bad'); }
+    }
   }
   if (PAGE) {
     if (pageName) {
@@ -561,18 +628,10 @@
     try { const t = await api('/api/owner/email/templates/' + tplId); D = t.design; M = { name: t.name, subject: t.subject, send_to: t.send_to, send_when: t.send_when, when_at: t.when_at || 'now', at_time: t.at_time || '09:00', enabled: !!t.enabled }; if (!/^(everyone|essential|target|tag:.+)$/.test(M.send_to)) M.send_to = 'everyone'; if (M.send_when !== 'manual' && M.send_to === 'everyone') M.send_to = 'target'; }
     catch (e) { app.replaceChildren(stateScreen('Email not found', e.message, h('a', { class: 'btn', href: '/owner#email' }, 'Back'))); return; }
   } else {
-    let k = qs.get('gen') ? 'gen:' + qs.get('gen') : await pickStart();
-    if (k.startsWith('gen:')) {
-      const ans = await askNotes(k.slice(4));
-      if (ans === null) { location.href = '/owner#email'; return; }
-      const g = generate(k.slice(4), ans.notes, ans.theme); D = g.d; M.subject = g.subject; M.name = g.name; M.send_to = g.send_to; dirty = true;
-    } else if (k.startsWith('theme:')) {
-      const th = THEMES.find((x) => x.id === k.slice(6)); D = themed(th); M.name = th.label; M.subject = ''; dirty = true;
-    } else {
-      const p = PRESETS[k].make(); D = p.d; M.subject = p.subject; M.name = k === 'blank' ? '' : PRESETS[k].label; dirty = true;
-      if (k === 'welcome') { M.send_when = 'first_login'; M.send_to = 'target'; }
-      if (k === 'notice') { M.send_when = 'server_blacklisted'; M.send_to = 'essential'; }
-    }
+    const st0 = await chooseStart();
+    D = st0.d; M.subject = st0.subject || ''; M.name = st0.name || ''; dirty = true;
+    if (st0.send_to) M.send_to = st0.send_to;
+    if (st0.send_when) M.send_when = st0.send_when;
   }
   nameIn.value = M.name; tab = 'add'; paintAll();
   new ResizeObserver(() => { if (!canvasWrap.clientWidth) return; const c = canvasWrap.clientWidth - 48, need = (dev === 'd' ? D.w : MOB); if (c < need * zoom && zoom === 1) setZoom(Math.max(0.4, Math.floor(c / need * 10) / 10)); }).observe(canvasWrap);

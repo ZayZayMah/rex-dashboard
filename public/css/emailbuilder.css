@@ -103,3 +103,5 @@ body.page-emailbuilder { margin: 0; height: 100vh; overflow: hidden; background:
 .pv-nav { padding: 12px 18px; font-size: 13px; background: rgba(0, 0, 0, .35); border-bottom: 1px solid rgba(255, 255, 255, .1); }
 .pv-body { padding: 24px 16px 40px; }
 .eb-seg { white-space: nowrap; }
+.eb-big { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } .eb-big .eb-start { min-height: 92px; }
+.eb-modal .eb-card.eb-wide { max-height: 92vh; overflow: auto; }

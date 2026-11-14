@@ -13,7 +13,7 @@
   const B = (me.beta || {});
   const TABS = [['tools', 'Tools'], ['website', 'Website'], ['servers', 'Servers'], ['users', 'Users']];
   if (B.support && B.support !== 'off') TABS.push(['support', 'Support']);
-  if (B.email && B.email !== 'off') TABS.push(['email', 'Email']);
+  if (B.email && B.email !== 'off') { TABS.push(['inbox', 'Inbox']); TABS.push(['email', 'Email']); }
   if (B.pages && B.pages !== 'off') TABS.push(['pages', 'Pages']);
   TABS.push(['updates', 'Updates'], ['audit', 'Audit'], ['health', 'Health']);
   let tab = (location.hash || '#tools').slice(1);
@@ -275,6 +275,14 @@
     return wrap;
   }
 
+  /* ---- Gmail connect steps (also used by the Inbox tab) */
+  function connectSteps(st, verb) {
+    const paste = h('input', { type: 'text', placeholder: 'http://localhost/?code=4/0A...', maxlength: 1500 });
+    return h('div', {}, h('ol', { class: 'howto' }, h('li', {}, 'Press "Open Google" and allow Rex to read and send email from your account (tick every box).'), h('li', {}, 'Google then sends you to a page that will not load (http://localhost). That is expected.'), h('li', {}, 'Copy the whole address from the browser bar and paste it below.')),
+      h('a', { class: 'btn', href: st.auth_url, target: '_blank', rel: 'noopener' }, 'Open Google'), h('div', { style: 'margin-top:12px' }, field('Pasted address', paste)),
+      h('button', { class: 'btn', style: 'margin-top:12px', type: 'button', onclick: async () => { try { await api('/api/owner/email/connect', { method: 'POST', body: { url: paste.value } }); location.reload(); } catch (e) { toast(e.message, 'bad'); } } }, verb || 'Connect'));
+  }
+
   /* ---- email (beta) */
   async function emailTab() {
     const st = await api('/api/owner/email');
@@ -286,11 +294,9 @@
       conn.append(h('p', { class: 'muted small' }, 'Gmail is not set up yet. In Google Cloud, create an OAuth client (type "Desktop app" or "Web application", redirect http://localhost), turn on the Gmail API, then add GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET as secrets on the Cloudflare worker. Reload this page afterwards.'));
     } else if (st.connected) {
       conn.append(h('p', {}, 'Sending from ', h('b', {}, st.connected)), h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Disconnect Gmail?', 'You can connect it again any time.', 'Disconnect', true)) { await api('/api/owner/email/disconnect', { method: 'POST', body: {} }); location.reload(); } } }, 'Disconnect'));
+      if (!st.can_read) conn.append(h('div', { class: 'well', style: 'margin-top:12px' }, h('h4', { style: 'margin:0 0 6px' }, 'Turn on the Inbox'), h('p', { class: 'muted small' }, 'To read and reply to the emails you receive, Google needs to ask for one more permission. Reconnect once and tick the new box.'), connectSteps(st, 'Reconnect')));
     } else {
-      const paste = h('input', { type: 'text', placeholder: 'http://localhost/?code=4/0A...', maxlength: 1500 });
-      conn.append(h('ol', { class: 'howto' }, h('li', {}, 'Press "Open Google" and allow Rex to send email from your account.'), h('li', {}, 'Google then sends you to a page that will not load (http://localhost). That is expected.'), h('li', {}, 'Copy the whole address from the browser bar and paste it below.')),
-        h('a', { class: 'btn', href: st.auth_url, target: '_blank', rel: 'noopener' }, 'Open Google'), h('div', { style: 'margin-top:12px' }, field('Pasted address', paste)),
-        h('button', { class: 'btn', style: 'margin-top:12px', type: 'button', onclick: async () => { try { await api('/api/owner/email/connect', { method: 'POST', body: { url: paste.value } }); location.reload(); } catch (e) { toast(e.message, 'bad'); } } }, 'Connect'));
+      conn.append(connectSteps(st, 'Connect'));
     }
     wrap.append(conn);
     function tagsCard() {
@@ -346,9 +352,9 @@
       document.body.append(box);
     }
     paintRows();
-    const gen = h('div', { class: 'chips' }, st.tags.map((x) => h('a', { class: 'chip', href: '/email-builder?gen=' + x.id }, 'Generate: ' + x.name)));
+    const gen = h('div', { class: 'chips' }, h('a', { class: 'chip', href: '/email-builder?new=announce' }, 'New announcement'), h('a', { class: 'chip', href: '/email-builder?new=followup' }, 'Follow Up template'), h('a', { class: 'chip', href: '/email-builder?new=templates' }, 'Pick a template'));
     wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' }, h('h3', { style: 'margin:0' }, 'Saved emails'), h('a', { class: 'btn', href: '/email-builder' }, 'New email')),
-      h('p', { class: 'muted small' }, 'Each email remembers who gets it and when it goes out. Emails go to everyone with an email on file, unless they turned emails off. ' + A.everyone + ' can get emails now, ' + A.off + ' turned them off, ' + A.no_email + ' have no email on file.'), h('div', { class: 'muted small' }, 'Make a ready-to-edit email for a tag:'), gen, rows, statusLine));
+      h('p', { class: 'muted small' }, 'Each email remembers who gets it and when it goes out. Emails go to everyone with an email on file, unless they turned emails off. ' + A.everyone + ' can get emails now, ' + A.off + ' turned them off, ' + A.no_email + ' have no email on file.'), h('div', { class: 'muted small' }, 'Start an email:'), gen, rows, statusLine));
     wrap.append(tagsCard());
 
     // 3. history
@@ -480,6 +486,109 @@
         h('tr', {}, h('td', {}, 'Tiers'), h('td', {}, Object.entries(d.tier_counts).map(([k, v]) => k + ': ' + v).join('   ')))))));
   }
 
+  /* ---- inbox: read and reply to the emails the connected Gmail account receives */
+  async function inboxTab() {
+    const st = await api('/api/owner/email');
+    const wrap = h('div', { class: 'stack' });
+    if (!st.configured || !st.connected) return h('div', { class: 'frame' }, h('h3', {}, 'Inbox'), h('p', { class: 'muted' }, 'Connect Gmail first on the Email tab.'), h('button', { class: 'btn', type: 'button', onclick: () => { tab = 'email'; history.replaceState(null, '', '#email'); drawTabs(); render(); } }, 'Go to Email'));
+    if (!st.can_read) return h('div', { class: 'frame' }, h('h3', {}, 'Inbox'), h('p', { class: 'muted small' }, 'Rex can send email from ' + st.connected + ' but is not allowed to read it yet. Reconnect once and tick every box Google shows.'), connectSteps(st, 'Reconnect'));
+    const gen = await MailGen.meta();
+    const listBox = h('div', { class: 'inbox-list' }), view = h('div', { class: 'inbox-view' }, h('p', { class: 'muted' }, 'Pick an email on the left.'));
+    const q = h('input', { type: 'search', placeholder: 'Search your inbox (e.g. from:name, is:unread)', 'aria-label': 'Search inbox' });
+    let nextTok = '', query = '', cur = null;
+    const grid = h('div', { class: 'inbox' }, h('div', { class: 'inbox-side' }, h('div', { class: 'inbox-tools' }, q, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => load(true) }, 'Refresh')), listBox), view);
+    wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center' }, h('h3', { style: 'margin:0' }, 'Inbox'), h('span', { class: 'muted small' }, st.connected)), h('p', { class: 'muted small' }, 'Only owners can see this. Opening an email marks it read in Gmail. Replies are sent from this Gmail account and stay in the same conversation.')), grid);
+
+    const linkify = (text) => {
+      const out = [], re = /https?:\/\/[^\s<>"')]+/g; let last = 0, m;
+      while ((m = re.exec(text))) { out.push(text.slice(last, m.index)); out.push(h('a', { href: m[0], target: '_blank', rel: 'noopener noreferrer' }, m[0].length > 60 ? m[0].slice(0, 57) + '…' : m[0])); last = m.index + m[0].length; }
+      out.push(text.slice(last)); return out;
+    };
+    const body = (text) => {
+      const cut = text.search(/\n(On .{5,160}wrote:|-{2,}\s*Original Message|From: .+\nSent: )/);
+      const main = cut > 40 ? text.slice(0, cut).trim() : text, rest = cut > 40 ? text.slice(cut).trim() : '';
+      return h('div', { class: 'mbox-body' }, h('div', { class: 'mbox-text' }, linkify(main)), rest ? h('details', {}, h('summary', {}, 'Show quoted text'), h('div', { class: 'mbox-text muted' }, linkify(rest))) : null);
+    };
+    const when = (t) => t ? new Date(t * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+
+    function row(t) {
+      const el = h('button', { type: 'button', class: 'inbox-row' + (t.unread ? ' unread' : '') + (cur === t.id ? ' on' : ''), onclick: () => open(t.id, el) },
+        h('div', { class: 'ir-top' }, h('b', {}, (t.mine ? 'You → ' : '') + t.from.name), h('span', { class: 'muted small' }, timeAgo(t.date))),
+        h('div', { class: 'ir-sub' }, t.subject), h('div', { class: 'muted small ir-snip' }, t.snippet));
+      return el;
+    }
+    async function load(reset) {
+      if (reset) { nextTok = ''; listBox.replaceChildren(h('div', { class: 'skel', style: 'height:120px' })); query = q.value.trim(); }
+      try {
+        const r = await api('/api/owner/email/inbox?q=' + encodeURIComponent(query) + (nextTok ? '&page=' + encodeURIComponent(nextTok) : ''));
+        if (reset) listBox.replaceChildren();
+        listBox.querySelector('.more')?.remove();
+        if (!r.threads.length && reset) listBox.append(h('p', { class: 'muted', style: 'padding:12px' }, 'Nothing here.'));
+        r.threads.forEach((t) => listBox.append(row(t)));
+        nextTok = r.next;
+        if (nextTok) listBox.append(h('button', { class: 'btn ghost sm more', type: 'button', onclick: () => load(false) }, 'Load more'));
+      } catch (e) { listBox.replaceChildren(h('p', { class: 'muted', style: 'padding:12px' }, e.message)); }
+    }
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') load(true); });
+
+    async function open(id, rowEl) {
+      cur = id; listBox.querySelectorAll('.inbox-row').forEach((x) => x.classList.remove('on')); if (rowEl) { rowEl.classList.add('on'); rowEl.classList.remove('unread'); }
+      grid.classList.add('reading');
+      view.replaceChildren(h('div', { class: 'skel', style: 'height:200px' }));
+      let t; try { t = await api('/api/owner/email/inbox/' + id); } catch (e) { view.replaceChildren(h('p', { class: 'muted' }, e.message)); return; }
+      const last = t.messages[t.messages.length - 1] || {}, other = [...t.messages].reverse().find((m) => !m.mine) || last;
+      const msgs = t.messages.map((m) => h('div', { class: 'mbox' + (m.mine ? ' mine' : '') }, h('div', { class: 'mbox-head' }, h('b', {}, m.from.name), h('span', { class: 'muted small' }, m.from.addr ? '<' + m.from.addr + '>' : ''), h('span', { class: 'grow' }), h('span', { class: 'muted small' }, when(m.date))),
+        body(m.text || '(no text)'), m.files.length ? h('div', { class: 'muted small' }, '📎 ' + m.files.map((f) => f.name).join(', ') + ' (open in Gmail to see attachments)') : null));
+      view.replaceChildren(
+        h('div', { class: 'inbox-back' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => grid.classList.remove('reading') }, '← Inbox')),
+        h('div', { class: 'inbox-head' }, h('h3', { style: 'margin:0' }, t.subject), h('div', { class: 'row-actions' },
+          h('a', { class: 'btn ghost sm', href: 'https://mail.google.com/mail/u/0/#inbox/' + id, target: '_blank', rel: 'noopener' }, 'Open in Gmail'),
+          h('button', { class: 'btn ghost sm', type: 'button', onclick: async (ev) => { ev.currentTarget.disabled = true; try { await api('/api/owner/email/inbox/' + id + '/archive', { method: 'POST', body: {} }); toast('Archived.', 'good'); view.replaceChildren(h('p', { class: 'muted' }, 'Archived.')); grid.classList.remove('reading'); load(true); } catch (e) { toast(e.message, 'bad'); ev.currentTarget.disabled = false; } } }, 'Archive'))),
+        h('div', { class: 'mboxes' }, msgs), composer(t, other, last));
+      view.querySelector('.mboxes').lastElementChild?.scrollIntoView({ block: 'nearest' });
+    }
+
+    function composer(t, other, last) {
+      const box = h('div', { class: 'frame composer' });
+      let mode = 'quick', base = 'dark', variant = 'classic', timer = 0;
+      const quick = h('textarea', { rows: 6, maxlength: 8000, placeholder: 'Write your reply…', 'aria-label': 'Reply' });
+      const fu = MailGen.followupForm(gen, () => { clearTimeout(timer); timer = setTimeout(preview, 700); });
+      const preBox = h('div', { class: 'fu-preview', hidden: true });
+      const seg = h('div', { class: 'seg', role: 'radiogroup' }, [['quick', 'Quick reply'], ['fu', 'Follow Up template']].map(([k, n]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(k === mode), onclick: () => { mode = k; seg.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-checked', String(['quick', 'fu'][i] === mode))); paint(); } }, n)));
+      const th = h('select', { 'aria-label': 'Theme', onchange: (e) => { base = e.target.value; preview(); } }, Object.entries(gen.palettes).map(([k, p]) => h('option', { value: k }, p.label)));
+      const va = h('select', { 'aria-label': 'Layout', onchange: (e) => { variant = e.target.value; preview(); } }, Object.entries(gen.variants).map(([k, n]) => h('option', { value: k }, n)));
+      const fuBox = h('div', { class: 'stack', hidden: true }, h('div', { class: 'row-2' }, field('Look', th), field('Layout', va)), fu.el, h('button', { class: 'btn ghost sm', type: 'button', onclick: preview }, 'Refresh preview'), preBox);
+      const send = h('button', { class: 'btn', type: 'button', onclick: doSend }, 'Send reply');
+      const who = other.from.name || other.from.addr;
+      function paint() { quick.hidden = mode !== 'quick'; fuBox.hidden = mode !== 'fu'; if (mode === 'fu') preview(); }
+      async function design() {
+        const sec = fu.sections(), qm = sec.find((s) => s.key === 'quote');
+        const r = await MailGen.build({ kind: 'followup', sections: sec, variant, base, subject: t.subject.replace(/^re:\s*/i, ''), quote: qm && qm.on ? (other.text || '').split('\n').filter((l) => !l.startsWith('>')).join('\n').slice(0, 600) : '' });
+        return r;
+      }
+      async function preview() {
+        if (mode !== 'fu') return;
+        try {
+          const r = await design(), p = await api('/api/owner/email/render', { method: 'POST', body: { design: r.design, subject: r.subject } });
+          preBox.hidden = false; preBox.replaceChildren(h('iframe', { src: p.url, sandbox: '', title: 'Preview of your reply', class: 'fu-frame' }));
+        } catch (e) { preBox.hidden = false; preBox.replaceChildren(h('p', { class: 'muted' }, e.message)); }
+      }
+      async function doSend() {
+        if (!await rexDialog.confirm('Send this reply?', 'It goes to ' + who + (other.from.addr ? ' (' + other.from.addr + ')' : '') + ' from ' + st.connected + '.', 'Send')) return;
+        send.disabled = true;
+        try {
+          const payload = mode === 'quick' ? { mode: 'quick', text: quick.value } : { mode: 'design', design: (await design()).design };
+          const r = await api('/api/owner/email/inbox/' + t.id + '/reply', { method: 'POST', body: payload });
+          toast('Sent to ' + (r.to.name || r.to.addr) + '.', 'good'); open(t.id);
+        } catch (e) { toast(e.message, 'bad'); send.disabled = false; }
+      }
+      box.append(h('h4', { style: 'margin:0 0 8px' }, 'Reply to ' + who), seg, quick, fuBox, h('div', { style: 'margin-top:10px' }, send));
+      return box;
+    }
+    load(true);
+    return wrap;
+  }
+
   async function render() {
     pane.replaceChildren(h('div', { class: 'skel', style: 'height:160px' }));
     try {
@@ -489,6 +598,7 @@
       else if (tab === 'servers') node = await serversTab();
       else if (tab === 'users') node = await usersTab();
       else if (tab === 'support') node = await supportTab();
+      else if (tab === 'inbox') node = await inboxTab();
       else if (tab === 'email') node = await emailTab();
       else if (tab === 'pages') node = await pagesTab();
       else if (tab === 'updates') node = await updatesTab();

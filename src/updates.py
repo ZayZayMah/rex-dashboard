@@ -25,6 +25,7 @@ KEEP_DAYS = 30
 MAX_FEATURES = 24
 MAX_FIXES = 60
 CHECK_EVERY = 45
+_LAST = {}
 TOPIC = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
 PAGE_FEATURES, PAGE_FIXES = "updates", "bug-fixes"
 EMAIL_IDS = {"features": "feed00feed01", "fixes": "feed00feed02"}
@@ -584,7 +585,7 @@ async def sync(w, url, force=False, bot_entries=None):
     """Pull in new entries and refresh premade pages/emails. Cheap when nothing changed."""
     d = await load(w)
     now = time.time()
-    if not force and bot_entries is None and now - d.get("synced", 0) < CHECK_EVERY:
+    if not force and bot_entries is None and now - max(d.get("synced", 0), _LAST.get("t", 0)) < CHECK_EVERY:
         return d
     origin = w.public_origin(url)
     d["origin"] = origin
@@ -604,10 +605,15 @@ async def sync(w, url, force=False, bot_entries=None):
     before = _hash([d["features"], d["fixes"]])
     _prune(d)
     changed |= before != _hash([d["features"], d["fixes"]])
-    d["synced"] = now
-    if changed or force:
-        await regen(w, d, force)
-    await w.store.put(KEY, d)
+    _LAST["t"] = now
+    if changed or force or now - d.get("synced", 0) > 6 * 3600:
+        # KV writes are limited (about 1000 a day on the free plan), so only write when something changed.
+        d["synced"] = now
+        try:
+            await regen(w, d, force)
+            await w.store.put(KEY, d)
+        except Exception as err:
+            print("updates write skipped:", type(err).__name__, str(err)[:160])
     return d
 
 

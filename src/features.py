@@ -11,7 +11,9 @@ import re
 import secrets
 import time
 import helper
+import emailgen as _gen
 from email.header import Header
+from email.utils import parseaddr
 from urllib.parse import urlencode, parse_qs, urlparse, quote
 
 _G = {}
@@ -505,7 +507,7 @@ async def bot_route(w, tail, method, body):
 # Email: tags (kinds of email people can pick), preferences page, Gmail sending, saved emails, automatic sending
 # =====================================================================================================================
 GMAIL_REDIRECT = "http://localhost"
-GMAIL_SCOPES = "openid email https://www.googleapis.com/auth/gmail.send"
+GMAIL_SCOPES = "openid email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send"
 DAILY_CAP = 450
 BATCH = 8
 PREF_KEYS = ("update", "push")
@@ -920,6 +922,168 @@ def _fonts():
     return [{"id": k, "label": v[2].replace(" *", ""), "css": v[0], "gf": v[1] or "", "web": bool(v[1])} for k, v in _mail.FONTS.items()]
 
 
+# ---- inbox: read and reply to the mail the connected Gmail account receives (owners only)
+def _can_read(g):
+    sc = str(g.get("scope") or "")
+    return "gmail.modify" in sc or "gmail.readonly" in sc
+
+
+async def _gm(w, g, method, path, body=None):
+    tok = await _access_token(w, g)
+    hdr = {"Authorization": "Bearer " + tok}
+    if body is not None:
+        hdr["Content-Type"] = "application/json"
+    st, txt = await H("http")(method, "https://gmail.googleapis.com/gmail/v1/users/me/" + path, hdr, json.dumps(body) if body is not None else None)
+    if st >= 400:
+        why = ""
+        try:
+            why = str((json.loads(txt).get("error") or {}).get("message") or "")[:160]
+        except ValueError:
+            pass
+        if st in (401, 403) and ("scope" in why.lower() or "insufficient" in why.lower() or st == 401):
+            raise H("HttpError")(403, "gmail_scope", "Gmail needs permission to read your mail. Press Reconnect Gmail and allow it.")
+        raise H("HttpError")(502, "gmail_failed", "Gmail said: " + (why or "something went wrong") + ".")
+    return json.loads(txt) if txt else {}
+
+
+def _hdr(msg, name):
+    for x in (msg.get("payload") or {}).get("headers") or []:
+        if str(x.get("name", "")).lower() == name:
+            return str(x.get("value") or "")
+    return ""
+
+
+def _dec(data):
+    try:
+        return base64.urlsafe_b64decode(str(data) + "=" * (-len(str(data)) % 4)).decode("utf-8", "replace")
+    except ValueError:
+        return ""
+
+
+def _html_text(src):
+    t = re.sub(r"(?is)<(script|style|head)[^>]*>.*?</\1>", " ", src)
+    t = re.sub(r"(?is)<a\s[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", lambda m: (re.sub(r"<[^>]+>", "", m.group(2)).strip() + (" (" + m.group(1) + ")" if m.group(1).startswith("http") and m.group(1) not in m.group(2) else "")), t)
+    t = re.sub(r"(?i)<br\s*/?>|</(p|div|tr|li|h[1-6]|table)>", "\n", t)
+    t = re.sub(r"<[^>]+>", "", t)
+    t = html.unescape(t)
+    t = re.sub(r"[ \t\u00a0]+", " ", t)
+    return re.sub(r"\n\s*\n\s*\n+", "\n\n", t).strip()
+
+
+def _walk(part, out):
+    mt, body = str(part.get("mimeType") or ""), part.get("body") or {}
+    if part.get("filename"):
+        out["files"].append({"name": str(part["filename"])[:80], "size": int(body.get("size") or 0)})
+    elif mt == "text/plain" and body.get("data"):
+        out["plain"] += _dec(body["data"])
+    elif mt == "text/html" and body.get("data"):
+        out["html"] += _dec(body["data"])
+    for p in part.get("parts") or []:
+        _walk(p, out)
+
+
+def _person(raw):
+    name, addr = parseaddr(raw or "")
+    return {"name": (name or addr or "Unknown")[:80], "addr": addr[:120]}
+
+
+def _summ(t, me):
+    msgs = t.get("messages") or []
+    last = msgs[-1] if msgs else {}
+    first = msgs[0] if msgs else {}
+    other = next((m for m in reversed(msgs) if _person(_hdr(m, "from"))["addr"].lower() != me.lower()), last)
+    labels = {l for m in msgs for l in (m.get("labelIds") or [])}
+    return {"id": t.get("id"), "subject": _hdr(first, "subject")[:140] or "(no subject)", "from": _person(_hdr(other, "from")), "snippet": html.unescape(str(t.get("snippet") or ""))[:140],
+            "date": int(last.get("internalDate") or 0) // 1000, "count": len(msgs), "unread": "UNREAD" in labels, "mine": _person(_hdr(last, "from"))["addr"].lower() == me.lower()}
+
+
+async def _inbox_list(w, g, params):
+    q = H("clean_str")(params.get("q"), 120)
+    qs = {"maxResults": 15, "labelIds": "INBOX"}
+    if q:
+        qs["q"] = q
+    pt = H("clean_str")(params.get("page"), 200)
+    if pt and re.match(r"^[A-Za-z0-9_-]+$", pt):
+        qs["pageToken"] = pt
+    lst = await _gm(w, g, "GET", "threads?" + urlencode(qs))
+    ids = [t["id"] for t in (lst.get("threads") or []) if re.match(r"^[0-9a-f]{8,24}$", str(t.get("id")))]
+    await _access_token(w, g)
+    import asyncio
+    full = await asyncio.gather(*[_gm(w, g, "GET", "threads/" + i + "?format=metadata&metadataHeaders=From&metadataHeaders=Subject") for i in ids])
+    return {"threads": [_summ(t, g.get("addr", "")) for t in full], "next": lst.get("nextPageToken") or ""}
+
+
+async def _inbox_thread(w, g, tid):
+    t = await _gm(w, g, "GET", "threads/" + tid + "?format=full")
+    me = g.get("addr", "").lower()
+    out, unread = [], False
+    for m in t.get("messages") or []:
+        parts = {"plain": "", "html": "", "files": []}
+        _walk(m.get("payload") or {}, parts)
+        text = parts["plain"].strip() or _html_text(parts["html"])
+        unread = unread or "UNREAD" in (m.get("labelIds") or [])
+        fr = _person(_hdr(m, "from"))
+        out.append({"id": m.get("id"), "from": fr, "to": _hdr(m, "to")[:200], "date": int(m.get("internalDate") or 0) // 1000, "subject": _hdr(m, "subject")[:160],
+                    "text": text[:24000], "files": parts["files"][:8], "mine": fr["addr"].lower() == me})
+    if unread:
+        try:
+            await _gm(w, g, "POST", "threads/" + tid + "/modify", {"removeLabelIds": ["UNREAD"]})
+        except Exception:
+            pass
+    return {"id": tid, "subject": (out[0]["subject"] if out else "") or "(no subject)", "messages": out}
+
+
+def build_reply_mime(sender, to, subject, text_body, html_body, in_reply_to, references):
+    def b64lines(s):
+        raw = base64.b64encode(s.encode()).decode()
+        return "\r\n".join(raw[i:i + 76] for i in range(0, len(raw), 76))
+    head = (f"From: Rex <{sender}>\r\nTo: {to}\r\nSubject: {Header(subject, 'utf-8').encode()}\r\nMIME-Version: 1.0\r\n"
+            + (f"In-Reply-To: {in_reply_to}\r\n" if in_reply_to else "") + (f"References: {references}\r\n" if references else ""))
+    if not html_body:
+        return _b64((head + f"Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n{b64lines(text_body)}").encode())
+    bound = "rex" + secrets.token_hex(8)
+    return _b64((head + f"Content-Type: multipart/alternative; boundary=\"{bound}\"\r\n\r\n"
+                 f"--{bound}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n{b64lines(text_body)}\r\n"
+                 f"--{bound}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n{b64lines(html_body)}\r\n--{bound}--").encode())
+
+
+async def _inbox_reply(w, g, tid, body, origin):
+    err = H("HttpError")
+    t = await _gm(w, g, "GET", "threads/" + tid + "?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Reply-To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References")
+    msgs = t.get("messages") or []
+    if not msgs:
+        raise err(404, "not_found", "That conversation no longer exists.")
+    me = g.get("addr", "").lower()
+    target = next((m for m in reversed(msgs) if _person(_hdr(m, "from"))["addr"].lower() != me), msgs[-1])
+    last = msgs[-1]
+    to_p = _person(_hdr(target, "reply-to") or _hdr(target, "from"))
+    if _person(_hdr(target, "from"))["addr"].lower() == me:
+        to_p = _person(_hdr(target, "to"))
+    if not re.match(r"^[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+$", to_p["addr"]):
+        raise err(400, "bad_request", "Couldn't work out who to reply to.")
+    subject = _hdr(msgs[0], "subject") or "(no subject)"
+    subject = subject if subject.lower().startswith("re:") else "Re: " + subject
+    mid = _hdr(last, "message-id")
+    refs = (_hdr(last, "references") + " " + mid).strip()[-900:]
+    mode = body.get("mode")
+    if mode == "design":
+        try:
+            design = _mail.clean_design(body.get("design"))
+        except ValueError as ex:
+            raise err(400, "bad_design", str(ex))
+        v = _vars(w, origin, None, to_p["name"] if to_p["name"] != to_p["addr"] else "there")
+        doc, text = _mail.render(design, v, subject)
+        raw = build_reply_mime(g["addr"], to_p["addr"], subject, text, doc, mid, refs)
+    else:
+        text = H("clean_str")(body.get("text"), 8000)
+        if not text.strip():
+            raise err(400, "bad_request", "Write a reply first.")
+        raw = build_reply_mime(g["addr"], to_p["addr"], subject, text.replace("\r\n", "\n").replace("\n", "\r\n"), "", mid, refs)
+    await _gm(w, g, "POST", "messages/send", {"raw": raw, "threadId": tid})
+    return to_p
+
+
+
 async def owner_email_route(w, request, url, path, method, session):
     err = H("HttpError")
     jr = H("json_response")
@@ -948,11 +1112,51 @@ async def owner_email_route(w, request, url, path, method, session):
         if configured:
             auth = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({"client_id": w.cfg("GMAIL_CLIENT_ID"), "redirect_uri": GMAIL_REDIRECT, "response_type": "code",
                                                                                  "scope": GMAIL_SCOPES, "access_type": "offline", "prompt": "consent"})
-        return jr({"configured": configured, "connected": g.get("addr", ""), "auth_url": auth, "audience": aud, "sent_today": day["n"], "cap": DAILY_CAP,
+        return jr({"configured": configured, "connected": g.get("addr", ""), "can_read": _can_read(g), "auth_url": auth, "audience": aud, "sent_today": day["n"], "cap": DAILY_CAP,
                    "campaigns": (await w.store.get("email:camps") or [])[:15], "templates": await w.store.get("email:tpls") or [],
                    "events": EVENTS, "tags": tags, "send_at": SEND_AT})
     if tail == ["meta"] and method == "GET":
-        return jr({"fonts": _fonts(), "variables": list(_mail.VARIABLES), "events": EVENTS, "send_at": SEND_AT, "tags": await get_tags(w), "mob_w": _mail.MOB_W})
+        return jr({"fonts": _fonts(), "variables": list(_mail.VARIABLES), "events": EVENTS, "send_at": SEND_AT, "tags": await get_tags(w), "mob_w": _mail.MOB_W,
+                   "gen": {"layouts": {k: {"label": v[0], "desc": v[1]} for k, v in _gen.LAYOUTS.items()}, "variants": _gen.VARIANTS, "palettes": _gen.PALETTES, "followup": _gen.followup_defaults()}})
+    if tail == ["gen"] and method == "POST":
+        body = await w.read_json(request, 64 * 1024)
+        body = body if isinstance(body, dict) else {}
+        base = body.get("base") if body.get("base") in _gen.PALETTES else "dark"
+        if body.get("kind") == "followup":
+            res = _gen.followup(body.get("sections"), body.get("variant") or "classic", body.get("palette"), base, body.get("subject"), "", body.get("quote"))
+        else:
+            res = _gen.announcement(body.get("items"), body.get("layout") or "auto", body.get("variant") or "classic", body.get("palette"), base,
+                                    H("clean_str")(body.get("button_label"), 40), body.get("button_url"), body.get("subject"))
+        return jr(res)
+    if tail[:1] == ["inbox"]:
+        if not g.get("refresh"):
+            raise err(400, "not_connected", "Connect Gmail first.")
+        if not _can_read(g):
+            raise err(403, "gmail_scope", "Gmail needs permission to read your mail. Press Reconnect Gmail and allow it.")
+        before = (g.get("at") or {}).get("t")
+        try:
+            if len(tail) == 1 and method == "GET":
+                res = await _inbox_list(w, g, {k: v[0] for k, v in parse_qs(url.query).items() if v})
+                res["me"] = g.get("addr", "")
+                return jr(res)
+            tid = tail[1] if len(tail) > 1 else ""
+            if not re.match(r"^[0-9a-f]{8,24}$", tid):
+                raise err(404, "not_found", "Not found.")
+            if len(tail) == 2 and method == "GET":
+                return jr(await _inbox_thread(w, g, tid))
+            if len(tail) == 3 and tail[2] == "reply" and method == "POST":
+                w.check_mutation(request, url, session)
+                body = await w.read_json(request, 200 * 1024)
+                to_p = await _inbox_reply(w, g, tid, body if isinstance(body, dict) else {}, origin)
+                return jr({"ok": True, "to": to_p})
+            if len(tail) == 3 and tail[2] == "archive" and method == "POST":
+                w.check_mutation(request, url, session)
+                await _gm(w, g, "POST", "threads/" + tid + "/modify", {"removeLabelIds": ["INBOX", "UNREAD"]})
+                return jr({"ok": True})
+        finally:
+            if (g.get("at") or {}).get("t") != before:
+                await w.store.put("email:gmail", g)
+        raise err(404, "not_found", "Not found.")
     if len(tail) == 2 and tail[0] == "templates" and method == "GET":
         t = await w.store.get("email:tpl:" + tail[1]) if re.match(r"^[a-f0-9]{12}$", tail[1]) else None
         if not t:
@@ -1048,8 +1252,8 @@ async def owner_email_route(w, request, url, path, method, session):
             raise err(400, "no_refresh", "Google didn't give a long-lived login. Remove Rex from your Google account's third-party access and try again.")
         st2, txt2 = await H("http")("GET", "https://openidconnect.googleapis.com/v1/userinfo", {"Authorization": "Bearer " + d["access_token"]})
         addr = (json.loads(txt2).get("email") if st2 == 200 else "") or ""
-        await w.store.put("email:gmail", {"refresh": d["refresh_token"], "addr": addr})
-        return jr({"ok": True, "connected": addr})
+        await w.store.put("email:gmail", {"refresh": d["refresh_token"], "addr": addr, "scope": str(d.get("scope") or "")[:400]})
+        return jr({"ok": True, "connected": addr, "can_read": "gmail.modify" in str(d.get("scope") or "")})
     if tail == ["disconnect"] and method == "POST":
         await w.store.delete("email:gmail")
         return jr({"ok": True})

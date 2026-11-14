@@ -44,6 +44,8 @@ FONTS = {
     "fredoka": ("'Fredoka', Arial, sans-serif", "Fredoka:wght@400;600;700", "Fredoka *"),
     "chakra": ("'Chakra Petch', Arial, sans-serif", "Chakra+Petch:wght@400;600;700", "Chakra Petch *"),
     "creepster": ("'Creepster', cursive", "Creepster", "Creepster *"),
+    "fraunces": ("'Fraunces', Georgia, serif", "Fraunces:wght@400;600;700", "Fraunces *"),
+    "figtree": ("'Figtree', Arial, sans-serif", "Figtree:wght@400;600;700", "Figtree *"),
     "mountains": ("'Mountains of Christmas', cursive", "Mountains+of+Christmas:wght@400;700", "Mountains of Christmas *"),
     "righteous": ("'Righteous', Arial, sans-serif", "Righteous", "Righteous *"),
     "abril": ("'Abril Fatface', Georgia, serif", "Abril+Fatface", "Abril Fatface *"),
