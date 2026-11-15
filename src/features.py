@@ -756,9 +756,40 @@ def eligible(u, send_to):
 def _vars(w, origin, key, name, extra=None):
     v = {"name": name or "there", "dashboard_url": origin + "/dashboard", "site_url": origin, "unsubscribe_url": _unsub_url(w, origin, key) if key else "#",
          "unsubscribe_link": _prefs_url(w, origin, key) if key else origin + "/", "logo_url": origin + "/img/rex-logo.png", "support_url": origin + "/support",
-         "date": time.strftime("%B %d, %Y", time.gmtime()), "server": ""}
+         "date": time.strftime("%B %d, %Y", time.gmtime()), "server": "", "code": ""}
     v.update(extra or {})
     return v
+
+
+CODE_TIERS = ("premium", "priority", "ultra")
+CODE_DURATIONS = ("1 day", "7 days", "30 days", "90 days", "1 year", "lifetime")
+SAMPLE_CODE = "REX-PREMIUM-SAMPLE-NOT-REAL"
+
+
+def _clean_code_cfg(c):
+    c = c if isinstance(c, dict) else {}
+    try:
+        limit = max(1, min(int(c.get("limit") or 1), 1000))
+        days = max(1, min(int(c.get("valid_days") or 14), 90))
+    except (TypeError, ValueError):
+        limit, days = 1, 14
+    return {"tier": c.get("tier") if c.get("tier") in CODE_TIERS else "premium", "duration": c.get("duration") if c.get("duration") in CODE_DURATIONS else "30 days", "limit": limit, "valid_days": days}
+
+
+def _uses_code(tpl):
+    return "{code}" in (tpl.get("subject") or "") or "{code}" in json.dumps(tpl.get("design") or {})
+
+
+async def _make_codes(w, cfg, n, who):
+    """Invent n different codes and ask the bot to register them. Raises if the bot cannot take them right now, so nothing is sent with a code that won't work."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    codes = ["REX-" + cfg["tier"].upper() + "-" + "".join(secrets.choice(alphabet) for _ in range(16)) for _ in range(n)]
+    try:
+        await w.enqueue("_", {"id": secrets.token_hex(6), "ts": H("now")(), "by": who.get("id", ""), "byname": who.get("name", "email"), "op": "register_codes",
+                              "args": {"codes": codes, "tier": cfg["tier"], "duration": cfg["duration"], "limit": cfg["limit"], "valid_days": cfg["valid_days"]}, "gid": "_"})
+    except H("HttpError"):
+        raise H("HttpError")(429, "codes_busy", "Rex can't take the new codes right now (too many requests are waiting, or the bot is offline). Nothing was sent. Try again in a minute.")
+    return codes
 
 
 def _tpl_row(t):
@@ -789,7 +820,7 @@ def _clean_tpl(body, prev, tag_ids):
         send_to = "everyone"
     enabled = bool(body.get("enabled")) and send_when != "manual"
     return {"id": prev.get("id"), "name": name, "subject": subject or name, "design": design, "send_to": send_to, "send_when": send_when, "when_at": when_at, "at_time": at_time,
-            "enabled": enabled, "updated": H("now")(), "sent": int(prev.get("sent", 0))}
+            "enabled": enabled, "updated": H("now")(), "sent": int(prev.get("sent", 0)), "code": _clean_code_cfg(body.get("code"))}
 
 
 async def _gmail(w):
@@ -822,6 +853,11 @@ async def _send_tpl(w, g, tpl_id, rec, key, origin, extra):
     day = await w.store.get(day_key) or {"n": 0}
     if day["n"] >= DAILY_CAP:
         return False
+    if _uses_code(tpl):
+        try:
+            extra = dict(extra or {}, code=(await _make_codes(w, _clean_code_cfg(tpl.get("code")), 1, {"name": "email"}))[0])
+        except H("HttpError"):
+            return False
     ok = await _send_one(w, g, tpl, key, rec["e"], rec.get("n", ""), origin, extra)
     day["n"] += 1
     await w.store.put(day_key, day, ttl=60 * 60 * 36)
@@ -994,12 +1030,19 @@ def _summ(t, me):
     other = next((m for m in reversed(msgs) if _person(_hdr(m, "from"))["addr"].lower() != me.lower()), last)
     labels = {l for m in msgs for l in (m.get("labelIds") or [])}
     return {"id": t.get("id"), "subject": _hdr(first, "subject")[:140] or "(no subject)", "from": _person(_hdr(other, "from")), "snippet": html.unescape(str(t.get("snippet") or ""))[:140],
-            "date": int(last.get("internalDate") or 0) // 1000, "count": len(msgs), "unread": "UNREAD" in labels, "mine": _person(_hdr(last, "from"))["addr"].lower() == me.lower()}
+            "date": int(last.get("internalDate") or 0) // 1000, "count": len(msgs), "unread": "UNREAD" in labels, "starred": "STARRED" in labels, "spam": "SPAM" in labels, "trash": "TRASH" in labels, "mine": _person(_hdr(last, "from"))["addr"].lower() == me.lower()}
 
 
 async def _inbox_list(w, g, params):
     q = H("clean_str")(params.get("q"), 120)
-    qs = {"maxResults": 15, "labelIds": "INBOX"}
+    folder = str(params.get("folder") or "INBOX")
+    if not re.match(r"^[A-Za-z0-9_-]{2,60}$", folder) and folder != "ALL":
+        folder = "INBOX"
+    qs = {"maxResults": 15}
+    if folder != "ALL":
+        qs["labelIds"] = folder
+    if folder in ("SPAM", "TRASH", "ALL") or "in:anywhere" in q:
+        qs["includeSpamTrash"] = "true"
     if q:
         qs["q"] = q
     pt = H("clean_str")(params.get("page"), 200)
@@ -1023,14 +1066,111 @@ async def _inbox_thread(w, g, tid):
         text = parts["plain"].strip() or _html_text(parts["html"])
         unread = unread or "UNREAD" in (m.get("labelIds") or [])
         fr = _person(_hdr(m, "from"))
-        out.append({"id": m.get("id"), "from": fr, "to": _hdr(m, "to")[:200], "date": int(m.get("internalDate") or 0) // 1000, "subject": _hdr(m, "subject")[:160],
-                    "text": text[:24000], "files": parts["files"][:8], "mine": fr["addr"].lower() == me})
+        out.append({"id": m.get("id"), "from": fr, "to": _hdr(m, "to")[:200], "cc": _hdr(m, "cc")[:200], "date": int(m.get("internalDate") or 0) // 1000, "subject": _hdr(m, "subject")[:160],
+                    "text": text[:24000], "has_html": bool(parts["html"].strip()), "files": parts["files"][:8], "mine": fr["addr"].lower() == me})
     if unread:
         try:
             await _gm(w, g, "POST", "threads/" + tid + "/modify", {"removeLabelIds": ["UNREAD"]})
         except Exception:
             pass
-    return {"id": tid, "subject": (out[0]["subject"] if out else "") or "(no subject)", "messages": out}
+    labels = {l for m in t.get("messages") or [] for l in (m.get("labelIds") or [])}
+    return {"id": tid, "subject": (out[0]["subject"] if out else "") or "(no subject)", "messages": out, "labels": sorted(labels), "starred": "STARRED" in labels, "spam": "SPAM" in labels, "trash": "TRASH" in labels}
+
+
+_CID_IMG = re.compile(r"""(?i)(src|background)\s*=\s*(["'])cid:([^"']+)\2""")
+
+
+def _clean_html(src):
+    t = re.sub(r"(?is)<(script|iframe|object|embed|form|applet|noscript)\b.*?</\1\s*>", "", src)
+    t = re.sub(r"(?is)<(script|iframe|object|embed|form|applet|base|meta|noscript)\b[^>]*>", "", t)
+    t = re.sub(r"(?i)\son[a-z]+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", t)
+    t = re.sub(r"(?i)(href|src|action|formaction|xlink:href|background)\s*=\s*([\"'])\s*(javascript|vbscript|data:text)[^\"']*\2", r"\1=\2#\2", t)
+    styles = "".join(re.findall(r"(?is)<style\b.*?</style>", t))
+    m = re.search(r"(?is)<body\b[^>]*>(.*)</body\s*>", t)
+    body = m.group(1) if m else re.sub(r"(?is)<head\b.*?</head\s*>|</?(html|body)\b[^>]*>|<!doctype[^>]*>", "", t)
+    return styles, body
+
+
+def _find_parts(part, out):
+    mt, body = str(part.get("mimeType") or ""), part.get("body") or {}
+    cid = ""
+    for x in part.get("headers") or []:
+        if str(x.get("name", "")).lower() == "content-id":
+            cid = str(x.get("value") or "").strip("<> ")
+    if cid and body.get("attachmentId"):
+        out["cid"][cid] = (mt, body["attachmentId"])
+    elif cid and body.get("data"):
+        out["cid"][cid] = (mt, "inline:" + body["data"])
+    if mt == "text/html" and body.get("data"):
+        out["html"] += _dec(body["data"])
+    for p in part.get("parts") or []:
+        _find_parts(p, out)
+
+
+async def _inbox_html(w, g, tid, mid, images):
+    msg = await _gm(w, g, "GET", "messages/" + mid + "?format=full")
+    out = {"html": "", "cid": {}}
+    _find_parts(msg.get("payload") or {}, out)
+    styles, body = _clean_html(out["html"] or "<p>(This email has no formatted version.)</p>")
+    used = {c for _, _, c in _CID_IMG.findall(body)}
+    uris, total = {}, 0
+    for cid in list(used)[:8]:
+        mt, ref = out["cid"].get(cid, ("", ""))
+        if not ref or not mt.startswith("image/"):
+            continue
+        try:
+            data = ref[7:] if ref.startswith("inline:") else (await _gm(w, g, "GET", "messages/" + mid + "/attachments/" + ref)).get("data", "")
+        except Exception:
+            continue
+        total += len(data)
+        if total > 3_000_000:
+            break
+        uris[cid] = "data:" + mt + ";base64," + str(data).replace("-", "+").replace("_", "/")
+    body = _CID_IMG.sub(lambda m: m.group(1) + '="' + uris.get(m.group(3), "") + '"', body)
+    if not images:
+        body = re.sub(r"(?i)<img\b[^>]*\ssrc=[\"']https?:[^>]*>", "", body)
+    doc = ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank">'
+           '<style>body{margin:0;padding:14px;font:14px/1.5 Arial,Helvetica,sans-serif;color:#202124;background:#fff;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}</style>'
+           + styles + "</head><body>" + body + "</body></html>")
+    return doc
+
+
+_ACTIONS = {
+    "archive": ("modify", [], ["INBOX"]), "inbox": ("modify", ["INBOX"], ["SPAM"]), "spam": ("modify", ["SPAM"], ["INBOX"]), "notspam": ("modify", ["INBOX"], ["SPAM"]),
+    "read": ("modify", [], ["UNREAD"]), "unread": ("modify", ["UNREAD"], []), "star": ("modify", ["STARRED"], []), "unstar": ("modify", [], ["STARRED"]),
+    "trash": ("trash", [], []), "untrash": ("untrash", [], []),
+}
+
+
+async def _inbox_act(w, g, tid, action):
+    err = H("HttpError")
+    if action.startswith("label:") or action.startswith("unlabel:"):
+        lid = action.split(":", 1)[1]
+        if not re.match(r"^Label_[0-9]+$", lid):
+            raise err(400, "bad_request", "Unknown label.")
+        add, rem = ([lid], ["INBOX"]) if action.startswith("label:") else ([], [lid])
+        await _gm(w, g, "POST", "threads/" + tid + "/modify", {"addLabelIds": add, "removeLabelIds": rem})
+        return
+    if action not in _ACTIONS:
+        raise err(400, "bad_request", "Unknown action.")
+    kind, add, rem = _ACTIONS[action]
+    if kind == "modify":
+        await _gm(w, g, "POST", "threads/" + tid + "/modify", {"addLabelIds": add, "removeLabelIds": rem})
+    else:
+        await _gm(w, g, "POST", "threads/" + tid + "/" + kind, {})
+
+
+async def _inbox_labels(w, g):
+    d = await _gm(w, g, "GET", "labels")
+    user = [{"id": x["id"], "name": str(x.get("name"))[:60]} for x in d.get("labels") or [] if x.get("type") == "user" and re.match(r"^Label_[0-9]+$", str(x.get("id")))]
+    counts = {}
+    for lid in ("INBOX", "SPAM"):
+        try:
+            counts[lid] = int((await _gm(w, g, "GET", "labels/" + lid)).get("threadsUnread") or 0)
+        except Exception:
+            counts[lid] = 0
+    return {"labels": sorted(user, key=lambda x: x["name"].lower()), "unread": counts}
+
 
 
 def build_reply_mime(sender, to, subject, text_body, html_body, in_reply_to, references):
@@ -1125,8 +1265,8 @@ async def owner_email_route(w, request, url, path, method, session):
         if body.get("kind") == "followup":
             res = _gen.followup(body.get("sections"), body.get("variant") or "classic", body.get("palette"), base, body.get("subject"), "", body.get("quote"))
         else:
-            res = _gen.announcement(body.get("items"), body.get("layout") or "auto", body.get("variant") or "classic", body.get("palette"), base,
-                                    H("clean_str")(body.get("button_label"), 40), body.get("button_url"), body.get("subject"))
+            res = _gen.announcement(body.get("items"), body.get("layout") or "auto", body.get("variant") or "auto", body.get("palette"), base,
+                                    H("clean_str")(body.get("button_label"), 40), body.get("button_url"), body.get("subject"), page=body.get("kind") == "page")
         return jr(res)
     if tail[:1] == ["inbox"]:
         if not g.get("refresh"):
@@ -1139,9 +1279,30 @@ async def owner_email_route(w, request, url, path, method, session):
                 res = await _inbox_list(w, g, {k: v[0] for k, v in parse_qs(url.query).items() if v})
                 res["me"] = g.get("addr", "")
                 return jr(res)
+            if tail == ["inbox", "labels"] and method == "GET":
+                return jr(await _inbox_labels(w, g))
+            if tail == ["inbox", "bulk"] and method == "POST":
+                w.check_mutation(request, url, session)
+                body = await w.read_json(request, 8 * 1024)
+                ids = [i for i in ((body or {}).get("ids") or [])[:25] if re.match(r"^[0-9a-f]{8,24}$", str(i))]
+                import asyncio
+                await _access_token(w, g)
+                await asyncio.gather(*[_inbox_act(w, g, i, str((body or {}).get("action") or "")) for i in ids])
+                return jr({"ok": True, "n": len(ids)})
             tid = tail[1] if len(tail) > 1 else ""
             if not re.match(r"^[0-9a-f]{8,24}$", tid):
                 raise err(404, "not_found", "Not found.")
+            if len(tail) == 4 and tail[2] == "html" and method == "GET" and re.match(r"^[0-9a-f]{8,24}$", tail[3]):
+                doc = await _inbox_html(w, g, tail[3], tail[3], parse_qs(url.query).get("images", ["1"])[0] != "0")
+                from workers import Response
+                return Response(doc, status=200, headers={
+                    "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+                    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https:; font-src https: data:; img-src https: data:; frame-ancestors 'self'"})
+            if len(tail) == 3 and tail[2] == "act" and method == "POST":
+                w.check_mutation(request, url, session)
+                body = await w.read_json(request, 2 * 1024)
+                await _inbox_act(w, g, tid, str((body or {}).get("action") or ""))
+                return jr({"ok": True})
             if len(tail) == 2 and method == "GET":
                 return jr(await _inbox_thread(w, g, tid))
             if len(tail) == 3 and tail[2] == "reply" and method == "POST":
@@ -1264,7 +1425,7 @@ async def owner_email_route(w, request, url, path, method, session):
         except ValueError as ex:
             raise err(400, "bad_design", str(ex))
         who = session["user"]["name"]
-        v = _vars(w, origin, session["user"]["id"], who)
+        v = _vars(w, origin, session["user"]["id"], who, {"code": SAMPLE_CODE})
         doc, text = _mail.render(design, v, H("clean_str")(body.get("subject"), 150), force_dark=bool(body.get("dark")))
         tok = secrets.token_urlsafe(18)
         await w.store.put("email:pv:" + tok, {"html": doc}, ttl=600)
@@ -1281,7 +1442,7 @@ async def owner_email_route(w, request, url, path, method, session):
         except ValueError as ex:
             raise err(400, "bad_design", str(ex))
         tpl = {"design": design, "subject": "[Test] " + (H("clean_str")(body.get("subject"), 140) or "Rex email")}
-        ok = await _send_one(w, g, tpl, session["user"]["id"], to, session["user"]["name"], origin)
+        ok = await _send_one(w, g, tpl, session["user"]["id"], to, session["user"]["name"], origin, {"code": SAMPLE_CODE})
         if g.get("at"):
             await w.store.put("email:gmail", g)
         if not ok:
@@ -1329,7 +1490,7 @@ async def owner_email_route(w, request, url, path, method, session):
             if not recips:
                 raise err(400, "no_audience", "Nobody matches that audience (people need an email on file and must not have turned that kind of email off).")
             cid = secrets.token_hex(6)
-            camp = {"id": cid, "tpl": tid, "name": tpl["name"], "subject": tpl["subject"], "design": tpl["design"], "aud": aud, "total": len(recips), "pos": 0, "sent": 0,
+            camp = {"id": cid, "tpl": tid, "name": tpl["name"], "subject": tpl["subject"], "design": tpl["design"], "aud": aud, "code": _clean_code_cfg(tpl.get("code")) if _uses_code(tpl) else None, "total": len(recips), "pos": 0, "sent": 0,
                     "failed": 0, "started": H("now")(), "done": False}
             await w.store.put("email:c:" + cid, dict(camp, recips=recips), ttl=60 * 60 * 24 * 14)
         c = await w.store.get("email:c:" + cid) if re.match(r"^[a-f0-9]{12}$", str(cid)) else None
@@ -1337,10 +1498,12 @@ async def owner_email_route(w, request, url, path, method, session):
             raise err(404, "not_found", "Campaign not found.")
         left = DAILY_CAP - day["n"]
         sent_now = 0
-        for r in c["recips"][c["pos"]:c["pos"] + BATCH]:
+        chunk = c["recips"][c["pos"]:c["pos"] + BATCH][:max(0, left)]
+        codes = await _make_codes(w, c["code"], len(chunk), session["user"]) if (c.get("code") and chunk) else []
+        for r in chunk:
             if left <= 0:
                 break
-            ok = await _send_one(w, g, c, r.get("key") or r.get("uid"), r["e"], r["n"], origin)
+            ok = await _send_one(w, g, c, r.get("key") or r.get("uid"), r["e"], r["n"], origin, {"code": codes.pop(0)} if codes else None)
             c["pos"] += 1
             left -= 1
             sent_now += 1
@@ -1464,7 +1627,10 @@ async def pages_owner_route(w, request, url, path, method, session):
         if method == "DELETE" or (method == "POST" and False):
             cur = await w.store.get("page:" + name)
             if cur and cur.get("premade"):
-                raise err(400, "premade", "This is a premade page, so it can't be deleted. You can edit it, and it keeps your edits.")
+                w.check_mutation(request, url, session)
+                d = await updates.load(w)
+                await updates.remove_page(w, d, name, cur["premade"], w.public_origin(url))
+                return jr({"ok": True})
             await w.store.delete("page:" + name)
             await w.store.put("pages:idx", [r for r in idx if r["name"] != name])
             return jr({"ok": True})

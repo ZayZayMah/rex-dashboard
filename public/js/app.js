@@ -155,16 +155,16 @@ function mountFooter() {
     h('div', { class: 'foot-brand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('div', {}, h('b', {}, 'Rex'), h('div', { class: 'small' }, 'Smart. Helpful. Always here.'))),
     h('div', { class: 'foot-links' },
       h('a', { href: '/about' }, 'About'), h('a', { href: '/commands' }, 'Commands'), h('a', { href: '/premium' }, 'Premium'),
-      h('a', { href: '/live' }, 'Live stats'), h('a', { href: '/updates' }, 'Updates'), h('a', { href: '/docs' }, 'Docs'), h('a', { href: '/dashboard' }, 'Dashboard')),
+      h('a', { href: '/live' }, 'Live stats'), h('a', { href: '/updates' }, 'Updates'), h('a', { href: '/welcome' }, 'Guide'), h('a', { href: '/docs' }, 'Docs'), h('a', { href: '/dashboard' }, 'Dashboard')),
     h('span', { class: 'small' }, 'Not affiliated with Discord Inc.')));
 }
 
-const ABOUT_KEYS = ['about', 'commands', 'premium', 'live', 'docs', 'updates'];
+const ABOUT_KEYS = ['about', 'commands', 'premium', 'live', 'docs', 'updates', 'welcome'];
 
 function subnav(active) {
   const item = (href, label, key) => h('a', { href, class: active === key ? 'active' : '' }, label);
   return h('nav', { class: 'subnav', 'aria-label': 'About sections' },
-    item('/about', 'Overview', 'about'), item('/commands', 'Commands', 'commands'), item('/premium', 'Premium', 'premium'), item('/live', 'Live stats', 'live'), item('/updates', 'Updates', 'updates'), item('/docs', 'Docs', 'docs'));
+    item('/about', 'Overview', 'about'), item('/commands', 'Commands', 'commands'), item('/premium', 'Premium', 'premium'), item('/live', 'Live stats', 'live'), item('/updates', 'Updates', 'updates'), item('/welcome', 'Guide', 'welcome'), item('/docs', 'Docs', 'docs'));
 }
 
 function renderMaintenance(m, isOwnerPage) {
@@ -323,3 +323,26 @@ function redeemWidget(guilds, fixedGid, onDone) {
     fixedGid ? null : h('div', {}, h('label', { class: 'lbl' }, 'Server'), sel),
     h('div', {}, h('label', { class: 'lbl' }, 'Code'), code), h('div', {}, btn), out);
 }
+
+
+/* ---- sideways scrolling that works with a mouse: wheel over a row that scrolls sideways, and click-and-drag */
+(function () {
+  const sideways = (el) => { for (; el && el !== document.body; el = el.parentElement) { const cs = getComputedStyle(el); if ((cs.overflowX === 'auto' || cs.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 2) return el; } return null; };
+  document.addEventListener('wheel', (e) => {
+    const el = sideways(e.target); if (!el || e.ctrlKey) return;
+    const vertical = el.scrollHeight > el.clientHeight + 2 && getComputedStyle(el).overflowY !== 'visible';
+    const dx = e.deltaX || (e.shiftKey || !vertical ? e.deltaY : 0);
+    if (!dx) return;
+    const before = el.scrollLeft; el.scrollLeft += dx;
+    if (el.scrollLeft !== before) e.preventDefault();
+  }, { passive: false });
+  let drag = null, moved = false;
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || e.target.closest('input,textarea,select,[contenteditable],.eb-canvas,.eb-stage')) return;
+    const el = sideways(e.target); if (el) { drag = { el, x: e.clientX, left: el.scrollLeft }; moved = false; }
+  });
+  document.addEventListener('pointermove', (e) => { if (!drag) return; const dx = e.clientX - drag.x; if (Math.abs(dx) > 6) { moved = true; drag.el.scrollLeft = drag.left - dx; drag.el.style.cursor = 'grabbing'; } });
+  const end = () => { if (drag) { drag.el.style.cursor = ''; drag = null; } };
+  document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+  document.addEventListener('click', (e) => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+}());

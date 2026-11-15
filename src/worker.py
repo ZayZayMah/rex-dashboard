@@ -549,6 +549,8 @@ class Default(WorkerEntrypoint):
         if path == "/api/updates" and method == "GET":
             import updates
             return await updates.public_route(self, request, url, path, method)
+        if path == "/api/welcome" and method == "GET":
+            return json_response({"content": await self.store.get("welcome")})
         if path.startswith("/api/pages/") and method == "GET":
             return await features.pages_public(self, request, path, await self.get_session(request))
         if path.startswith("/api/img/") and method == "GET":
@@ -1427,6 +1429,27 @@ class Default(WorkerEntrypoint):
             return json_response(await self.get_site())
         if path == "/api/owner/email" or path.startswith("/api/owner/email/"):
             return await features.owner_email_route(self, request, url, path, method, session)
+        if path == "/api/owner/welcome":
+            if method == "GET":
+                return json_response({"content": await self.store.get("welcome")})
+            self.check_mutation(request, url, session)
+            if method == "DELETE":
+                await self.store.delete("welcome")
+                return json_response({"ok": True})
+            body = await self.read_json(request, 300 * 1024)
+            secs = []
+            for x in (body.get("sections") or [])[:40] if isinstance(body, dict) else []:
+                if isinstance(x, dict):
+                    sid = re.sub(r"[^a-z0-9-]", "", clean_str(x.get("id"), 40).lower())
+                    if sid and clean_str(x.get("title"), 90) and all(sid != y["id"] for y in secs):
+                        secs.append({"id": sid, "title": clean_str(x.get("title"), 90), "group": clean_str(x.get("group"), 40), "body": str(x.get("body") or "")[:12000]})
+            if not secs:
+                raise HttpError(400, "bad_request", "Keep at least one section.")
+            team = body.get("team") if isinstance(body.get("team"), dict) else {}
+            doc = {"team": {"title": clean_str(team.get("title"), 90), "text": str(team.get("text") or "")[:3000]}, "sections": secs, "updated": now()}
+            await self.store.put("welcome", doc)
+            await self.audit(session, "welcome", "Edited the welcome guide")
+            return json_response({"ok": True})
         if path == "/api/owner/updates" or path.startswith("/api/owner/updates/"):
             import updates
             return await updates.owner_route(self, request, url, path, method, session)

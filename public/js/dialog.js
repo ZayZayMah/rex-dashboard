@@ -31,7 +31,9 @@ window.rexDialog = (function () {
   let openMenu = null;
   const closeAll = () => { if (openMenu) { openMenu.remove(); openMenu = null; } };
   document.addEventListener('mousedown', (e) => { if (openMenu && !openMenu.contains(e.target) && !(e.target.closest && e.target.closest('.sel-btn'))) closeAll(); });
-  window.addEventListener('scroll', closeAll, true); window.addEventListener('resize', closeAll);
+  /* scrolling the menu itself (or anything inside it) must not close it; only the page moving away from it does */
+  window.addEventListener('scroll', (e) => { if (openMenu && !(e.target && e.target.nodeType === 1 && openMenu.contains(e.target)) && e.target !== openMenu) closeAll(); }, true);
+  window.addEventListener('resize', closeAll);
   function enhance(sel) {
     if (sel.dataset.enhanced || sel.hasAttribute('data-native') || sel.multiple || sel.size > 1) return;
     sel.dataset.enhanced = '1';

@@ -11,19 +11,29 @@
   }
 
   const B = (me.beta || {});
-  const TABS = [['tools', 'Tools'], ['website', 'Website'], ['servers', 'Servers'], ['users', 'Users']];
-  if (B.support && B.support !== 'off') TABS.push(['support', 'Support']);
-  if (B.email && B.email !== 'off') { TABS.push(['inbox', 'Inbox']); TABS.push(['email', 'Email']); }
-  if (B.pages && B.pages !== 'off') TABS.push(['pages', 'Pages']);
-  TABS.push(['updates', 'Updates'], ['audit', 'Audit'], ['health', 'Health']);
+  /* Tabs are grouped so the top row stays short: a group shows its own row of sub-tabs underneath. */
+  const LEAVES = [['tools', 'Tools', 'tools'], ['website', 'Website', 'website'], ['servers', 'Servers', 'people'], ['users', 'Users', 'people']];
+  if (B.support && B.support !== 'off') LEAVES.push(['support', 'Support', 'support']);
+  if (B.email && B.email !== 'off') LEAVES.push(['inbox', 'Inbox', 'mail'], ['email', 'Email', 'mail']);
+  if (B.pages && B.pages !== 'off') LEAVES.push(['pages', 'Pages', 'content']);
+  LEAVES.push(['updates', 'Updates', 'content'], ['welcome', 'Welcome guide', 'content'], ['audit', 'Audit', 'system'], ['health', 'Health', 'system']);
+  const GROUP_NAMES = { tools: 'Tools', website: 'Website', people: 'Servers & users', support: 'Support', mail: 'Mail', content: 'Pages & updates', system: 'Audit & health' };
+  const TABS = LEAVES;
+  const groupOf = (id) => (LEAVES.find((l) => l[0] === id) || [])[2];
   let tab = (location.hash || '#tools').slice(1);
   if (!TABS.some((t) => t[0] === tab)) tab = 'tools';
   const nav = h('div', { class: 'tabs', role: 'tablist' });
   const pane = h('div', { class: 'owner-pane' });
-  app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'page-head' }, h('h1', {}, 'Owner mode'), h('p', { class: 'muted' }, 'Everything here is only visible to Rex owners.')), nav, pane));
+  const subnav = h('div', { class: 'tabs sub', role: 'tablist' });
+  app.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'page-head' }, h('h1', {}, 'Owner mode'), h('p', { class: 'muted' }, 'Everything here is only visible to Rex owners.')), nav, subnav, pane));
 
+  function go(id) { tab = id; history.replaceState(null, '', '#' + id); drawTabs(); render(); }
   function drawTabs() {
-    nav.replaceChildren(...TABS.map(([id, name]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === id), class: tab === id ? 'active' : '', onclick: () => { tab = id; history.replaceState(null, '', '#' + id); drawTabs(); render(); } }, name)));
+    const g = groupOf(tab), groups = [...new Set(LEAVES.map((l) => l[2]))];
+    nav.replaceChildren(...groups.map((gid) => { const first = LEAVES.find((l) => l[2] === gid)[0]; return h('button', { type: 'button', role: 'tab', 'aria-selected': String(g === gid), class: g === gid ? 'active' : '', onclick: () => go(g === gid ? tab : first) }, GROUP_NAMES[gid]); }));
+    const kids = LEAVES.filter((l) => l[2] === g);
+    subnav.hidden = kids.length < 2;
+    subnav.replaceChildren(...kids.map(([id, name]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === id), class: tab === id ? 'active' : '', onclick: () => go(id) }, name)));
   }
   const result = (box, r) => {
     box.hidden = false;
@@ -220,7 +230,7 @@
           h('button', { class: 'btn ghost sm', type: 'button', onclick: () => copy(p.name) }, 'Copy link'),
           h('a', { class: 'btn ghost sm', href: '/pages/' + p.name, target: '_blank', rel: 'noopener' }, 'Open'),
           h('a', { class: 'btn sm', href: '/page-builder?name=' + p.name }, 'Edit'),
-          p.premade ? null : h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (!(await rexDialog.confirm('Remove /pages/' + p.name + '?', 'The link will stop working straight away.', 'Remove', true))) return; try { await api('/api/owner/pages/' + p.name, { method: 'DELETE' }); toast('Removed', 'good'); load(); } catch (e) { toast(e.message, 'bad'); } } }, 'Remove')));
+          h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (!(await rexDialog.confirm(p.premade ? 'Delete the premade page /pages/' + p.name + '?' : 'Remove /pages/' + p.name + '?', p.premade ? 'Are you sure? The page stops working straight away and any links to it in your other pages turn into / (in emails, {site_url}). It will not come back until a newer update uses this topic. Premade update pages also delete themselves once their update disappears from the website.' : 'The link will stop working straight away.', p.premade ? 'Delete page' : 'Remove', true))) return; try { await api('/api/owner/pages/' + p.name, { method: 'DELETE' }); toast('Removed', 'good'); load(); } catch (e) { toast(e.message, 'bad'); } } }, p.premade ? 'Delete' : 'Remove')));
       const prem = d.items.filter((p) => p.premade), mine = d.items.filter((p) => !p.premade);
       list.replaceChildren(
         ...(prem.length ? [h('h4', { style: 'margin:6px 0 2px' }, 'Premade'), h('p', { class: 'muted small', style: 'margin:0 0 6px' }, 'Made by Rex from your updates. They change by themselves after each update until you edit one by hand.'), ...prem.map(row)] : []),
@@ -486,41 +496,114 @@
         h('tr', {}, h('td', {}, 'Tiers'), h('td', {}, Object.entries(d.tier_counts).map(([k, v]) => k + ': ' + v).join('   ')))))));
   }
 
-  /* ---- inbox: read and reply to the emails the connected Gmail account receives */
+  const WL_PICS = ['home', 'servers', 'server-welcome', 'server-groups', 'server-tickets', 'profile', 'support', 'premium', 'ill-add-bot', 'ill-ticket', 'ill-ticket-chan', 'ill-invite', 'ill-forward'];
+  async function welcomeTab() {
+    const saved = (await api('/api/owner/welcome')).content;
+    const base = saved && saved.sections && saved.sections.length ? saved : Welcome.DEFAULT;
+    const doc = JSON.parse(JSON.stringify({ team: base.team || Welcome.DEFAULT.team, sections: base.sections }));
+    const wrap = h('div', { class: 'stack' }), list = h('div', { class: 'stack' }), prev = h('div', {});
+    let lastTa = null;
+    const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'section';
+    const field = (label, el) => h('label', { class: 'eb-f' }, h('span', {}, label), el);
+    const teamTitle = h('input', { type: 'text', maxlength: 90, value: doc.team.title, oninput: (e) => { doc.team.title = e.target.value; } });
+    const teamText = h('textarea', { rows: 7, maxlength: 3000, oninput: (e) => { doc.team.text = e.target.value; } }); teamText.value = doc.team.text;
+    function paint() {
+      list.replaceChildren(...doc.sections.map((s, i) => {
+        const ta = h('textarea', { rows: 10, maxlength: 12000, onfocus: () => { lastTa = ta; }, oninput: (e) => { s.body = e.target.value; } }); ta.value = s.body;
+        const move = (d) => () => { const j = i + d; if (j < 0 || j >= doc.sections.length) return; [doc.sections[i], doc.sections[j]] = [doc.sections[j], doc.sections[i]]; paint(); };
+        return h('details', { class: 'well', open: false }, h('summary', {}, h('b', {}, (i + 1) + '. ' + s.title), h('span', { class: 'muted small' }, '  #' + s.id + (s.group ? ' · ' + s.group : ''))),
+          h('div', { class: 'row-2' }, field('Title', h('input', { type: 'text', maxlength: 90, value: s.title, oninput: (e) => { s.title = e.target.value; } })), field('Group in the Jump to list', h('input', { type: 'text', maxlength: 40, value: s.group || '', oninput: (e) => { s.group = e.target.value; } }))),
+          field('Text', ta),
+          h('div', { class: 'row-actions' }, sel2([['', 'Insert a picture…'], ...WL_PICS.map((p) => [p, p])], () => '', (v) => { if (!v) return; const cap = prompt_('Caption (use "1 thing, 2 thing" to explain numbers)', ''); if (cap === null) return; ta.value += (ta.value ? '\n\n' : '') + '![' + cap + '](/img/welcome/' + v + '.png)'; s.body = ta.value; }),
+            h('button', { class: 'btn ghost sm', type: 'button', onclick: move(-1) }, '↑ Up'), h('button', { class: 'btn ghost sm', type: 'button', onclick: move(1) }, '↓ Down'),
+            h('button', { class: 'btn danger sm', type: 'button', onclick: async () => { if (await rexDialog.confirm('Remove this section?', 'Links to it (#' + s.id + ') will stop jumping anywhere.', 'Remove', true)) { doc.sections.splice(i, 1); paint(); } } }, 'Remove')));
+      }));
+    }
+    const prompt_ = (q, d) => window.prompt(q, d);
+    paint();
+    const save = async () => {
+      try {
+        doc.sections.forEach((s) => { s.id = s.id || slug(s.title); });
+        await api('/api/owner/welcome', { method: 'PUT', body: doc }); toast('Saved. /welcome is updated.', 'good');
+      } catch (e) { toast(e.message, 'bad'); }
+    };
+    wrap.append(h('div', { class: 'frame' }, h('h3', {}, 'Welcome guide'), h('p', { class: 'muted small' }, 'This is the public page at /welcome. Edit the team message and each section. In the text: a blank line starts a new paragraph, lines starting with "- " are bullets, "1. " are numbered steps, "> " is a tip box, "### " is a small heading, **bold**, `code` and [label](https://…) work. The support helper can point people to any section with /welcome#section-id.'),
+      field('Team message title', teamTitle), field('Team message', teamText)),
+      list,
+      h('div', { class: 'row-actions' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => { const t = prompt_('Name of the new section', ''); if (!t) return; let id = slug(t); while (doc.sections.some((x) => x.id === id)) id += '-2'; doc.sections.push({ id, title: t.slice(0, 90), group: 'More', body: 'Write here.' }); paint(); } }, '+ Add a section'),
+        h('button', { class: 'btn', type: 'button', onclick: save }, 'Save'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { prev.replaceChildren(Welcome.render(doc)); prev.scrollIntoView({ behavior: 'smooth' }); } }, 'Preview'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => window.open('/welcome', '_blank', 'noopener') }, 'Open /welcome'),
+        saved ? h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!(await rexDialog.confirm('Go back to the built-in guide?', 'Your edits are removed.', 'Reset', true))) return; await api('/api/owner/welcome', { method: 'DELETE' }); toast('Reset', 'good'); render(); } }, 'Reset to the built-in guide') : null),
+      prev);
+    return wrap;
+  }
+
+  const sel2 = (opts, get, set) => { const el = h('select', { onchange: (e) => { set(e.target.value); } }, opts.map(([v, l]) => h('option', { value: v }, l))); el.value = get(); return el; };
+
+  /* ---- inbox: read, sort and reply to the emails the connected Gmail account receives */
   async function inboxTab() {
     const st = await api('/api/owner/email');
     const wrap = h('div', { class: 'stack' });
-    if (!st.configured || !st.connected) return h('div', { class: 'frame' }, h('h3', {}, 'Inbox'), h('p', { class: 'muted' }, 'Connect Gmail first on the Email tab.'), h('button', { class: 'btn', type: 'button', onclick: () => { tab = 'email'; history.replaceState(null, '', '#email'); drawTabs(); render(); } }, 'Go to Email'));
+    if (!st.configured || !st.connected) return h('div', { class: 'frame' }, h('h3', {}, 'Inbox'), h('p', { class: 'muted' }, 'Connect Gmail first on the Email tab.'), h('button', { class: 'btn', type: 'button', onclick: () => go('email') }, 'Go to Email'));
     if (!st.can_read) return h('div', { class: 'frame' }, h('h3', {}, 'Inbox'), h('p', { class: 'muted small' }, 'Rex can send email from ' + st.connected + ' but is not allowed to read it yet. Reconnect once and tick every box Google shows.'), connectSteps(st, 'Reconnect'));
     const gen = await MailGen.meta();
+    const FOLDERS = [['INBOX', 'Inbox'], ['STARRED', 'Starred'], ['SENT', 'Sent'], ['DRAFT', 'Drafts'], ['SPAM', 'Junk'], ['TRASH', 'Trash'], ['ALL', 'All mail']];
     const listBox = h('div', { class: 'inbox-list' }), view = h('div', { class: 'inbox-view' }, h('p', { class: 'muted' }, 'Pick an email on the left.'));
-    const q = h('input', { type: 'search', placeholder: 'Search your inbox (e.g. from:name, is:unread)', 'aria-label': 'Search inbox' });
-    let nextTok = '', query = '', cur = null;
-    const grid = h('div', { class: 'inbox' }, h('div', { class: 'inbox-side' }, h('div', { class: 'inbox-tools' }, q, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => load(true) }, 'Refresh')), listBox), view);
-    wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center' }, h('h3', { style: 'margin:0' }, 'Inbox'), h('span', { class: 'muted small' }, st.connected)), h('p', { class: 'muted small' }, 'Only owners can see this. Opening an email marks it read in Gmail. Replies are sent from this Gmail account and stay in the same conversation.')), grid);
+    const q = h('input', { type: 'search', placeholder: 'Search (e.g. from:name, is:unread, has:attachment)', 'aria-label': 'Search mail' });
+    const folderRow = h('div', { class: 'inbox-folders', role: 'tablist' }), bulkBar = h('div', { class: 'inbox-bulk', hidden: true }), userLabels = h('div', { class: 'inbox-labels' });
+    let nextTok = '', query = '', cur = null, folder = 'INBOX', labelList = [], unread = {}; const picked = new Set();
+    const grid = h('div', { class: 'inbox' }, h('div', { class: 'inbox-side' }, folderRow, userLabels, h('div', { class: 'inbox-tools' }, q, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => load(true) }, 'Refresh')), bulkBar, listBox), view);
+    wrap.append(h('div', { class: 'frame' }, h('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center' }, h('h3', { style: 'margin:0' }, 'Inbox'), h('span', { class: 'muted small' }, st.connected)), h('p', { class: 'muted small' }, 'Only owners can see this. Emails show exactly as they were sent. Anything you do here (read, star, junk, trash, move, reply) happens in Gmail too. Trashed mail stays in Trash for 30 days, then Gmail removes it.')), grid);
+
+    const act = async (ids, action, msg) => {
+      try { await api(ids.length === 1 ? '/api/owner/email/inbox/' + ids[0] + '/act' : '/api/owner/email/inbox/bulk', { method: 'POST', body: ids.length === 1 ? { action } : { ids, action } }); if (msg) toast(msg, 'good'); return true; }
+      catch (e) { toast(e.message, 'bad'); return false; }
+    };
+    const paintFolders = () => {
+      folderRow.replaceChildren(...FOLDERS.map(([id, name]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(folder === id), class: folder === id ? 'on' : '', onclick: () => { folder = id; picked.clear(); view.replaceChildren(h('p', { class: 'muted' }, 'Pick an email on the left.')); grid.classList.remove('reading'); paintFolders(); load(true); } }, name, (unread[id] ? h('i', { class: 'badge' }, String(unread[id])) : null))));
+      userLabels.replaceChildren(...(labelList.length ? [sel2([['', 'Labels…'], ...labelList.map((l) => [l.id, l.name])], () => (labelList.some((l) => l.id === folder) ? folder : ''), (v) => { if (v) { folder = v; picked.clear(); paintFolders(); load(true); } })] : []));
+    };
+    api('/api/owner/email/inbox/labels').then((r) => { labelList = r.labels; unread = r.unread; paintFolders(); }).catch(() => {});
 
     const linkify = (text) => {
       const out = [], re = /https?:\/\/[^\s<>"')]+/g; let last = 0, m;
       while ((m = re.exec(text))) { out.push(text.slice(last, m.index)); out.push(h('a', { href: m[0], target: '_blank', rel: 'noopener noreferrer' }, m[0].length > 60 ? m[0].slice(0, 57) + '…' : m[0])); last = m.index + m[0].length; }
       out.push(text.slice(last)); return out;
     };
-    const body = (text) => {
+    const plain = (text) => {
       const cut = text.search(/\n(On .{5,160}wrote:|-{2,}\s*Original Message|From: .+\nSent: )/);
       const main = cut > 40 ? text.slice(0, cut).trim() : text, rest = cut > 40 ? text.slice(cut).trim() : '';
       return h('div', { class: 'mbox-body' }, h('div', { class: 'mbox-text' }, linkify(main)), rest ? h('details', {}, h('summary', {}, 'Show quoted text'), h('div', { class: 'mbox-text muted' }, linkify(rest))) : null);
     };
     const when = (t) => t ? new Date(t * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    function htmlFrame(tid, m, images) {
+      const fr = h('iframe', { class: 'mbox-frame', title: 'Email from ' + m.from.name, sandbox: 'allow-same-origin allow-popups allow-popups-to-escape-sandbox', src: '/api/owner/email/inbox/' + tid + '/html/' + m.id + (images ? '' : '?images=0'), loading: 'lazy' });
+      fr.addEventListener('load', () => { try { const d = fr.contentDocument; fr.style.height = Math.min(Math.max(d.documentElement.scrollHeight, d.body.scrollHeight) + 8, 4000) + 'px'; } catch (e) { fr.style.height = '600px'; } });
+      return fr;
+    }
 
+    function updateBulk() {
+      bulkBar.hidden = !picked.size;
+      if (!picked.size) return;
+      const ids = () => [...picked];
+      const b = (label, action, msg) => h('button', { type: 'button', class: 'btn ghost sm', onclick: async () => { if (await act(ids(), action, msg)) { picked.clear(); load(true); } } }, label);
+      bulkBar.replaceChildren(h('b', {}, picked.size + ' selected'), b('Archive', 'archive', 'Archived.'), b('Junk', 'spam', 'Moved to junk.'), b(folder === 'TRASH' ? 'Restore' : 'Trash', folder === 'TRASH' ? 'untrash' : 'trash', folder === 'TRASH' ? 'Restored.' : 'Moved to trash.'), b('Mark read', 'read'), b('Mark unread', 'unread'), h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { picked.clear(); paintRows(); updateBulk(); } }, 'Clear'));
+    }
+    const rows = new Map();
+    function paintRows() { rows.forEach((el, id) => { el.querySelector('input').checked = picked.has(id); }); }
     function row(t) {
-      const el = h('button', { type: 'button', class: 'inbox-row' + (t.unread ? ' unread' : '') + (cur === t.id ? ' on' : ''), onclick: () => open(t.id, el) },
-        h('div', { class: 'ir-top' }, h('b', {}, (t.mine ? 'You → ' : '') + t.from.name), h('span', { class: 'muted small' }, timeAgo(t.date))),
-        h('div', { class: 'ir-sub' }, t.subject), h('div', { class: 'muted small ir-snip' }, t.snippet));
-      return el;
+      const cb = h('input', { type: 'checkbox', 'aria-label': 'Select', onclick: (e) => { e.stopPropagation(); cb.checked ? picked.add(t.id) : picked.delete(t.id); updateBulk(); } });
+      const star = h('button', { type: 'button', class: 'star' + (t.starred ? ' on' : ''), 'aria-label': 'Star', title: 'Star', onclick: async (e) => { e.stopPropagation(); t.starred = !t.starred; star.classList.toggle('on', t.starred); star.textContent = t.starred ? '★' : '☆'; await act([t.id], t.starred ? 'star' : 'unstar'); } }, t.starred ? '★' : '☆');
+      const el = h('div', { class: 'inbox-row' + (t.unread ? ' unread' : '') + (cur === t.id ? ' on' : ''), role: 'button', tabindex: '0', onclick: () => open(t.id, el), onkeydown: (e) => { if (e.key === 'Enter') open(t.id, el); } },
+        h('div', { class: 'ir-check' }, cb, star), h('div', { class: 'ir-main' }, h('div', { class: 'ir-top' }, h('b', {}, (t.mine ? 'You → ' : '') + t.from.name), h('span', { class: 'muted small' }, timeAgo(t.date))),
+        h('div', { class: 'ir-sub' }, t.subject), h('div', { class: 'muted small ir-snip' }, t.snippet)));
+      rows.set(t.id, el); return el;
     }
     async function load(reset) {
-      if (reset) { nextTok = ''; listBox.replaceChildren(h('div', { class: 'skel', style: 'height:120px' })); query = q.value.trim(); }
+      if (reset) { nextTok = ''; rows.clear(); listBox.replaceChildren(h('div', { class: 'skel', style: 'height:120px' })); query = q.value.trim(); updateBulk(); }
       try {
-        const r = await api('/api/owner/email/inbox?q=' + encodeURIComponent(query) + (nextTok ? '&page=' + encodeURIComponent(nextTok) : ''));
+        const r = await api('/api/owner/email/inbox?folder=' + encodeURIComponent(folder) + '&q=' + encodeURIComponent(query) + (nextTok ? '&page=' + encodeURIComponent(nextTok) : ''));
         if (reset) listBox.replaceChildren();
         listBox.querySelector('.more')?.remove();
         if (!r.threads.length && reset) listBox.append(h('p', { class: 'muted', style: 'padding:12px' }, 'Nothing here.'));
@@ -537,15 +620,30 @@
       view.replaceChildren(h('div', { class: 'skel', style: 'height:200px' }));
       let t; try { t = await api('/api/owner/email/inbox/' + id); } catch (e) { view.replaceChildren(h('p', { class: 'muted' }, e.message)); return; }
       const last = t.messages[t.messages.length - 1] || {}, other = [...t.messages].reverse().find((m) => !m.mine) || last;
-      const msgs = t.messages.map((m) => h('div', { class: 'mbox' + (m.mine ? ' mine' : '') }, h('div', { class: 'mbox-head' }, h('b', {}, m.from.name), h('span', { class: 'muted small' }, m.from.addr ? '<' + m.from.addr + '>' : ''), h('span', { class: 'grow' }), h('span', { class: 'muted small' }, when(m.date))),
-        body(m.text || '(no text)'), m.files.length ? h('div', { class: 'muted small' }, '📎 ' + m.files.map((f) => f.name).join(', ') + ' (open in Gmail to see attachments)') : null));
+      let images = true, textMode = false;
+      const msgsBox = h('div', { class: 'mboxes' });
+      const paintMsgs = () => msgsBox.replaceChildren(...t.messages.map((m) => h('div', { class: 'mbox' + (m.mine ? ' mine' : '') }, h('div', { class: 'mbox-head' }, h('b', {}, m.from.name), h('span', { class: 'muted small' }, m.from.addr ? '<' + m.from.addr + '>' : ''), h('span', { class: 'grow' }), h('span', { class: 'muted small' }, when(m.date))),
+        h('div', { class: 'muted small' }, 'To: ' + (m.to || '—') + (m.cc ? '   Cc: ' + m.cc : '')),
+        m.has_html && !textMode ? htmlFrame(t.id, m, images) : plain(m.text || '(no text)'),
+        m.files.length ? h('div', { class: 'muted small' }, '📎 ' + m.files.map((f) => f.name).join(', ') + ' (open in Gmail to download attachments)') : null)));
+      paintMsgs();
+      const after = async (action, msg, stay) => { if (await act([id], action, msg)) { if (stay) open(id); else { view.replaceChildren(h('p', { class: 'muted' }, msg || 'Done.')); grid.classList.remove('reading'); load(true); } } };
+      const tb = (label, onclick, cls) => h('button', { class: 'btn ghost sm ' + (cls || ''), type: 'button', onclick }, label);
+      const moveSel = labelList.length ? sel2([['', 'Move to…'], ...labelList.map((l) => [l.id, l.name])], () => '', async (v) => { if (v) after('label:' + v, 'Moved.'); }) : null;
+      const tools = h('div', { class: 'row-actions' },
+        tb(t.trash ? 'Restore' : 'Trash', () => after(t.trash ? 'untrash' : 'trash', t.trash ? 'Restored.' : 'Moved to trash.')),
+        t.spam ? tb('Not junk', () => after('notspam', 'Moved to inbox.')) : tb('Junk', () => after('spam', 'Moved to junk.')),
+        t.labels.includes('INBOX') ? tb('Archive', () => after('archive', 'Archived.')) : tb('Move to inbox', () => after('inbox', 'Moved to inbox.')),
+        tb(t.starred ? '★ Starred' : '☆ Star', () => after(t.starred ? 'unstar' : 'star', null, true)),
+        tb('Mark unread', () => after('unread', 'Marked unread.')),
+        moveSel,
+        tb('Open in Gmail', () => window.open('https://mail.google.com/mail/u/0/#all/' + id, '_blank', 'noopener')));
       view.replaceChildren(
-        h('div', { class: 'inbox-back' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => grid.classList.remove('reading') }, '← Inbox')),
-        h('div', { class: 'inbox-head' }, h('h3', { style: 'margin:0' }, t.subject), h('div', { class: 'row-actions' },
-          h('a', { class: 'btn ghost sm', href: 'https://mail.google.com/mail/u/0/#inbox/' + id, target: '_blank', rel: 'noopener' }, 'Open in Gmail'),
-          h('button', { class: 'btn ghost sm', type: 'button', onclick: async (ev) => { ev.currentTarget.disabled = true; try { await api('/api/owner/email/inbox/' + id + '/archive', { method: 'POST', body: {} }); toast('Archived.', 'good'); view.replaceChildren(h('p', { class: 'muted' }, 'Archived.')); grid.classList.remove('reading'); load(true); } catch (e) { toast(e.message, 'bad'); ev.currentTarget.disabled = false; } } }, 'Archive'))),
-        h('div', { class: 'mboxes' }, msgs), composer(t, other, last));
-      view.querySelector('.mboxes').lastElementChild?.scrollIntoView({ block: 'nearest' });
+        h('div', { class: 'inbox-back' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => grid.classList.remove('reading') }, '← Back to list')),
+        h('div', { class: 'inbox-head' }, h('h3', { style: 'margin:0' }, t.subject), tools),
+        h('div', { class: 'row-actions' }, t.messages.some((m) => m.has_html) ? tb('Show plain text', (e) => { textMode = !textMode; e.currentTarget.textContent = textMode ? 'Show formatted email' : 'Show plain text'; paintMsgs(); }, 'tiny') : null,
+          t.messages.some((m) => m.has_html) ? tb('Block images', (e) => { images = !images; e.currentTarget.textContent = images ? 'Block images' : 'Show images'; paintMsgs(); }, 'tiny') : null),
+        msgsBox, composer(t, other, last));
     }
 
     function composer(t, other, last) {
@@ -582,9 +680,10 @@
           toast('Sent to ' + (r.to.name || r.to.addr) + '.', 'good'); open(t.id);
         } catch (e) { toast(e.message, 'bad'); send.disabled = false; }
       }
-      box.append(h('h4', { style: 'margin:0 0 8px' }, 'Reply to ' + who), seg, quick, fuBox, h('div', { style: 'margin-top:10px' }, send));
+      box.append(h('h4', { style: 'margin:0 0 8px' }, 'Reply to ' + who), seg, quick, fuBox, h('div', { style: 'margin-top:10px;display:flex;gap:8px;flex-wrap:wrap' }, send, h('a', { class: 'btn ghost', href: '/email-builder?reply=' + t.id }, 'Reply in the email builder')));
       return box;
     }
+    paintFolders();
     load(true);
     return wrap;
   }
@@ -602,6 +701,7 @@
       else if (tab === 'email') node = await emailTab();
       else if (tab === 'pages') node = await pagesTab();
       else if (tab === 'updates') node = await updatesTab();
+      else if (tab === 'welcome') node = await welcomeTab();
       else if (tab === 'audit') node = await auditTab();
       else node = await healthTab();
       pane.replaceChildren(node);

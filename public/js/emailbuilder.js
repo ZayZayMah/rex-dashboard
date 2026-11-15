@@ -6,6 +6,7 @@
   if (!me || !me.is_owner || !me.owner_mode) { location.replace(window.EB_MODE === 'page' ? '/owner#pages' : '/owner#email'); return; }
   const PAGE = window.EB_MODE === 'page';   // the same builder also makes website pages
   const qs = new URLSearchParams(location.search);
+  const REPLY = !PAGE && qs.get('reply') ? qs.get('reply') : '';   // replying to an inbox conversation from the builder
   let tplId = qs.get('id') || '', pageName = (qs.get('name') || '').toLowerCase(), pageHideNav = false, PT = 'normal';
   const BACK = PAGE ? '/owner#pages' : '/owner#email';
   if (PAGE && !me.beta) { /* owners can always edit pages */ }
@@ -16,7 +17,7 @@
   if (gf) document.head.append(h('link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?' + gf + '&display=swap' }));
 
   /* ---------- state */
-  let D = null, M = { name: '', subject: '', send_to: 'everyone', send_when: 'manual', when_at: 'now', at_time: '09:00', enabled: false };
+  let D = null, M = { name: '', subject: '', send_to: 'everyone', send_when: 'manual', when_at: 'now', at_time: '09:00', enabled: false, code: { tier: 'premium', duration: '30 days', limit: 1, valid_days: 14 } };
   let dev = 'd', sel = null, zoom = 1, mode = 'edit', dirty = false, tab = 'layers';
   const undo = [], redo = [];
   const uid = () => Math.random().toString(36).slice(2, 10);
@@ -166,10 +167,10 @@
     nameIn, h('div', { class: 'eb-segs' }, bDesk, bMob), h('div', { class: 'eb-segs' }, bEdit, bPrev),
     h('div', { class: 'eb-tools' }, bUndo, bRedo,
       h('button', { type: 'button', class: 'eb-ic', 'aria-label': 'Zoom out', onclick: () => setZoom(zoom - 0.1) }, '−'), zLabel, h('button', { type: 'button', class: 'eb-ic', 'aria-label': 'Zoom in', onclick: () => setZoom(zoom + 0.1) }, '+')),
-    status, ...(PAGE ? [pageTheme(), h('button', { type: 'button', class: 'eb-ghost', onclick: copyLink }, 'Copy link')] : [bAuto, h('button', { type: 'button', class: 'eb-ghost', onclick: testSend }, 'Send test')]), bSave);
+    status, ...(PAGE ? [pageTheme(), h('button', { type: 'button', class: 'eb-ghost', onclick: copyLink }, 'Copy link')] : (REPLY ? [] : [h('button', { type: 'button', class: 'eb-ghost', onclick: codeSettings }, '🎟 Code'), bAuto, h('button', { type: 'button', class: 'eb-ghost', onclick: testSend }, 'Send test')])), bSave);
   app.replaceChildren(h('div', { class: 'eb' }, bar, h('div', { class: 'eb-body' }, left, h('main', { class: 'eb-main' }, canvasWrap, previewBox), right)));
 
-  function syncBar() { if (!PAGE) bAuto.classList.toggle('on', !!M.enabled && M.send_when !== 'manual'); if (!PAGE) bAuto.textContent = '⚡ Automation' + (M.enabled && M.send_when !== 'manual' ? ': on' : ''); bUndo.disabled = !undo.length; bRedo.disabled = !redo.length; bSave.textContent = dirty ? 'Save' : 'Saved'; bSave.classList.toggle('clean', !dirty); zLabel.textContent = Math.round(zoom * 100) + '%'; }
+  function syncBar() { if (!PAGE) bAuto.classList.toggle('on', !!M.enabled && M.send_when !== 'manual'); if (!PAGE) bAuto.textContent = '⚡ Automation' + (M.enabled && M.send_when !== 'manual' ? ': on' : ''); bUndo.disabled = !undo.length; bRedo.disabled = !redo.length; bSave.textContent = REPLY ? 'Send reply' : (dirty ? 'Save' : 'Saved'); bSave.classList.toggle('clean', !dirty); zLabel.textContent = Math.round(zoom * 100) + '%'; }
   function setZoom(z) { zoom = Math.max(0.4, Math.min(1.6, Math.round(z * 10) / 10)); paintCanvas(); syncBar(); }
   function setDev(d) { dev = d; bDesk.classList.toggle('on', d === 'd'); bMob.classList.toggle('on', d === 'm'); if (mode === 'preview') showPreview(); paintAll(); }
   function setMode(m) { mode = m; bEdit.classList.toggle('on', m === 'edit'); bPrev.classList.toggle('on', m === 'preview'); canvasWrap.hidden = m === 'preview'; previewBox.hidden = m !== 'preview'; left.classList.toggle('dim', m === 'preview'); if (m === 'preview') showPreview(); }
@@ -372,7 +373,7 @@
       const ta = h('textarea', { rows: e.t === 'text' ? 5 : 2, maxlength: 4000, 'data-main': '1', oninput: (ev) => { e[key] = ev.target.value; dirty = true; syncBar(); if (nodes[e.id]) { nodes[e.id].replaceChildren(); fillNode(nodes[e.id], e, b); if (e.id === sel && !e.lock) paintCanvas(); } }, onchange: () => { commit(); } }, e[key]);
       const wrapSel = (a, z) => () => { const s = ta.selectionStart, t = ta.selectionEnd, v = ta.value; ta.value = v.slice(0, s) + a + v.slice(s, t) + z + v.slice(t); ta.dispatchEvent(new Event('input')); ta.focus(); };
       wr.append(F(e.t === 'text' ? 'Text' : 'Label', ta), e.t === 'text' ? h('div', { class: 'eb-tgs' }, h('button', { type: 'button', class: 'eb-tg', onclick: wrapSel('**', '**') }, 'B'), h('button', { type: 'button', class: 'eb-tg', onclick: wrapSel('*', '*') }, 'I'),
-        h('button', { type: 'button', class: 'eb-tg', onclick: wrapSel('[', '](https://)') }, 'Link'), sel2([['', 'Insert variable…'], ...meta.variables.filter((v) => v !== 'unsubscribe_url').map((v) => ['{' + v + '}', '{' + v + '}'])], () => '', (v) => { if (v) wrapSel(v, '')(); })) : null);
+        h('button', { type: 'button', class: 'eb-tg', onclick: wrapSel('[', '](https://)') }, 'Link'), PAGE ? null : h('button', { type: 'button', class: 'eb-tg', title: 'Put a different premium code in every email that is sent', onclick: () => { wrapSel('{code}', '')(); codeSettings(); } }, '🎟 Generate a code'), sel2([['', 'Insert variable…'], ...meta.variables.filter((v) => v !== 'unsubscribe_url').map((v) => ['{' + v + '}', '{' + v + '}'])], () => '', (v) => { if (v) wrapSel(v, '')(); })) : null);
       if (e.t === 'button') wr.append(F('Link (https://…)', h('input', { type: 'text', value: e.url || '', maxlength: 480, placeholder: 'https://… or {dashboard_url}', onchange: (ev) => edit(() => { e.url = ev.target.value.trim(); }, true) })));
       wr.append(h('h4', {}, 'Text style'), F('Font', sel2([['', 'Email default'], ...meta.fonts.map((f) => [f.id, f.label])], () => e.font || '', (v) => edit(() => { e.font = v; }, true))),
         h('div', { class: 'eb-4' }, F(dev === 'm' ? 'Size (phone)' : 'Size', numIn(() => (dev === 'm' && e.m && e.m.size) || e.size, (v) => edit(() => { if (dev === 'm') { materialise(); e.m.size = v; } else e.size = v; }, true), 8, 120)),
@@ -441,8 +442,25 @@
         r.checks.length ? h('ul', { class: 'eb-checks' }, r.checks.map((c) => h('li', {}, c))) : null, h('div', { class: 'eb-frame-wrap' }, fr));
     } catch (e) { previewBox.replaceChildren(h('p', { class: 'eb-help bad' }, e.message)); }
   }
+  function codeSettings() {
+    const c = M.code = Object.assign({ tier: 'premium', duration: '30 days', limit: 1, valid_days: 14 }, M.code || {});
+    const sel = (opts, k) => { const el = h('select', { onchange: (ev) => { c[k] = ev.target.value; dirty = true; syncBar(); } }, opts.map(([v, l]) => h('option', { value: v }, l))); el.value = String(c[k]); return el; };
+    const num = (k, min, max) => h('input', { type: 'number', min, max, value: c[k], oninput: (ev) => { c[k] = Math.max(min, Math.min(max, parseInt(ev.target.value, 10) || min)); dirty = true; syncBar(); } });
+    modal('Unique code', h('div', { class: 'eb-pad' }, h('p', { class: 'eb-help' }, 'Put {code} anywhere in the text or subject. Every email that goes out gets its own, different code, and Rex registers it before the email is sent. Previews and test emails show a sample that does not work.'),
+      F('Type', sel([['premium', 'Premium'], ['priority', 'Priority'], ['ultra', 'Ultra']], 'tier')), F('What it gives', sel(['1 day', '7 days', '30 days', '90 days', '1 year', 'lifetime'].map((x) => [x, x]), 'duration')),
+      F('Uses per code', num('limit', 1, 1000)), F('Must be redeemed within (days)', num('valid_days', 1, 90)),
+      h('p', { class: 'eb-help' }, 'Save the email to keep these settings. If the bot is offline, sending pauses with a message instead of sending codes that would not work.')),
+      (close) => [h('button', { type: 'button', class: 'eb-save', onclick: () => { close(); toast('Code settings kept. Remember to Save.', 'good'); } }, 'Done')]);
+  }
+  async function sendReply() {
+    if (!(await rexDialog.confirm('Send this reply?', 'It goes to the person in that conversation, in the same Gmail thread.', 'Send reply'))) return;
+    bSave.disabled = true; status.textContent = 'Sending…';
+    try { await api('/api/owner/email/inbox/' + REPLY + '/reply', { method: 'POST', body: { mode: 'design', design: D } }); dirty = false; toast('Reply sent', 'good'); setTimeout(() => { location.href = '/owner#inbox'; }, 700); }
+    catch (e) { status.textContent = ''; toast(e.message, 'bad'); bSave.disabled = false; }
+  }
   async function save() {
-    if (!M.name.trim()) { toast(PAGE ? 'Give the page a title first.' : 'Give the email a name first.', 'bad'); nameIn.focus(); return; }
+    if (REPLY) return sendReply();
+    if (!M.name.trim() && !REPLY) { toast(PAGE ? 'Give the page a title first.' : 'Give the email a name first.', 'bad'); nameIn.focus(); return; }
     bSave.disabled = true; status.textContent = 'Saving…';
     if (PAGE) {
       try { await api('/api/owner/pages/' + pageName, { method: 'PUT', body: { title: M.name, hide_nav: pageHideNav, design: D } }); tplId = pageName; dirty = false; status.textContent = ''; toast('Saved', 'good'); } catch (e) { status.textContent = ''; toast(e.message, 'bad'); }
@@ -507,17 +525,7 @@
         BTN(60, 530, 240, 'Add Rex to your server', '/dashboard', { bg: '', color: '' })]; return d; } },
     notice: { label: 'Announcement', desc: 'A big banner and a short message.', make: () => { const d = base(); d.els = [RECT(0, 0, 860, 220, '#0c1729', { name: 'Banner' }), T(60, 70, 740, 70, 'Big news', { name: 'Heading', size: 46, bold: true, font: 'poppins' }), T(60, 250, 740, 160, 'Tell people what changed, when it happens and what they need to do.', { size: 19, lh: 1.6 })]; return d; } },
   };
-  async function pickStartPage() {
-    return new Promise((resolve) => {
-      const nameBox = h('input', { type: 'text', maxlength: 40, placeholder: 'page-name (letters, numbers, dashes)', value: pageName }), err = h('p', { class: 'eb-help bad' });
-      const pick = (k) => () => { const n = nameBox.value.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(n)) { err.textContent = 'Use 2 to 40 letters, numbers or dashes, e.g. learn-more.'; nameBox.focus(); return; } pageName = n; m.remove(); resolve(k); };
-      const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card eb-wide' }, h('h2', {}, 'New page'), h('p', { class: 'eb-help' }, 'The page will live at ' + location.origin + '/pages/…'),
-        h('label', { class: 'eb-f' }, h('span', {}, 'Page name (the end of the link)'), nameBox), err,
-        h('h4', { class: 'eb-h4' }, 'Start from'), h('div', { class: 'eb-starts' }, Object.entries(PAGE_PRESETS).map(([k, p]) => h('button', { type: 'button', class: 'eb-start', onclick: pick(k) }, h('b', {}, p.label), h('span', {}, p.desc)))),
-        h('button', { type: 'button', class: 'eb-ghost', onclick: () => { location.href = BACK; } }, '← Back')));
-      document.body.append(m); nameBox.focus();
-    });
-  }
+  /* (page start screen is defined below, next to the email one, so both share the same theme grid) */
   /* ---------- start screen: announcement wizard, Follow Up, templates, themes */
   const gen = await MailGen.meta();
   const palOf = (t) => ({ bg: t.bg, card: t.card, head: t.head, title: t.title, text: t.text, muted: t.muted, accent: t.accent, btn: t.btn, btnText: t.btnText, font: t.font, body: t.body, radius: t.radius, decor: t.decor, logoBg: t.logoBg || '', gold: t.gold || '', card2: t.card2 || '', line: t.line || '' });
@@ -527,9 +535,9 @@
     if (v.startsWith('p:')) return gen.palettes[v.slice(2)];
     return palOf(THEMES.find((t) => t.id === v.slice(2)) || THEMES[0]);
   }
-  let LOOK = 'auto', STYLE = 'classic';
+  let LOOK = 'auto', STYLE = 'auto';
   const lookSel = () => sel2(LOOKS, () => LOOK, (v) => { LOOK = v; });
-  const styleSel = () => sel2(Object.entries(gen.variants), () => STYLE, (v) => { STYLE = v; });
+  const styleSel = () => sel2([['auto', 'Automatic (chosen from what you add)'], ...Object.entries(gen.variants)], () => STYLE, (v) => { STYLE = v; });
   const SAMPLE_ITEM = { title: 'Your headline here', brief: 'One line that sums it up.', long: 'Write the full details here. Keep it friendly and to the point.', image: '', link: '{site_url}', link_label: 'Read more' };
   const SAMPLES = {
     spotlight: [SAMPLE_ITEM], story: [SAMPLE_ITEM],
@@ -553,7 +561,7 @@
       const isAnn = kind === 'announce';
       const note = h('p', { class: 'eb-help' }), pre = h('div', { class: 'fu-preview', hidden: true });
       let layout = 'auto', subject = '', btnLabel = '', btnUrl = '', busy = false;
-      const upd = () => { clearTimeout(upd.t); upd.t = setTimeout(async () => { if (!isAnn) return; try { const r = await MailGen.build(payload()); note.textContent = r.why ? 'Layout picked for you: ' + gen.layouts[r.layout].label + ' (' + r.why + ').' : 'Layout: ' + gen.layouts[r.layout].label + '.'; if (r.trimmed) note.textContent += ' Some of the last announcements were left out to keep the email a safe size.'; } catch (e) { /* ignore */ } }, 350); };
+      const upd = () => { clearTimeout(upd.t); upd.t = setTimeout(async () => { if (!isAnn) return; try { const r = await MailGen.build(payload()); note.textContent = (r.why ? 'Layout picked for you: ' + gen.layouts[r.layout].label + ' (' + r.why + ').' : 'Layout: ' + gen.layouts[r.layout].label + '.') + ' Style: ' + gen.variants[r.variant] + '.'; if (r.trimmed) note.textContent += ' Some of the last announcements were left out to keep the email a safe size.'; } catch (e) { /* ignore */ } }, 350); };
       const ann = isAnn ? MailGen.announceForm(upd) : null, fu = isAnn ? null : MailGen.followupForm(gen, () => {});
       const payload = () => isAnn ? { kind: 'announcement', items: ann.items(), layout, variant: STYLE, palette: lookPal(LOOK), button_label: btnLabel, button_url: btnUrl, subject }
         : { kind: 'followup', sections: fu.sections(), variant: STYLE, palette: lookPal(LOOK), subject: subject || 'your message' };
@@ -579,41 +587,77 @@
       upd();
     });
   }
+  /* One grid of themes for emails and pages. Each theme has its own drop-down: a layout style, or a ready-made template
+     in that theme, so "Christmas + Digest" or "Halloween + Alert" is one click. */
+  function choiceOptions(isPage) {
+    const styles = Object.entries(gen.variants).map(([k, v]) => ['style:' + k, v]);
+    const tpls = Object.entries(gen.layouts).map(([k, v]) => ['tpl:' + k, 'Template · ' + v.label]);
+    const extra = isPage ? [['preset:blank', 'Template · Blank page']] : [['preset:welcome', 'Template · Welcome message'], ['preset:notice', 'Template · Account notice'], ['preset:blank', 'Template · Blank']];
+    return [...styles, ...tpls, ...extra];
+  }
+  function themeSwatch(th) {
+    const a = h('div', { class: 'eb-sw' }), b = h('div', { class: 'eb-sw-h' }, h('span', { class: 'eb-sw-t' }, 'Aa'), th.decor[0] ? h('span', {}, th.decor[0]) : null), c = h('div', { class: 'eb-sw-b' }), bt = h('i', { class: 'eb-sw-btn' });
+    a.style.background = th.bg; a.style.borderRadius = Math.min(th.radius, 18) + 'px'; b.style.background = th.head; b.style.color = th.title; b.querySelector('.eb-sw-t').style.fontFamily = (FONT[th.font] || FONT.arial).css; c.style.background = th.card; bt.style.background = th.btn; c.append(bt); a.append(b, c); return a;
+  }
+  function themeGrid(isPage, onPick) {
+    const opts = choiceOptions(isPage);
+    return h('div', { class: 'eb-themes' }, THEMES.map((th) => {
+      let choice = opts[0][0];
+      const dd = sel2(opts, () => choice, (v) => { choice = v; });
+      const go = () => onPick(th, choice);
+      return h('div', { class: 'eb-theme' }, h('button', { type: 'button', class: 'eb-theme-hit', onclick: go }, themeSwatch(th), h('b', {}, th.label), h('span', {}, th.desc)), dd, h('button', { type: 'button', class: 'eb-start-btn', onclick: go }, 'Use this'));
+    }));
+  }
+  const blankDesign = (th, isPage) => { const d = base(); d.bg = th.bg; d.page = th.card; d.color = th.text; d.font = th.body; d.els = isPage ? [T(60, 60, 740, 70, 'Page title', { name: 'Heading', size: 40, bold: true, font: th.font, color: th.title === '#ffffff' ? th.text : th.title }), T(60, 150, 740, 120, 'Write your text here.', { size: 18, color: th.text })] : [T(40, 40, 520, 120, 'Hi {first_name},\n\nWrite your message here.\n\n[Unsubscribe]({unsubscribe_url})', { color: th.text })]; return d; };
+  const WELCOME = [{ title: 'Welcome to Rex', brief: 'Smart. Helpful. Always here.', long: 'Hi {first_name},\n\nThanks for logging in. Add Rex to a server, open the dashboard and make it yours: commands, welcome cards, moderation and more.', link: '{dashboard_url}', link_label: 'Open my dashboard' }];
+  const NOTICE = [{ title: 'Account notice', brief: 'Something changed on your account.', long: 'Hi {first_name},\n\nSay what happened, why, and what happens next. Reply to this email if you have questions.' }];
+  async function fromChoice(th, choice, isPage) {
+    const [kind, val] = choice.split(':'), pal = palOf(th);
+    const call = (items, layout, variant) => MailGen.build({ kind: isPage ? 'page' : 'announcement', items, layout, variant, palette: pal, button_label: isPage ? '' : (layout === 'alert' ? '' : 'Open my dashboard'), button_url: '{dashboard_url}' });
+    if (kind === 'style') {
+      if (!isPage && val === 'classic') return { d: themed(th), subject: '', name: th.label };
+      const r = await call(SAMPLES.story, 'story', val); return { d: r.design, subject: r.subject, name: th.label + ' – ' + gen.variants[val] };
+    }
+    if (kind === 'tpl') { const r = await call(SAMPLES[val], val, 'auto'); return { d: r.design, subject: r.subject, name: th.label + ' – ' + gen.layouts[val].label, send_to: isPage ? '' : annTag() }; }
+    if (val === 'blank') return { d: blankDesign(th, isPage), subject: '', name: isPage ? '' : '' };
+    if (val === 'welcome') { const r = await call(WELCOME, 'story', 'auto'); return { d: r.design, subject: 'Welcome to Rex, {first_name}!', name: 'Welcome', send_when: 'first_login', send_to: 'target' }; }
+    const r = await call(NOTICE, 'alert', 'auto'); return { d: r.design, subject: 'About your Rex account', name: 'Account notice', send_when: 'server_blacklisted', send_to: 'essential' };
+  }
+  async function pickStartPage() {
+    return new Promise((resolve) => {
+      const nameBox = h('input', { type: 'text', maxlength: 40, placeholder: 'page-name (letters, numbers, dashes)', value: pageName }), err = h('p', { class: 'eb-help bad' });
+      const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card eb-wide' }, h('h2', {}, 'New page'), h('p', { class: 'eb-help' }, 'The page will live at ' + location.origin + '/pages/…'),
+        h('label', { class: 'eb-f' }, h('span', {}, 'Page name (the end of the link)'), nameBox), err,
+        h('h4', { class: 'eb-h4' }, 'Pick a theme'), h('p', { class: 'eb-help' }, 'Each theme has its own drop-down: a layout style, or a ready-made template in that theme. Everything can be changed afterwards.'),
+        themeGrid(true, async (th, choice) => {
+          const n = nameBox.value.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(n)) { err.textContent = 'Use 2 to 40 letters, numbers or dashes, e.g. learn-more.'; nameBox.focus(); return; }
+          try { const r = await fromChoice(th, choice, true); pageName = n; m.remove(); resolve(r); } catch (e) { err.textContent = e.message; }
+        }),
+        h('button', { type: 'button', class: 'eb-ghost', onclick: () => { location.href = BACK; } }, '← Back')));
+      document.body.append(m); nameBox.focus();
+    });
+  }
   async function pickStart() {
     return new Promise((resolve) => {
       const pick = (k) => () => { m.remove(); resolve(k); };
-      const sw = (th) => { const a = h('div', { class: 'eb-sw' }), b = h('div', { class: 'eb-sw-h' }, h('span', { class: 'eb-sw-t' }, 'Aa'), th.decor[0] ? h('span', {}, th.decor[0]) : null), c = h('div', { class: 'eb-sw-b' }), bt = h('i', { class: 'eb-sw-btn' });
-        a.style.background = th.bg; a.style.borderRadius = Math.min(th.radius, 18) + 'px'; b.style.background = th.head; b.style.color = th.title; b.querySelector('.eb-sw-t').style.fontFamily = (FONT[th.font] || FONT.arial).css; c.style.background = th.card; bt.style.background = th.btn; c.append(bt); a.append(b, c); return a; };
       const m = h('div', { class: 'eb-modal' }, h('div', { class: 'eb-card eb-wide' }, h('h2', {}, 'Start a new email'),
         h('div', { class: 'eb-starts eb-big' },
-          h('button', { type: 'button', class: 'eb-start', onclick: pick('announce') }, h('b', {}, '📣 Announcement'), h('span', {}, 'Answer a few questions (none required) and the best layout is picked for you. Add as many announcements as you like.')),
+          h('button', { type: 'button', class: 'eb-start', onclick: pick('announce') }, h('b', {}, '📣 Announcement'), h('span', {}, 'Answer a few questions (none required) and the best layout and style are picked for you. Add as many announcements as you like.')),
           h('button', { type: 'button', class: 'eb-start', onclick: pick('followup') }, h('b', {}, '💬 Follow Up'), h('span', {}, 'A reply-style email with switchable parts: thanks, issue addressing, what we did, next steps, conclusion…'))),
-        h('h4', { class: 'eb-h4' }, 'Or pick a template (no questions)'),
-        h('div', { class: 'row-2' }, F('Look', lookSel()), F('Layout style', styleSel())),
-        h('div', { class: 'eb-starts' }, Object.entries(gen.layouts).map(([k, v]) => h('button', { type: 'button', class: 'eb-start', onclick: pick('tpl:' + k) }, h('b', {}, v.label), h('span', {}, v.desc))),
-          Object.entries(PRESETS).map(([k, p]) => h('button', { type: 'button', class: 'eb-start', onclick: pick(k) }, h('b', {}, p.label), h('span', {}, p.desc)))),
-        h('h4', { class: 'eb-h4' }, 'Or start from a theme'), h('p', { class: 'eb-help' }, 'Uses the layout style above. Colours, fonts, logo and decorations can all be changed afterwards.'),
-        h('div', { class: 'eb-themes' }, THEMES.map((th) => h('button', { type: 'button', class: 'eb-theme', onclick: pick('theme:' + th.id) }, sw(th), h('b', {}, th.label), h('span', {}, th.desc)))),
+        h('h4', { class: 'eb-h4' }, 'Or start from a theme'), h('p', { class: 'eb-help' }, 'Each theme has its own drop-down: a layout style, or a ready-made template in that theme. Colours, fonts, logo and decorations can all be changed afterwards.'),
+        themeGrid(false, (th, choice) => { m.remove(); resolve({ th, choice }); }),
         h('button', { type: 'button', class: 'eb-ghost', onclick: () => { location.href = '/owner#email'; } }, '← Back')));
       document.body.append(m);
     });
   }
   async function chooseStart() {
-    let first = qs.get('new') || '';
+    let first = REPLY ? 'followup' : (qs.get('new') || '');
     for (;;) {
       const k = first === 'announce' || first === 'followup' ? first : await pickStart();
-      first = first === 'templates' ? '' : (['announce', 'followup'].includes(first) ? '' : first);
+      first = '';
       try {
         if (k === 'announce' || k === 'followup') { const r = await wizard(k); if (r) return r; continue; }
-        if (k.startsWith('tpl:')) return await fromTemplate(k.slice(4));
-        if (k.startsWith('theme:')) {
-          const th = THEMES.find((x) => x.id === k.slice(6));
-          if (STYLE === 'classic') return { d: themed(th), subject: '', name: th.label };
-          const r = await MailGen.build({ kind: 'announcement', items: SAMPLES.story, layout: 'story', variant: STYLE, palette: palOf(th), button_label: 'Open my dashboard', button_url: '{dashboard_url}' });
-          return { d: r.design, subject: r.subject, name: th.label + ' – ' + gen.variants[STYLE] };
-        }
-        const p = PRESETS[k].make();
-        return { d: p.d, subject: p.subject, name: k === 'blank' ? '' : PRESETS[k].label, send_when: k === 'welcome' ? 'first_login' : k === 'notice' ? 'server_blacklisted' : '', send_to: k === 'welcome' ? 'target' : k === 'notice' ? 'essential' : '' };
+        return await fromChoice(k.th, k.choice, false);
       } catch (e) { toast(e.message, 'bad'); }
     }
   }
@@ -622,10 +666,10 @@
       try { const p = await api('/api/owner/pages/' + pageName); D = p.design; M.name = p.title; pageHideNav = !!p.hide_nav; tplId = pageName; }
       catch (e) { app.replaceChildren(stateScreen('Page not found', e.message, h('a', { class: 'btn', href: BACK }, 'Back'))); return; }
     } else {
-      const k = await pickStartPage(); D = PAGE_PRESETS[k].make(); M.name = k === 'blank' ? pageName : PAGE_PRESETS[k].label; dirty = true; history.replaceState(null, '', '/page-builder?name=' + pageName);
+      const r0 = await pickStartPage(); D = r0.d; M.name = r0.name || pageName; dirty = true; history.replaceState(null, '', '/page-builder?name=' + pageName);
     }
   } else if (tplId) {
-    try { const t = await api('/api/owner/email/templates/' + tplId); D = t.design; M = { name: t.name, subject: t.subject, send_to: t.send_to, send_when: t.send_when, when_at: t.when_at || 'now', at_time: t.at_time || '09:00', enabled: !!t.enabled }; if (!/^(everyone|essential|target|tag:.+)$/.test(M.send_to)) M.send_to = 'everyone'; if (M.send_when !== 'manual' && M.send_to === 'everyone') M.send_to = 'target'; }
+    try { const t = await api('/api/owner/email/templates/' + tplId); D = t.design; M = { name: t.name, subject: t.subject, send_to: t.send_to, send_when: t.send_when, when_at: t.when_at || 'now', at_time: t.at_time || '09:00', enabled: !!t.enabled, code: t.code || M.code }; if (!/^(everyone|essential|target|tag:.+)$/.test(M.send_to)) M.send_to = 'everyone'; if (M.send_when !== 'manual' && M.send_to === 'everyone') M.send_to = 'target'; }
     catch (e) { app.replaceChildren(stateScreen('Email not found', e.message, h('a', { class: 'btn', href: '/owner#email' }, 'Back'))); return; }
   } else {
     const st0 = await chooseStart();
@@ -633,6 +677,6 @@
     if (st0.send_to) M.send_to = st0.send_to;
     if (st0.send_when) M.send_when = st0.send_when;
   }
-  nameIn.value = M.name; tab = 'add'; paintAll();
+  if (REPLY && !M.name) M.name = 'Reply'; nameIn.value = M.name; tab = 'add'; paintAll();
   new ResizeObserver(() => { if (!canvasWrap.clientWidth) return; const c = canvasWrap.clientWidth - 48, need = (dev === 'd' ? D.w : MOB); if (c < need * zoom && zoom === 1) setZoom(Math.max(0.4, Math.floor(c / need * 10) / 10)); }).observe(canvasWrap);
 })();

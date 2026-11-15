@@ -1,6 +1,22 @@
 {
- "build": "a17dbe3bc5",
+ "build": "d57ca54fe7",
  "entries": [
+  {
+   "id": "w-2026-11-15-guide",
+   "date": "2026-11-15",
+   "kind": "website",
+   "topic": "welcome-guide",
+   "title": "Welcome guide",
+   "summary": "A full step-by-step guide with annotated pictures, from adding Rex to email settings and support.",
+   "items": [
+    "📖 New **/welcome** guide: adding Rex, the dashboard, tickets, premium codes, email preferences and how support reaches our staff, with a Jump to list.",
+    "📬 The owner inbox now shows emails exactly as sent, with folders, junk, trash and move.",
+    "🎟️ Emails can include a different premium code for every person."
+   ],
+   "fixes": [
+    "Premade update pages can now be deleted, and tidy themselves up when their update ages out."
+   ]
+  },
   {
    "id": "w-2026-11-03-apps",
    "date": "2026-11-03",

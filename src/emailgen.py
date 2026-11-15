@@ -239,6 +239,8 @@ def footer(g, y, small, signature=True):
     if signature:
         g.text("Signature", 40, y, 520, "♥ by Rex Team", 14, h=22, color=gold if p["decor"][:1] == ["✦"] else p["muted"], align="center", bold=True)
         y += 28
+    if not small:
+        return y + 20
     g.text("Small print", 40, y, 520, small, 12, h=th(small, 12, 520, 1.6), color=p["muted"], align="center", lh=1.6)
     return y + th(small, 12, 520, 1.6) + 24
 
@@ -280,6 +282,24 @@ def pick_layout(items):
             return "grid", "%d announcements that all have pictures" % n
         return "digest", "%d announcements" % n
     return "list", "%d announcements, so a short list reads best" % n
+
+
+def pick_variant(items, layout):
+    """Chooses the look (layout style) from how much was filled in."""
+    n = len(items)
+    has_img = any(i["image"] for i in items)
+    longest = max([len(i["long"]) for i in items] or [0])
+    if layout == "alert":
+        return "classic"
+    if layout == "list" or n >= 5:
+        return "compact"
+    if layout == "spotlight":
+        return "image" if has_img else ("classic" if longest > 200 else "framed")
+    if layout == "story":
+        return "framed" if not has_img else "classic"
+    if layout in ("digest", "grid"):
+        return "rounded" if n <= 3 else "classic"
+    return "classic"
 
 
 def _more(it):
@@ -443,12 +463,14 @@ def _layout_list(g, items, y):
     return y
 
 
-def announcement(raw_items, layout="auto", variant="classic", palette=None, base="dark", button_label="", button_url="", subject="", sub="News from Rex"):
+def announcement(raw_items, layout="auto", variant="classic", palette=None, base="dark", button_label="", button_url="", subject="", sub="News from Rex", page=False):
     items = _clean_items(raw_items)
     pal = clean_pal(palette, base)
     why = ""
     if layout not in LAYOUTS:
         layout, why = pick_layout(items)
+    if variant not in VARIANTS:
+        variant = pick_variant(items, layout)
     trimmed = 0
     while True:
         g = Gen(pal, variant)
@@ -477,12 +499,14 @@ def announcement(raw_items, layout="auto", variant="classic", palette=None, base
             y += 4
             g.button(40, y, 240, button_label, _url(button_url) or "{dashboard_url}")
             y += 80
-        y = footer(g, y, SMALL_ANN)
+        y = footer(g, y, "" if page else SMALL_ANN)
         if len(g.els) <= MAX_BUILD_ELS or not shown:
             break
         trimmed += 1
     d = g.design(pre=(items[0]["brief"] or items[0]["title"]) if items else "")
     subj = _s(subject, 150) or (items[0]["title"] if len(items) == 1 and items[0]["title"] else ("What's new in Rex" if items else "News from Rex"))
+    if page:
+        d = to_page(d, pal)
     return {"design": d, "subject": subj, "layout": layout, "why": why, "trimmed": trimmed, "variant": g.var}
 
 
@@ -554,3 +578,31 @@ def followup(sections, variant="classic", palette=None, base="dark", subject="",
             y += h + 16
     y = footer(g, y + 4, SMALL_REPLY)
     return {"design": g.design(pre="Following up on your message"), "subject": ("Re: " + subj) if subj and not subj.lower().startswith("re:") else subj}
+
+
+# ------------------------------------------------------------------------------------------------ pages
+PAGE_W = 860
+_PAGE_VARS = {"{dashboard_url}": "/dashboard", "{site_url}": "/", "{support_url}": "/support", "{docs_url}": "/docs"}
+
+
+def to_page(design, pal):
+    """Scales an email design up to the 860 wide page canvas, so pages and emails share the same templates."""
+    k = PAGE_W / W
+    out = []
+    for e in design["els"]:
+        e = dict(e)
+        d = e["d"]
+        e["d"] = {"x": round(d["x"] * k), "y": round(d["y"] * k), "w": round(d["w"] * k), "h": round(d["h"] * k)}
+        if "size" in e:
+            e["size"] = min(120, round(e["size"] * 1.12))
+        for f in ("radius", "pad"):
+            if isinstance(e.get(f), (int, float)):
+                e[f] = min(300, round(e[f] * k)) if f == "radius" and e[f] < 100 else e[f]
+        for f in ("url", "text", "label", "src"):
+            if isinstance(e.get(f), str):
+                v = e[f]
+                for a, b in _PAGE_VARS.items():
+                    v = v.replace(a, b)
+                e[f] = v
+        out.append(e)
+    return {"v": 1, "w": PAGE_W, "bg": pal["bg"], "page": pal["card"], "color": pal["text"], "link": pal.get("gold") or pal["accent"], "font": pal["body"], "fill": False, "els": out}

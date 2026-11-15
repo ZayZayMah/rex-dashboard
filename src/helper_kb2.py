@@ -168,3 +168,18 @@ _GEN = [
 ]
 for t, k, *a in _GEN:
     E(t, k, *a)
+
+# ---- pointers into the /welcome guide (the owners can edit the guide, so these only link to its section ids)
+E("Full guide", "guide|full guide|tutorial|walkthrough|how do i start|getting started|beginner|new to rex|how does rex work|show me everything|help me get started|where do i begin|step by step|instructions",
+  "There's a full step-by-step guide with pictures: [Welcome to Rex](/welcome). It starts with adding the bot and goes through the dashboard, tickets, premium codes, email settings and support.",
+  "Start at the [Welcome guide](/welcome). Use its **Jump to** list to go straight to the part you need, for example [adding Rex](/welcome#add-rex) or [the dashboard tour](/welcome#dashboard-tour).")
+E("Guide: adding Rex", "how do i add rex step by step|add rex with pictures|add rex guide|server not in the list|cant see my server|can't see my server|server missing dashboard|my server isnt listed|my server is not listed",
+  "The guide has pictures for this: [Add Rex to your server](/welcome#add-rex). If your server isn't listed in the Dashboard, you need **Manage Server** there and Rex has to be added first.")
+E("Guide: email preferences", "email preferences|unsubscribe|stop emails|stop the emails|too many emails|email settings|change which emails|opt out of emails|emails from rex|turn off emails",
+  "You can pick which emails you get on your profile: see [Your profile and email preferences](/welcome#profile-email). Every email also has an **Unsubscribe** link at the bottom.")
+E("Guide: support tickets", "how do tickets get to the server|ticket forwarding|forwarded to the server|how does support work|who answers support|does a human answer|talk to a person|talk to a human|real person|staff reply",
+  "If I can't solve something, your chat is forwarded to our staff in the support server and they answer you in the same chat here. The details are in [How support tickets reach our server](/welcome#ticket-forwarding).")
+E("Guide: premium codes", "premium code not working|code not working|redeem code guide|how do i redeem|redeem a code|code expired|code used up|invalid code",
+  "Redeem codes inside the server you want to upgrade with `/redeem`. If it fails, Rex says whether it is expired, used up or already redeemed. See [Premium, Priority and Ultra codes](/welcome#premium) for the steps.")
+E("Guide: tickets setup", "set up tickets|ticket panel|ticket category|how do tickets work|create ticket panel|make tickets",
+  "Set up member tickets in **Help & safety > Tickets** in the [Dashboard](/dashboard). The steps with pictures are in [Tickets for your members](/welcome#tickets).")

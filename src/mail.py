@@ -54,7 +54,7 @@ FONTS = {
 }
 HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 URL = re.compile(r"^https?://[^\s<>\"']{4,480}$")
-VARIABLES = ("name", "first_name", "dashboard_url", "site_url", "unsubscribe_url", "unsubscribe_link", "logo_url", "support_url", "date", "server")
+VARIABLES = ("name", "first_name", "dashboard_url", "site_url", "unsubscribe_url", "unsubscribe_link", "logo_url", "support_url", "date", "server", "code")
 
 
 def _rgb(hx):

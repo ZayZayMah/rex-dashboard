@@ -64,7 +64,7 @@ def _age_days(date):
 
 # --------------------------------------------------------------------------------------------- data
 def _blank():
-    return {"features": [], "fixes": [], "seen": [], "intro": "", "site_build": "", "bot_build": "", "detached": {}, "hashes": {}, "origin": "", "synced": 0, "log": []}
+    return {"features": [], "fixes": [], "seen": [], "intro": "", "site_build": "", "bot_build": "", "detached": {}, "deleted": {}, "hashes": {}, "origin": "", "synced": 0, "log": []}
 
 
 async def load(w):
@@ -536,16 +536,75 @@ async def _write_email(w, kind, name, subject, design, d):
     await w.store.put("email:tpls", idx)
 
 
+def _pkey(kind, name):
+    return {"features": "page_features", "fixes": "page_fixes"}.get(kind) or "topic:" + name
+
+
+def _live_topics(d):
+    """Topics of features that still have a page; a deleted page is brought back only by a newer update on that topic."""
+    gone = d.get("deleted") or {}
+    out = {}
+    for f in d["features"]:
+        t = f.get("topic")
+        if t:
+            out.setdefault(t, set()).add(f["id"])
+    for t in list(out):
+        rec = gone.get("topic:" + t)
+        if rec is not None and not (out[t] - set(rec)):
+            del out[t]
+        elif rec is not None:
+            gone.pop("topic:" + t, None)
+    return out
+
+
+def _relink(obj, origin, name, to):
+    """Point every link to /pages/<name> somewhere else (inside a page or email design)."""
+    raw = json.dumps(obj)
+    new = raw
+    for u in {"/pages/" + name, (origin or "").rstrip("/") + "/pages/" + name, "{site_url}/pages/" + name}:
+        if u.startswith("/") or u.startswith("http") or u.startswith("{"):
+            new = new.replace("(" + u + ")", "(" + to + ")").replace('"' + u + '"', '"' + to + '"')
+    return json.loads(new) if new != raw else None
+
+
+async def remove_page(w, d, name, kind, origin):
+    """Delete a premade update page. Links to it in other pages become / and in emails {site_url}. It stays gone until a newer update arrives."""
+    key = _pkey(kind, name)
+    d.setdefault("deleted", {})[key] = sorted(f["id"] for f in d["features"] if f.get("topic") == name) if kind == "topic" else []
+    d["hashes"].pop(key, None)
+    await w.store.delete("page:" + name)
+    idx = [r for r in (await w.store.get("pages:idx") or []) if r["name"] != name]
+    await w.store.put("pages:idx", idx)
+    for r in idx:
+        p = await w.store.get("page:" + r["name"])
+        if p:
+            nd = _relink(p.get("design"), origin, name, "/")
+            if nd is not None:
+                p["design"] = nd
+                await w.store.put("page:" + r["name"], p)
+    for row in await w.store.get("email:tpls") or []:
+        t = await w.store.get("email:tpl:" + row["id"])
+        if t and not (t.get("premade") and not t.get("detached")):
+            nd = _relink(t.get("design"), origin, name, "{site_url}")
+            if nd is not None:
+                t["design"] = nd
+                await w.store.put("email:tpl:" + row["id"], t)
+    await w.store.put(KEY, d)
+
+
 async def regen(w, d, force=False):
     """Rebuild every premade page/email that still follows the updates (not hand-edited ones)."""
     origin = d.get("origin") or ""
+    live = _live_topics(d)
+    real = d
+    d = dict(d, features=[f if (not f.get("topic") or f["topic"] in live) else dict(f, topic="") for f in d["features"]])
     det, hashes = d["detached"], d["hashes"]
     jobs = [("page_features", "page", lambda: build_page(d, "features", origin)),
             ("page_fixes", "page", lambda: build_page(d, "fixes", origin)),
             ("email_features", "email", lambda: build_email(d, "features", origin)),
             ("email_fixes", "email", lambda: build_email(d, "fixes", origin))]
     for key, kind, fn in jobs:
-        if det.get(key):
+        if det.get(key) or (key in (real.get("deleted") or {})):
             continue
         design = fn()
         h = _hash(design)
@@ -560,7 +619,13 @@ async def regen(w, d, force=False):
         else:
             await _write_email(w, "fixes", "Premade · Bug fixes", "Recent fixes in Rex", design, d)
         hashes[key] = h
-    for topic in sorted({f["topic"] for f in d["features"] if f.get("topic")}):
+    # a premade topic page goes away by itself once its update has aged off the website
+    idx0 = await w.store.get("pages:idx") or []
+    for r in idx0:
+        if r.get("premade") == "topic" and not r.get("detached") and r["name"] not in live:
+            await remove_page(w, real, r["name"], "topic", origin)
+            real["deleted"].pop("topic:" + r["name"], None)
+    for topic in sorted(live):
         key = "topic:" + topic
         if det.get(key) or topic in (PAGE_FEATURES, PAGE_FIXES):
             continue
@@ -618,7 +683,9 @@ async def sync(w, url, force=False, bot_entries=None):
 
 
 def public_view(d):
-    return {"features": d["features"], "fixes": d["fixes"], "intro": d.get("intro", ""), "keep_days": KEEP_DAYS, "synced": int(d.get("synced", 0))}
+    live = _live_topics(d)
+    feats = [f if (not f.get("topic") or f["topic"] in live) else dict(f, topic="") for f in d["features"]]
+    return {"features": feats, "fixes": d["fixes"], "intro": d.get("intro", ""), "keep_days": KEEP_DAYS, "synced": int(d.get("synced", 0))}
 
 
 # --------------------------------------------------------------------------------------------- routes
