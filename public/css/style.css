@@ -894,3 +894,6 @@ body.wide .wrap { width: min(2400px, 100% - clamp(24px, 5vw, 120px)); }
 .wl-key { display: inline-flex; align-items: center; gap: 6px; margin-right: 12px; white-space: nowrap; } .wl-key i { font-style: normal; width: 20px; height: 20px; border-radius: 50%; background: #ff3b5c; color: #fff; font-weight: 700; font-size: .75rem; display: inline-flex; align-items: center; justify-content: center; }
 .wl-top { position: fixed; right: 18px; bottom: 18px; width: 42px; height: 42px; border-radius: 50%; background: var(--volt); color: #001; display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.4); z-index: 40; }
 @media (max-width: 900px) { .wl { grid-template-columns: 1fr; } .wl-side { display: none; } .wl-mob { display: block; } .wl-sec { padding-left: 0; } .wl-num { position: static; margin-bottom: 4px; } .wl-hero { flex-direction: column; } }
+
+.rx-emoji { width: 1.2em; height: 1.2em; vertical-align: -.25em; display: inline-block; margin: 0 .05em; user-select: none; }
+button .rx-emoji, .btn .rx-emoji { vertical-align: -.2em; }

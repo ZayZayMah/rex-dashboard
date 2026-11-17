@@ -121,3 +121,9 @@ Pages are plain files in `public/data/docs/*.md` (first lines: `title:`, `update
 - **Unique codes in emails**: in the email builder, a text box has **🎟 Generate a code** (and a **🎟 Code** button in the top bar). It inserts `{code}` and lets you pick type, what it gives, uses per code and how many days it can be redeemed. Every email sent gets a different code; the website asks the bot to register the codes (one queue request per batch of 8) *before* sending. If the bot is offline, sending stops with a message and nothing goes out. Previews and test emails show a fake sample code. **Needs the new bot update** (`register_codes`, `valid_days`).
 - **Premade update pages** can be deleted (links to them become `/` in pages and `{site_url}` in emails). A deleted page stays gone until a newer update uses that topic, and topic pages remove themselves when their update leaves the website.
 - **/welcome guide**: public page with a Jump to list, annotated screenshots in `public/img/welcome/`. Edit it in Owner tools > Pages & updates > Welcome guide (stored in KV as `welcome`; "Reset" brings back the built-in text in `public/js/welcome.js`). Pictures labelled *Illustration* are drawings of Discord, not real screenshots. The support helper links to guide sections (`/welcome#add-rex`, `#tickets`, `#profile-email`, `#ticket-forwarding`, `#premium`).
+
+
+## Custom emojis
+
+- `public/img/emoji/` holds the Rex icon set (SVG). `public/js/app.js` swaps everyday emoji (✅ ❌ 🎫 💡 ...) in the site's text for these icons automatically; seasonal and decorative emoji are left alone, and the email/page builder canvas is skipped so emails still send real emoji.
+- The Discord PNGs, the upload script and the generator are in `rex-emojis.zip` (not part of the site). The bot side is `rex_emoji.py` + `emoji_ids.json`.
