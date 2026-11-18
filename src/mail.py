@@ -233,7 +233,14 @@ def auto_mobile(els):
         if kids.get(e["id"]):
             s = w / e["d"]["w"]
             for k in kids[e["id"]]:
-                place(k, (k["d"]["x"] - e["d"]["x"]) * s, y + (k["d"]["y"] - e["d"]["y"]), k["d"]["w"] * s, k["d"]["h"])
+                kx, kw, kh = (k["d"]["x"] - e["d"]["x"]), k["d"]["w"], k["d"]["h"]
+                if k["t"] in ("text", "button") or kw >= 0.6 * e["d"]["w"]:
+                    nx, nw = kx * s, kw * s          # text and wide pieces stretch with the box
+                    nh = round(kh * (nw / kw)) if k["t"] in ("image", "rect") else kh
+                else:
+                    nw, nh = kw, kh                   # small shapes, logos and icons keep their size and shape
+                    nx = min(kx * s, max(0, w - kw))
+                place(k, nx, y + (k["d"]["y"] - e["d"]["y"]), nw, nh)
             # children are positioned relative to the box: convert to canvas coordinates
             for k in kids[e["id"]]:
                 out[k["id"]]["x"] += round(x)

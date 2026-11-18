@@ -64,7 +64,7 @@ def _age_days(date):
 
 # --------------------------------------------------------------------------------------------- data
 def _blank():
-    return {"features": [], "fixes": [], "seen": [], "intro": "", "site_build": "", "bot_build": "", "detached": {}, "deleted": {}, "hashes": {}, "origin": "", "synced": 0, "log": []}
+    return {"features": [], "fixes": [], "seen": [], "intro": "", "site_build": "", "bot_build": "", "detached": {}, "deleted": {}, "owner_notes": [], "hashes": {}, "origin": "", "synced": 0, "log": []}
 
 
 async def load(w):
@@ -85,6 +85,34 @@ def _clean_feature(e, source="site"):
     return out if out["id"] and out["title"] else None
 
 
+def _owner_note(d, e):
+    """Changes that only matter to the owners (owner tools, inbox, ...) are kept apart from the public feed."""
+    its = [_s(x, 300) for x in ((e.get("items") if e.get("audience") == "owner" else None) or e.get("owner_items") or []) if _s(x, 300)]
+    eid = _s(e.get("id"), 60)
+    if not its or not eid:
+        return
+    notes = [n for n in d.setdefault("owner_notes", []) if n.get("id") != eid]
+    notes.append({"id": eid, "date": _s(e.get("date"), 10) or _today(), "title": _s(e.get("title"), 90), "items": its[:12]})
+    d["owner_notes"] = sorted(notes, key=lambda n: (n["date"], n["id"]), reverse=True)[:30]
+
+
+def _scrub(d, site_entries):
+    """Entries that were already published before they were marked owner-only (or had owner lines removed) are cleaned up here."""
+    by = {_s(e.get("id"), 60): e for e in site_entries or [] if isinstance(e, dict)}
+    out = []
+    for f in d["features"]:
+        e = by.get(f["id"])
+        if e is not None:
+            _owner_note(d, e)
+            if e.get("audience") == "owner":
+                continue
+            pub = [_s(x, 300) for x in (e.get("items") or []) if _s(x, 300)][:12]
+            if pub and pub != f["items"]:
+                f = dict(f, items=pub, summary=_s(e.get("summary"), 220) or _brief(pub))
+        out.append(f)
+    d["features"] = out
+
+
 def _merge(d, entries, source):
     """Add entries we haven't seen. Returns how many were added."""
     added = 0
@@ -97,6 +125,9 @@ def _merge(d, entries, source):
             continue
         seen.add(eid)
         d["seen"].append(eid)
+        _owner_note(d, e)
+        if e.get("audience") == "owner":
+            continue                       # owner-only changes are never shown on the public updates page or in emails
         kind = e.get("kind")
         fixes = [_s(x, 240) for x in (e.get("fixes") or []) if _s(x, 240)]
         if kind in ("minor", "fix"):
@@ -655,21 +686,22 @@ async def sync(w, url, force=False, bot_entries=None):
     origin = w.public_origin(url)
     d["origin"] = origin
     changed = False
+    before0 = _hash([d["features"], d["fixes"], d.get("owner_notes")])
     if bot_entries:
         changed |= bool(_merge(d, bot_entries, "bot"))
     site = await _site_changelog(w, origin)
     if isinstance(site, dict):
         added = _merge(d, site.get("entries"), "site")
         changed |= bool(added)
+        _scrub(d, site.get("entries"))
         b = _s(site.get("build"), 20)
         if b and d["site_build"] != b:
             if d["site_build"] and not added:
                 added = _merge(d, [{"id": "auto-site-" + b, "date": _today(), "kind": "minor", "items": ["Small fixes and improvements to the Rex website."]}], "site")
             d["site_build"] = b
             changed = True
-    before = _hash([d["features"], d["fixes"]])
     _prune(d)
-    changed |= before != _hash([d["features"], d["fixes"]])
+    changed |= before0 != _hash([d["features"], d["fixes"], d.get("owner_notes")])
     _LAST["t"] = now
     if changed or force or now - d.get("synced", 0) > 6 * 3600:
         # KV writes are limited (about 1000 a day on the free plan), so only write when something changed.
@@ -715,7 +747,7 @@ async def owner_route(w, request, url, path, method, session):
     tail = path.split("/")[4:]  # /api/owner/updates/...
     if tail == [] and method == "GET":
         d = await sync(w, url, force=True)
-        return jr(dict(public_view(d), detached=_premade_state(d), pages=[PAGE_FEATURES, PAGE_FIXES], emails=EMAIL_IDS))
+        return jr(dict(public_view(d), detached=_premade_state(d), pages=[PAGE_FEATURES, PAGE_FIXES], emails=EMAIL_IDS, owner_notes=d.get("owner_notes", [])))
     w.check_mutation(request, url, session)
     if tail == [] and method == "PUT":
         body = await w.read_json(request, 200 * 1024)

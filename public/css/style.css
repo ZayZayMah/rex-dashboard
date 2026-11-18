@@ -897,3 +897,5 @@ body.wide .wrap { width: min(2400px, 100% - clamp(24px, 5vw, 120px)); }
 
 .rx-emoji { width: 1.2em; height: 1.2em; vertical-align: -.25em; display: inline-block; margin: 0 .05em; user-select: none; }
 button .rx-emoji, .btn .rx-emoji { vertical-align: -.2em; }
+
+.rx-emoji.rx-free{width:1.3em;height:1.3em;vertical-align:-.28em}

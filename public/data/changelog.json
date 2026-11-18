@@ -1,6 +1,20 @@
 {
- "build": "bdc993d9e5",
+ "build": "a798aeedb8",
  "entries": [
+  {
+   "id": "w-2026-11-18-icons",
+   "date": "2026-11-18",
+   "kind": "website",
+   "topic": "icons",
+   "title": "Sharper icons and tidier emails",
+   "summary": "Icons are now crisp at any text size, and update emails look right on phones.",
+   "items": [
+    "🎨 Every icon now has a circle-free twin that is used at text size, so small icons stay recognisable.",
+    "📱 Logos and shapes in Rex emails no longer get squashed on phones."
+   ],
+   "fixes": [],
+   "owner_items": []
+  },
   {
    "id": "w-2026-11-15-guide",
    "date": "2026-11-15",
@@ -9,12 +23,13 @@
    "title": "Welcome guide",
    "summary": "A full step-by-step guide with annotated pictures, from adding Rex to email settings and support.",
    "items": [
-    "📖 New **/welcome** guide: adding Rex, the dashboard, tickets, premium codes, email preferences and how support reaches our staff, with a Jump to list.",
-    "📬 The owner inbox now shows emails exactly as sent, with folders, junk, trash and move.",
-    "🎟️ Emails can include a different premium code for every person."
+    "📖 New **/welcome** guide: adding Rex, the dashboard, tickets, premium codes, email preferences and how support reaches our staff, with a Jump to list."
    ],
-   "fixes": [
-    "Premade update pages can now be deleted, and tidy themselves up when their update ages out."
+   "fixes": [],
+   "owner_items": [
+    "📬 The owner inbox now shows emails exactly as sent, with folders, junk, trash and move.",
+    "🎟️ Emails can include a different premium code for every person.",
+    "🗑️ Premade update pages can be deleted from Owner tools."
    ]
   },
   {
