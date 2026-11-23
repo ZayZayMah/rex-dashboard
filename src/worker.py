@@ -1224,7 +1224,7 @@ class Default(WorkerEntrypoint):
         channel = body.get("channel") if isinstance(body, dict) else None
         if kind in ("lockdown", "unlock"):
             channel = "0"
-        if kind not in ("ticket", "verify", "lockdown", "unlock") or not isinstance(channel, str) or not (channel == "0" or SNOWFLAKE.match(channel)):
+        if kind not in ("ticket", "verify", "apply", "lockdown", "unlock") or not isinstance(channel, str) or not (channel == "0" or SNOWFLAKE.match(channel)):
             raise HttpError(400, "bad_request", "Choose a panel and a channel.")
         rid = secrets.token_hex(6)
         await self.enqueue(gid, {"id": rid, "ts": now(), "by": user["id"], "byname": user["name"], "op": "publish_panel",

@@ -1,6 +1,28 @@
 {
- "build": "a798aeedb8",
+ "build": "dcd6c0af28",
  "entries": [
+  {
+   "id": "w-2026-11-23-studio",
+   "date": "2026-11-23",
+   "kind": "website",
+   "topic": "studio",
+   "title": "The Studio, a bigger card editor and a fix for the loading screen",
+   "summary": "Commands and events now have their own Studio page with a big zoomable canvas and many more blocks.",
+   "items": [
+    "🧩 New Studio page: drag blocks anywhere, zoom in and out, search blocks, 20+ new blocks, and new events (keyword, boost, voice join, role gained).",
+    "🖼️ The card builder lets you drag, resize, rotate and crop images and shapes.",
+    "☺ New emoji button next to message boxes: pick a Rex emoji and its text code is added for you.",
+    "🔒 Options your plan does not include are hidden instead of cluttering the page.",
+    "🎁 Ticket buttons can now be a \"Giveaway prize claim\" that finds the prize someone won and opens the claim ticket.",
+    "🔤 Crisper small icons (thicker lines on the circle-free set).",
+    "🔽 Pop-up forms in Discord now use real channel, role and member pickers instead of pasted IDs."
+   ],
+   "fixes": [
+    "🛠️ The dashboard no longer gets stuck on \"loading\". If something goes wrong it now says so.",
+    "📖 Floating text now always has a solid background so it cannot overlap other text."
+   ],
+   "owner_items": []
+  },
   {
    "id": "w-2026-11-18-icons",
    "date": "2026-11-18",

@@ -127,3 +127,8 @@ Pages are plain files in `public/data/docs/*.md` (first lines: `title:`, `update
 
 - `public/img/emoji/` holds the Rex icon set (SVG). `public/js/app.js` swaps everyday emoji (✅ ❌ 🎫 💡 ...) in the site's text for these icons automatically; seasonal and decorative emoji are left alone, and the email/page builder canvas is skipped so emails still send real emoji.
 - The Discord PNGs, the upload script and the generator are in `rex-emojis.zip` (not part of the site). The bot side is `rex_emoji.py` + `emoji_ids.json`.
+
+## Studio (new)
+- `public/studio.html` is the Studio page (commands and events). It reuses `js/server.js` (loading + saving) in a `page-studio` mode and `js/builder.js` with `studio: true`, which draws a pan/zoom board. Blocks keep an `x`/`y`; they run top to bottom by `y`.
+- New blocks and events exist in both `builder.js` and the bot's `rex_builder.py` (`BLOCK_TYPES`, `clean_blocks`, executor, `TRIGGERS`). Add a block in both places.
+- Emoji codes: `:rex_name:` in a message becomes Rex's emoji (or the regular one when the server turns "Use Rex's own emojis" off). The picker button is `window.RexEmoji`.
