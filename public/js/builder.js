@@ -101,6 +101,25 @@ window.rexBuilder = (function () {
   const uid = () => Math.random().toString(36).slice(2, 10);
   const clone = (x) => JSON.parse(JSON.stringify(x));
 
+  function emojiButton(getEl) {
+    let pop = null;
+    const btn = h('button', { type: 'button', class: 'bld-info bld-emo', title: 'Add a Rex emoji', 'aria-label': 'Add a Rex emoji', onclick: (e) => {
+      e.stopPropagation();
+      if (pop) { pop.remove(); pop = null; return; }
+      pop = h('div', { class: 'bld-pop emo-pop' }, h('b', {}, 'Rex emojis'), h('div', { class: 'muted small' }, 'Tap one to put its code in the text. Rex shows the picture in Discord. If this server turned Rex emojis off, the regular emoji shows instead.'),
+        h('div', { class: 'emo-grid' }, EMOJIS.map((n) => h('button', { type: 'button', title: ':rex_' + n + ':', 'aria-label': n.replace(/_/g, ' '), onclick: () => {
+          const el = getEl(); if (!el) return;
+          const code = ':rex_' + n + ':'; const a = el.selectionStart == null ? el.value.length : el.selectionStart, b = el.selectionEnd == null ? a : el.selectionEnd;
+          el.value = el.value.slice(0, a) + code + el.value.slice(b); el.selectionStart = el.selectionEnd = a + code.length; el.dispatchEvent(new Event('input', { bubbles: true })); el.focus();
+        } }, h('img', { src: '/img/emoji/rexf_' + n + '.svg', alt: '', width: 24, height: 24, draggable: 'false' })))));
+      btn.parentNode.append(pop);
+      setTimeout(() => document.addEventListener('click', function f(ev) { if (pop && !pop.contains(ev.target)) { pop.remove(); pop = null; } document.removeEventListener('click', f); }), 0);
+    } }, '☺');
+    return h('span', { class: 'bld-infowrap' }, btn);
+  }
+
+  window.RexEmojiPicker = { button: emojiButton };
+
   function mount(o) {
     const { spec, draft, set, guild, locked, errors, ticketTypes } = o;
     const isCmd = spec.kind !== 'event';
@@ -129,24 +148,6 @@ window.rexBuilder = (function () {
     }
 
 
-    function emojiButton(getEl) {
-      let pop = null;
-      const btn = h('button', { type: 'button', class: 'bld-info bld-emo', title: 'Add a Rex emoji', 'aria-label': 'Add a Rex emoji', onclick: (e) => {
-        e.stopPropagation();
-        if (pop) { pop.remove(); pop = null; return; }
-        pop = h('div', { class: 'bld-pop emo-pop' }, h('b', {}, 'Rex emojis'), h('div', { class: 'muted small' }, 'Tap one to put its code in the text. Rex shows the picture in Discord. If this server turned Rex emojis off, the regular emoji shows instead.'),
-          h('div', { class: 'emo-grid' }, EMOJIS.map((n) => h('button', { type: 'button', title: ':rex_' + n + ':', 'aria-label': n.replace(/_/g, ' '), onclick: () => {
-            const el = getEl(); if (!el) return;
-            const code = ':rex_' + n + ':'; const a = el.selectionStart == null ? el.value.length : el.selectionStart, b = el.selectionEnd == null ? a : el.selectionEnd;
-            el.value = el.value.slice(0, a) + code + el.value.slice(b); el.selectionStart = el.selectionEnd = a + code.length; el.dispatchEvent(new Event('input', { bubbles: true })); el.focus();
-          } }, h('img', { src: '/img/emoji/rexf_' + n + '.svg', alt: '', width: 24, height: 24, draggable: 'false' })))));
-        btn.parentNode.append(pop);
-        setTimeout(() => document.addEventListener('click', function f(ev) { if (pop && !pop.contains(ev.target)) { pop.remove(); pop = null; } document.removeEventListener('click', f); }), 0);
-      } }, '☺');
-      return h('span', { class: 'bld-infowrap' }, btn);
-    }
-
-    window.RexEmoji = { button: emojiButton };
 
     /* ---------------------------------------------------------- one field */
     function field(block, f, rerender) {

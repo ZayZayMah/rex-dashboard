@@ -356,7 +356,7 @@
       return h('div', { style: 'display:flex;gap:8px' }, el, sw);
     }
     if (spec.type === 'url' && spec.upload) return h('div', {}, el, uploadButton(spec, el, locked));
-    if (spec.multiline && !locked && window.RexEmoji) return h('div', { class: 'emo-wrap' }, h('div', { class: 'emo-row' }, window.RexEmoji.button(() => el)), el);
+    if (spec.multiline && !locked && window.RexEmojiPicker && typeof window.RexEmojiPicker.button === 'function') { try { return h('div', { class: 'emo-wrap' }, h('div', { class: 'emo-row' }, window.RexEmojiPicker.button(() => el)), el); } catch (e) { /* the picker is optional; the plain box below still works */ } }
     return el;
   }
   function control(spec, locked) {
@@ -446,6 +446,8 @@
 
   /* ---------------------------------------------------------------- sections */
   const SURF = ['well', 'frame', 'slab'];
+  /* one broken setting must never blank the whole section: it shows a small notice and the rest still loads */
+  const safeRow = (s, fn) => { try { return fn(); } catch (e) { console.error('Setting failed to draw:', s.key, e); return h('div', { class: 'hint bad', role: 'alert' }, '"' + (s.label || s.key) + '" could not load. Reload the page, and tell us if it keeps happening.'); } };
   function settingsSection(sec) {
     const secLock = !tierOn(sec.tier) ? 'tier' : (sec.perm === 'admin' && !canAdmin ? 'perm' : null);
     const box = h('div', {});
@@ -469,8 +471,8 @@
       const toggles = g.items.filter((s) => s.type === 'toggle'), rest = g.items.filter((s) => s.type !== 'toggle');
       const surface = g.name ? SURF[gi % SURF.length] : '';
       const node = h('div', { class: 'group ' + surface }, g.name ? h('h3', {}, g.name) : null);
-      if (toggles.length) node.append(h('div', { class: 'switch-grid' }, toggles.map((s) => switchCard(s, secLock))));
-      if (rest.length) node.append(h('div', { style: toggles.length ? 'margin-top:12px' : '' }, rest.map((s) => settingRow(s, secLock))));
+      if (toggles.length) node.append(h('div', { class: 'switch-grid' }, toggles.map((s) => safeRow(s, () => switchCard(s, secLock)))));
+      if (rest.length) node.append(h('div', { style: toggles.length ? 'margin-top:12px' : '' }, rest.map((s) => safeRow(s, () => settingRow(s, secLock)))));
       box.append(node);
     });
     if (!secLock && (sec.id === 'tickets' || sec.id === 'verification')) box.append(panelCard(sec.id === 'tickets' ? 'ticket' : 'verify'));
@@ -675,7 +677,7 @@
     main.replaceChildren(...frame, h('div', { id: 'sec-body' }));
     const body = document.getElementById('sec-body');
     if (sec && (id === 'commands' || id === 'events') && !FOCUS) body.append(builderLauncher(sec));
-    else if (sec) body.append(settingsSection(sec));
+    else if (sec) { try { body.append(settingsSection(sec)); } catch (e) { console.error(e); body.append(h('div', { class: 'tier-lock' }, 'This section could not load (' + (e && e.message || 'error') + '). Reload the page to try again.')); } }
     else if (id === 'premium') body.append(premiumSection());
     else if (id === 'transcripts') body.append(await transcriptsSection());
     else if (id === 'owner' && ownerMode) body.append(ownerSection());
