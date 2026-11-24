@@ -17,7 +17,7 @@
   // Turn Discord markup into safe DOM nodes (no innerHTML anywhere).
   function inline(text, m) {
     const out = [];
-    const re = /(`[^`\n]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(<@!?(\d+)>)|(<@&(\d+)>)|(<#(\d+)>)|(https?:\/\/[^\s<]+)/g;
+    const re = /(`[^`\n]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(<@!?(\d+)>)|(<@&(\d+)>)|(<#(\d+)>)|(https?:\/\/[^\s<]+)|(<(a?):?(?:rex|\w+):(\d{5,25})>)/g;
     let last = 0, x;
     while ((x = re.exec(text))) {
       if (x.index > last) out.push(text.slice(last, x.index));
@@ -29,6 +29,7 @@
       else if (x[7]) { const r = (m.roles || {})[x[8]]; out.push(h('span', { class: 'tx-mention', style: r && r.color ? 'color:' + hex(r.color) : '' }, '@' + (r ? r.name : 'role'))); }
       else if (x[9]) out.push(h('span', { class: 'tx-mention' }, '#' + ((m.channels || {})[x[10]] || 'channel')));
       else if (x[11]) out.push(h('a', { href: x[11], target: '_blank', rel: 'noopener noreferrer nofollow' }, x[11]));
+      else if (x[12]) out.push(h('img', { class: 'tx-emoji', src: 'https://cdn.discordapp.com/emojis/' + x[14] + (x[13] === 'a' ? '.gif' : '.png') + '?size=48', alt: '', width: 22, height: 22, loading: 'lazy' }));
       last = x.index + x[0].length;
     }
     if (last < text.length) out.push(text.slice(last));

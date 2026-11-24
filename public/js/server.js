@@ -89,8 +89,11 @@
     const btn = h('button', { type: 'button', class: 'combo-btn', id: 'f-' + spec.key, disabled: locked ? true : null, 'aria-haspopup': 'listbox' });
     let list = null;
     const cur = () => items.find((i) => i.id === String(draft[spec.key] || ''));
+    const warn = h('div', { class: 'no-access', role: 'alert', hidden: true });
     function paintBtn() {
       const c = cur(), v = String(draft[spec.key] || '');
+      warn.hidden = !(c && c.usable === false);
+      warn.textContent = 'Rex can\'t use this ' + (c && c.dot !== undefined ? 'role (move Rex\'s role above it and give it Manage Roles)' : 'channel (give Rex View Channel, Send Messages and Embed Links there)') + '. This setting won\'t work until that is fixed.';
       btn.replaceChildren(
         c ? [c.dot !== undefined ? h('span', { class: 'dot', style: c.dot ? 'background:#' + c.dot : '' }) : h('span', { class: 'glyph' }, c.glyph || '#'), h('span', {}, c.label)]
           : v ? h('span', { class: 'muted' }, 'Unknown (' + v + ')') : h('span', { class: 'ph' }, noneLabel),
@@ -106,8 +109,8 @@
       const draw = () => {
         const f = q.value.trim().toLowerCase();
         const rows = [h('button', { type: 'button', onclick: () => pick('') }, h('span', { class: 'muted' }, noneLabel))];
-        items.filter((i) => !f || i.label.toLowerCase().includes(f)).slice(0, 120).forEach((i) => rows.push(h('button', { type: 'button', class: String(draft[spec.key]) === i.id ? 'sel' : '', onclick: () => pick(i.id) },
-          i.dot !== undefined ? h('span', { class: 'dot', style: i.dot ? 'background:#' + i.dot : '' }) : h('span', { class: 'glyph' }, i.glyph || '#'), i.label, i.parent ? h('span', { class: 'par' }, i.parent) : null)));
+        items.filter((i) => !f || i.label.toLowerCase().includes(f)).slice(0, 120).forEach((i) => rows.push(h('button', { type: 'button', class: (String(draft[spec.key]) === i.id ? 'sel' : '') + (i.usable === false ? ' off' : ''), disabled: i.usable === false ? true : null, title: i.usable === false ? 'Rex has no access to this' : null, onclick: () => pick(i.id) },
+          i.dot !== undefined ? h('span', { class: 'dot', style: i.dot ? 'background:#' + i.dot : '' }) : h('span', { class: 'glyph' }, i.glyph || '#'), i.label, i.parent ? h('span', { class: 'par' }, i.parent) : null, i.usable === false ? h('span', { class: 'par' }, 'no access') : null)));
         opts.replaceChildren(...rows);
       };
       q.addEventListener('input', draw); draw();
@@ -116,7 +119,7 @@
       setTimeout(() => document.addEventListener('mousedown', outside), 0);
     });
     paintBtn();
-    wrap.append(btn);
+    wrap.append(btn, warn);
     return wrap;
   }
   function tagControl(spec, locked) {
@@ -369,9 +372,9 @@
       case 'channel': {
         const kinds = spec.kinds && spec.kinds.length ? spec.kinds : ['text', 'announcement'];
         const glyph = { text: '#', announcement: '!', voice: '~', category: '>' };
-        return combo(spec, guild.channels.filter((c) => kinds.includes(c.type)).map((c) => ({ id: c.id, label: c.name, glyph: glyph[c.type], parent: c.parent })), locked, 'None (off)');
+        return combo(spec, guild.channels.filter((c) => kinds.includes(c.type)).map((c) => ({ id: c.id, label: c.name, glyph: glyph[c.type], parent: c.parent, usable: c.usable !== false })), locked, 'None (off)');
       }
-      case 'role': return combo(spec, guild.roles.filter((r) => !r.managed).sort((a, b) => b.position - a.position).map((r) => ({ id: r.id, label: r.name, dot: r.color ? r.color.toString(16).padStart(6, '0') : '' })), locked, 'None');
+      case 'role': return combo(spec, guild.roles.filter((r) => !r.managed).sort((a, b) => b.position - a.position).map((r) => ({ id: r.id, label: r.name, dot: r.color ? r.color.toString(16).padStart(6, '0') : '', usable: r.usable !== false })), locked, 'None');
       case 'user': { const el = h('input', { id: 'f-' + spec.key, type: 'text', inputmode: 'numeric', placeholder: 'Discord user ID', maxlength: 25, disabled: locked ? true : null, oninput: (e) => set(spec.key, e.target.value.trim()) }); el.value = draft[spec.key] ? String(draft[spec.key]) : ''; return el; }
       case 'tags': return tagControl(spec, locked);
       case 'tickettypes': return ticketTypes(spec, locked);
@@ -391,7 +394,7 @@
     const paint = () => {
       chips.replaceChildren(...chosen().map((id) => { const c = guild.channels.find((x) => x.id === id); return h('button', { type: 'button', class: 'chip', disabled: locked ? true : null, onclick: () => { set(spec.key, chosen().filter((x) => x !== id)); paint(); } }, '#' + (c ? c.name : 'unknown'), h('span', { class: 'n' }, 'x')); }));
       if (!chosen().length) chips.append(h('span', { class: 'muted small' }, 'None chosen'));
-      pick.replaceChildren(h('option', { value: '' }, 'Add a channel...'), ...guild.channels.filter((c) => (c.type === 'text' || c.type === 'announcement') && !chosen().includes(c.id)).map((c) => h('option', { value: c.id }, '#' + c.name)));
+      pick.replaceChildren(h('option', { value: '' }, 'Add a channel...'), ...guild.channels.filter((c) => (c.type === 'text' || c.type === 'announcement') && !chosen().includes(c.id)).map((c) => h('option', { value: c.id, disabled: c.usable === false ? true : null }, '#' + c.name + (c.usable === false ? ' (no access)' : ''))));
     };
     paint(); return h('div', { class: 'stack' }, pick, chips);
   }

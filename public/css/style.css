@@ -644,7 +644,7 @@ html[data-theme='christmas'] .tabs button { background: #fff; color: var(--steel
 .mail-prev { width: 100%; height: 520px; border: 1px solid var(--edge); border-radius: 12px; background: #fff; }
 .mblock .mb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 @media (max-width: 900px) { .mail-split { grid-template-columns: 1fr; } }
-.up-why { font-size: .5em; font-weight: 400; color: var(--dim); letter-spacing: 0; }
+.up-why { display: block; max-width: 28ch; line-height: 1.25; overflow-wrap: anywhere; font-size: .45em; font-weight: 400; color: var(--dim); letter-spacing: 0; }
 .srv-head .meta { flex-wrap: nowrap; white-space: nowrap; } .srv-head .meta > * { flex: none; }
 @media (max-width: 640px) { .srv-head .meta { flex-wrap: wrap; white-space: normal; } .xm-snow { opacity: .6; } }
 
@@ -1003,3 +1003,9 @@ body.page-studio .srv-spacer { display: none; }
 .bld-pop { position: absolute; top: 100%; left: 0; margin-top: 6px; }
 .bld-infowrap { position: relative; display: inline-block; }
 .bld-fl, .bld-ch b, .sb-pi b, .sb-pi em { overflow-wrap: anywhere; }
+
+.tx-emoji { width: 1.375em; height: 1.375em; vertical-align: -.3em; object-fit: contain; }
+
+.combo-opts button.off { opacity: .45; cursor: not-allowed; filter: grayscale(1); }
+.no-access { margin-top: .4rem; padding: .45rem .65rem; border-radius: 8px; font-size: .82rem; background: rgba(237,66,69,.12); border: 1px solid rgba(237,66,69,.45); color: #ff8d90; }
+.no-access[hidden] { display: none; }

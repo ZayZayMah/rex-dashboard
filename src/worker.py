@@ -33,6 +33,7 @@ from workers import Response, WorkerEntrypoint
 
 import features
 import apply
+from hub import Hub  # noqa: F401  (the Durable Object class must be exported from the main module)
 from schema import (
     SNOWFLAKE,
     clean_str,
@@ -195,13 +196,35 @@ async def http(method, url, headers=None, body=None):
     return int(resp.status), await resp.text()
 
 
-class Store:
-    """Tiny JSON wrapper around the REX_KV namespace."""
+HOT_PREFIXES = ("q:all", "res:", "ores:", "guild:", "xpq", "watch")
 
-    def __init__(self, kv):
+
+class Store:
+    """Tiny JSON wrapper. Normal keys live in Workers KV. "Hot" keys (the website<->bot queue, results, live server snapshots) live in the
+    Hub Durable Object when it is bound, because KV can take up to a minute to show a fresh write in another city. If the Hub is missing or
+    errors, everything quietly falls back to KV, so nothing breaks."""
+
+    def __init__(self, kv, hub=None):
         self.kv = kv
+        self.hub = hub
+
+    def _hot(self, key):
+        return self.hub is not None and key.startswith(HOT_PREFIXES)
+
+    async def hub_call(self, msg, timeout_ms=None):
+        stub = self.hub.get(self.hub.idFromName("hub"))
+        init = to_js({"method": "POST", "body": json.dumps(msg, separators=(",", ":"))}, dict_converter=Object.fromEntries)
+        resp = await stub.fetch("https://hub/op", init)
+        return json.loads(await resp.text())
 
     async def get(self, key):
+        if self._hot(key):
+            try:
+                out = await self.hub_call({"op": "get", "key": key})
+                if out.get("found"):
+                    return out.get("value")
+            except Exception:
+                pass          # fall through to KV
         raw = await self.kv.get(key)
         if raw is None:
             return None
@@ -211,6 +234,12 @@ class Store:
             return None
 
     async def put(self, key, value, ttl=None):
+        if self._hot(key):
+            try:
+                await self.hub_call({"op": "put", "key": key, "value": value, "ttl": ttl})
+                return
+            except Exception:
+                pass          # fall back to KV so the change is never lost
         payload = json.dumps(value, separators=(",", ":"))
         if ttl:
             options = to_js({"expirationTtl": max(60, int(ttl))}, dict_converter=Object.fromEntries)
@@ -219,7 +248,30 @@ class Store:
             await self.kv.put(key, payload)
 
     async def delete(self, key):
+        if self._hot(key):
+            try:
+                await self.hub_call({"op": "delete", "key": key})
+            except Exception:
+                pass
         await self.kv.delete(key)
+
+    async def wait_change(self, since, seconds):
+        """Hold the request open until the queue changes (or the time is up). Returns the newest version number."""
+        if self.hub is None:
+            return 0
+        try:
+            out = await self.hub_call({"op": "wait", "since": since, "timeout": seconds})
+            return int(out.get("ver") or 0)
+        except Exception:
+            return 0
+
+    async def version(self):
+        if self.hub is None:
+            return 0
+        try:
+            return int((await self.hub_call({"op": "get", "key": "_"})).get("ver") or 0)
+        except Exception:
+            return 0
 
 
 def highest_tier(tiers):
@@ -399,7 +451,7 @@ class Default(WorkerEntrypoint):
         kv = getattr(self.env, "REX_KV", None)
         if kv is None:
             raise HttpError(503, "storage_missing", "The REX_KV storage binding is missing.")
-        return Store(kv)
+        return Store(kv, getattr(self.env, "HUB", None))
 
     def public_origin(self, url):
         configured = self.cfg("PUBLIC_URL")
@@ -1603,7 +1655,7 @@ class Default(WorkerEntrypoint):
         if tail == ["sync"] and method == "POST":
             return await self.bot_sync(await self.read_json(request, 2 * 1024 * 1024), urlparse(request.url))
         if tail == ["poll"] and method == "GET":
-            return await self.bot_poll()
+            return await self.bot_poll(parse_qs(urlparse(request.url).query))
         if tail == ["ack"] and method == "POST":
             return await self.bot_ack(await self.read_json(request, 512 * 1024), urlparse(request.url))
         if tail == ["transcript"] and method == "POST":
@@ -1683,8 +1735,20 @@ class Default(WorkerEntrypoint):
                     await features.fire(self, "bot_joins_server", str(oid), url, {"server": gname})
         return json_response({"ok": True, "received": len(batch), "written": written, "pruned": pruned})
 
-    async def bot_poll(self):
-        queue = await self.store.get("q:all") or {}
+    async def bot_poll(self, query=None):
+        """The bot asks "anything new?". With ?wait=20&ver=N the request is held open and answered the moment something is queued."""
+        query = query or {}
+        try:
+            wait = max(0, min(int((query.get("wait") or ["0"])[0]), 20))
+            since = int((query.get("ver") or ["-1"])[0])
+        except ValueError:
+            wait, since = 0, -1
+        store = self.store
+        ver = await store.version() if store.hub is not None else 0
+        queue = await store.get("q:all") or {}
+        if wait and store.hub is not None and since >= 0 and since == ver:
+            ver = await store.wait_change(since, wait)
+            queue = await store.get("q:all") or {}
         t = now()
         pending = []
         for gid, entries in queue.items():
@@ -1704,7 +1768,7 @@ class Default(WorkerEntrypoint):
         recent = [uid for uid, ts in watch.items() if t - int(ts) < WATCH_MAX_AGE][:200]
         hot = bool(pending) or any(t - int(ts) < HOT_WINDOW for ts in watch.values())
         xpq = await self.store.get("xpq") or {}
-        return json_response({"pending": pending[:50], "watch": recent, "hot": hot, "xp": xpq})
+        return json_response({"pending": pending[:50], "watch": recent, "hot": hot, "xp": xpq, "ver": ver, "hub": store.hub is not None})
 
     async def bot_ack(self, body, url=None):
         if not isinstance(body, dict):

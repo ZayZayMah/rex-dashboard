@@ -132,3 +132,7 @@ Pages are plain files in `public/data/docs/*.md` (first lines: `title:`, `update
 - `public/studio.html` is the Studio page (commands and events). It reuses `js/server.js` (loading + saving) in a `page-studio` mode and `js/builder.js` with `studio: true`, which draws a pan/zoom board. Blocks keep an `x`/`y`; they run top to bottom by `y`.
 - New blocks and events exist in both `builder.js` and the bot's `rex_builder.py` (`BLOCK_TYPES`, `clean_blocks`, executor, `TRIGGERS`). Add a block in both places.
 - Emoji codes: `:rex_name:` in a message becomes Rex's emoji (or the regular one when the server turns "Use Rex's own emojis" off). The picker button is `window.RexEmoji`.
+
+
+## Live connection (Hub)
+The bot and website talk through a Durable Object (`src/hub.py`, binding `HUB` in `wrangler.jsonc`) with long-polling, so changes apply almost instantly. If the binding is missing the site falls back to KV (slow, up to ~60s).

@@ -1,5 +1,5 @@
 {
- "build": "dcd6c0af28",
+ "build": "2ef1732e33",
  "entries": [
   {
    "id": "w-2026-11-23-studio",
@@ -19,7 +19,8 @@
    ],
    "fixes": [
     "🛠️ The dashboard no longer gets stuck on \"loading\". If something goes wrong it now says so.",
-    "📖 Floating text now always has a solid background so it cannot overlap other text."
+    "📖 Floating text now always has a solid background so it cannot overlap other text.",
+    "🛠️ Settings sections (like Welcome & Leave) that showed a heading and nothing else now load. One broken setting can no longer blank a whole section."
    ],
    "owner_items": []
   },

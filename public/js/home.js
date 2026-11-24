@@ -53,7 +53,9 @@
       set('s-guilds', s.online ? fmtNum(s.guild_count) : '-');
       set('s-users', s.online ? fmtNum(s.user_count) : '-');
       set('s-ping', s.online && s.latency_ms != null ? s.latency_ms + ' ms' : '-');
-      set('s-up', s.online ? fmtDuration(s.uptime_s) + (s.uptime_reason ? ' (' + s.uptime_reason + ')' : '') : '-');
+      const up = document.getElementById('s-up');
+      up.textContent = s.online ? fmtDuration(s.uptime_s) : '-';
+      if (s.online && s.uptime_reason) { const w = document.createElement('small'); w.className = 'up-why'; w.textContent = ' ' + String(s.uptime_reason).slice(0, 120); up.append(w); }
     } catch (e) { pill.textContent = 'Unknown'; }
   }
   status();

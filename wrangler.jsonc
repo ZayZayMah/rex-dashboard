@@ -20,6 +20,11 @@
   // No id needed: Wrangler creates this KV namespace automatically on first deploy.
   "kv_namespaces": [{ "binding": "REX_KV" }],
 
+  // One Durable Object ("Hub") carries the instant website <-> bot queue. Free plan supports SQLite-backed Durable Objects.
+  // If this is ever removed, the site falls back to KV on its own (just slower).
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Hub"] }],
+
   // Non-secret settings only. Real secrets go in Cloudflare -> Settings -> Variables and Secrets.
   "vars": {
     // Permissions requested when someone adds REX to a server (8 = Administrator).
