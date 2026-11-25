@@ -21,6 +21,7 @@ import base64
 import hashlib
 import hmac
 import json
+import html as _html
 import re
 import secrets
 import time
@@ -641,6 +642,18 @@ class Default(WorkerEntrypoint):
 
     # ---- Discord login
     async def auth_login(self, url):
+        try:
+            return await self._auth_login(url)
+        except HttpError:
+            raise
+        except Exception as err:
+            print("login start failed:", type(err).__name__, str(err)[:300])
+            return html_response(
+                "<body style='font:16px system-ui;background:#04070f;color:#e8f7ff;padding:40px;max-width:640px;margin:auto'>"
+                "<h1>Login could not start</h1>"
+                f"<p>Tell the developer: <code>step=login_start error={type(err).__name__}: {_html.escape(str(err)[:160])}</code></p></body>", status=500)
+
+    async def _auth_login(self, url):
         missing = self.missing_config("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET")
         if missing:
             items = "".join(f"<li><code>{name}</code></li>" for name in missing)
@@ -665,6 +678,22 @@ class Default(WorkerEntrypoint):
         return redirect(location, make_cookie(STATE_COOKIE, state, 600, path="/auth"))
 
     async def auth_callback(self, request, url):
+        """Login must never end on a blank JSON page: any failure shows which step broke."""
+        self._login_step = "start"
+        try:
+            return await self._auth_callback(request, url)
+        except HttpError:
+            raise
+        except Exception as err:
+            step = getattr(self, "_login_step", "?")
+            print("login failed at", step, type(err).__name__, str(err)[:300])
+            return html_response(
+                "<body style='font:16px system-ui;background:#04070f;color:#e8f7ff;padding:40px;max-width:640px;margin:auto'>"
+                "<h1>Login hit a problem</h1><p>Discord accepted you, but Rex's website failed while finishing the login.</p>"
+                f"<p>Tell the developer: <code>step={step} error={type(err).__name__}: {_html.escape(str(err)[:160])}</code></p>"
+                "<p><a style='color:#6fe3a1' href='/auth/login'>Try again</a></p></body>", status=500)
+
+    async def _auth_callback(self, request, url):
         query = {k: v[0] for k, v in parse_qs(url.query).items() if v}
         if query.get("error") in ("consent_required", "interaction_required", "login_required"):
             return redirect("/auth/login?consent=1")
@@ -677,6 +706,7 @@ class Default(WorkerEntrypoint):
         if self.missing_config("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"):
             return redirect("/dashboard?login=failed")
 
+        self._login_step = "discord_token"
         status, text = await http(
             "POST", DISCORD_API + "/oauth2/token",
             {"Content-Type": "application/x-www-form-urlencoded", "User-Agent": USER_AGENT},
@@ -695,6 +725,7 @@ class Default(WorkerEntrypoint):
         except (ValueError, KeyError, TypeError):
             return redirect("/dashboard?login=failed")
 
+        self._login_step = "discord_profile"
         auth = {"Authorization": "Bearer " + access, "User-Agent": USER_AGENT}
         s1, t1 = await http("GET", DISCORD_API + "/users/@me", auth)
         s2, t2 = await http("GET", DISCORD_API + "/users/@me/guilds", auth)
@@ -734,17 +765,29 @@ class Default(WorkerEntrypoint):
             "csrf": secrets.token_urlsafe(24),
             "exp": now() + SESSION_TTL,
         }
+        self._login_step = "save_session"
         await self.store.put("sess:" + token_hash(token), session, ttl=SESSION_TTL)
+        self._login_step = "save_user"
         email = clean_str(user.get("email"), 120) if user.get("verified") and uid not in self.owner_ids() else ""   # owner emails are never stored
-        prev = await self.get_user(uid) or {}
-        rec = dict(prev)
-        rec.update({"n": session["user"]["name"], "u": session["user"]["username"], "a": session["user"]["avatar"],
-                    "e": email or prev.get("e", ""), "ll": now(), "lc": int(prev.get("lc", 0)) + 1,
-                    "fs": prev.get("fs") or now(), "g": [g["id"] for g in managed][:100]})
-        await self.put_user(uid, rec)
-        await self.touch_watch(uid, force=True)
-        if not prev:
-            await features.fire(self, "first_login", uid, url, rec=rec)
+        prev, rec = {}, {}
+        try:        # the session is already saved: a problem in the extras below must never block the login itself
+            prev = await self.get_user(uid) or {}
+            rec = dict(prev)
+            rec.update({"n": session["user"]["name"], "u": session["user"]["username"], "a": session["user"]["avatar"],
+                        "e": email or prev.get("e", ""), "ll": now(), "lc": int(prev.get("lc", 0)) + 1,
+                        "fs": prev.get("fs") or now(), "g": [g["id"] for g in managed][:100]})
+            await self.put_user(uid, rec)
+        except Exception as err:
+            print("login: could not save user record:", type(err).__name__, str(err)[:200])
+        try:
+            await self.touch_watch(uid, force=True)
+        except Exception as err:
+            print("login: touch_watch failed:", type(err).__name__, str(err)[:200])
+        try:
+            if not prev:
+                await features.fire(self, "first_login", uid, url, rec=rec)
+        except Exception as err:
+            print("login: first_login hook failed:", type(err).__name__, str(err)[:200])
         back = "/dashboard"
         if "." in state:
             try:
@@ -962,6 +1005,18 @@ class Default(WorkerEntrypoint):
     # ---- logged-in API
     async def route_user(self, request, url, path, method):
         session = await self.require_session(request)
+
+        if path == "/api/incident" and method == "GET":
+            iid = (parse_qs(url.query).get("id") or [""])[0]
+            if not re.match(r"^[a-f0-9]{12,32}$", iid):
+                raise HttpError(404, "not_found", "Incident not found.")
+            rec = await self.store.get("inc:" + iid)
+            if not rec:
+                raise HttpError(404, "not_found", "This incident report has expired or does not exist.")
+            access = self.guild_access(session, str(rec.get("gid")))
+            if not access.get("admin"):
+                raise HttpError(403, "forbidden", "Only server admins can read incident reports.")
+            return json_response(rec, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
 
         if path == "/api/me" and method == "GET":
             await self.note_user(session)
@@ -1675,6 +1730,8 @@ class Default(WorkerEntrypoint):
             return await self.bot_poll(parse_qs(urlparse(request.url).query))
         if tail == ["ack"] and method == "POST":
             return await self.bot_ack(await self.read_json(request, 512 * 1024), urlparse(request.url))
+        if tail == ["incident"] and method == "POST":
+            return await self.bot_incident(request, await self.read_json(request, 3 * 1024 * 1024))
         if tail == ["transcript"] and method == "POST":
             return await self.bot_transcript(request, await self.read_json(request, 3 * 1024 * 1024))
         if tail == ["ownercode"] and method == "POST":
@@ -1878,6 +1935,19 @@ class Default(WorkerEntrypoint):
                     ev = "server_unblacklisted" if (entry.get("args") or {}).get("remove") else "server_blacklisted"
                     await features.fire(self, ev, str(gi["oi"]), url, {"server": gi.get("n", "")})
         return json_response({"ok": True, "recorded": sum(len(v) for v in by_guild.values())})
+
+    async def bot_incident(self, request, body):
+        """Rex posts (and later updates) an anti-betray / anti-raid incident report. Readable only by that server's admins."""
+        if not isinstance(body, dict):
+            raise HttpError(400, "bad_request", "Expected an object.")
+        iid, gid = str(body.get("id", "")), str(body.get("gid", ""))
+        if not re.match(r"^[a-f0-9]{12,32}$", iid) or not SNOWFLAKE.match(gid):
+            raise HttpError(400, "bad_request", "Bad incident or guild id.")
+        report = body.get("report") if isinstance(body.get("report"), dict) else {}
+        rec = {"v": 1, "id": iid, "gid": gid, "updated": now(), "report": report}
+        await self.store.put("inc:" + iid, rec, ttl=30 * 24 * 3600)
+        origin = self.public_origin(urlparse(request.url))
+        return json_response({"ok": True, "url": f"{origin}/incident?id={iid}"})
 
     async def bot_transcript(self, request, body):
         if not isinstance(body, dict):
