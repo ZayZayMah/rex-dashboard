@@ -207,6 +207,7 @@ class Store:
     def __init__(self, kv, hub=None):
         self.kv = kv
         self.hub = hub
+        self.hub_error = ""
 
     def _hot(self, key):
         return self.hub is not None and key.startswith(HOT_PREFIXES)
@@ -215,7 +216,9 @@ class Store:
         stub = self.hub.get(self.hub.idFromName("hub"))
         init = to_js({"method": "POST", "body": json.dumps(msg, separators=(",", ":"))}, dict_converter=Object.fromEntries)
         resp = await stub.fetch("https://hub/op", init)
-        return json.loads(await resp.text())
+        out = json.loads(await resp.text())
+        self.hub_error = ""
+        return out
 
     async def get(self, key):
         if self._hot(key):
@@ -223,8 +226,8 @@ class Store:
                 out = await self.hub_call({"op": "get", "key": key})
                 if out.get("found"):
                     return out.get("value")
-            except Exception:
-                pass          # fall through to KV
+            except Exception as err:
+                self.hub_error = type(err).__name__ + ": " + str(err)[:160]   # fall through to KV
         raw = await self.kv.get(key)
         if raw is None:
             return None
@@ -238,8 +241,8 @@ class Store:
             try:
                 await self.hub_call({"op": "put", "key": key, "value": value, "ttl": ttl})
                 return
-            except Exception:
-                pass          # fall back to KV so the change is never lost
+            except Exception as err:
+                self.hub_error = type(err).__name__ + ": " + str(err)[:160]   # fall back to KV so the change is never lost
         payload = json.dumps(value, separators=(",", ":"))
         if ttl:
             options = to_js({"expirationTtl": max(60, int(ttl))}, dict_converter=Object.fromEntries)
@@ -558,6 +561,20 @@ class Default(WorkerEntrypoint):
             return await self.auth_callback(request, url)
         if path.startswith("/api/"):
             await self.get_site()
+        if path == "/api/hubcheck" and method == "GET":
+            st = self.store
+            t0 = time.time()
+            out = {"bound": st.hub is not None, "ok": False, "ms": None, "error": ""}
+            if st.hub is not None:
+                try:
+                    r = await st.hub_call({"op": "get", "key": "_"})
+                    out["ok"] = "ver" in r
+                    out["ms"] = int((time.time() - t0) * 1000)
+                except Exception as err:
+                    out["error"] = type(err).__name__ + ": " + str(err)[:200]
+            else:
+                out["error"] = "The HUB Durable Object binding is missing, so the site is using slow KV. Check wrangler.jsonc was deployed."
+            return json_response(out)
         if path == "/api/site" and method == "GET":
             return await self.api_site()
         if path == "/api/live" and method == "GET":
@@ -1768,7 +1785,7 @@ class Default(WorkerEntrypoint):
         recent = [uid for uid, ts in watch.items() if t - int(ts) < WATCH_MAX_AGE][:200]
         hot = bool(pending) or any(t - int(ts) < HOT_WINDOW for ts in watch.values())
         xpq = await self.store.get("xpq") or {}
-        return json_response({"pending": pending[:50], "watch": recent, "hot": hot, "xp": xpq, "ver": ver, "hub": store.hub is not None})
+        return json_response({"pending": pending[:50], "watch": recent, "hot": hot, "xp": xpq, "ver": ver, "hub": store.hub is not None and not store.hub_error, "hub_error": store.hub_error})
 
     async def bot_ack(self, body, url=None):
         if not isinstance(body, dict):
