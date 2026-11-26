@@ -30,7 +30,7 @@
   const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const dirtyKeys = () => Object.keys(draft).filter((k) => !eq(draft[k], original[k]));
   const tierOn = (t) => t === 'free' || ownerOverride || (guild.tiers[t] && guild.tiers[t].active);
-  const secs = () => schema.sections.filter((x) => tierOn(x.tier));   // sections the plan doesn't include are hidden, not greyed out
+  const secs = () => schema.sections.filter((x) => tierOn(x.tier) && (!x.only_recent || guild.recent));   // sections the plan doesn't include are hidden, not greyed out
   const lockReason = (spec) => (!tierOn(spec.tier) ? 'tier' : (spec.perm === 'admin' && !canAdmin ? 'perm' : null));
   const chanById = Object.fromEntries(guild.channels.map((c) => [c.id, c]));
   const roleById = Object.fromEntries(guild.roles.map((r) => [r.id, r]));

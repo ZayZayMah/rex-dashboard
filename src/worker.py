@@ -349,6 +349,8 @@ def sanitize_guild(raw):
         "owner_id": raw.get("owner_id") if isinstance(raw.get("owner_id"), str) and SNOWFLAKE.match(raw.get("owner_id")) else "",
         "owner_name": clean_str(raw.get("owner_name"), 60),
         "created": clean_epoch(raw.get("created")),
+        "joined": clean_epoch(raw.get("joined")),
+        "fresh": bool(raw.get("fresh")),
         "blacklisted": bool(raw.get("blacklisted")),
         "tiers": sanitize_tiers(raw.get("tiers")),
         "channels": channels,
@@ -1159,6 +1161,7 @@ class Default(WorkerEntrypoint):
             "guild": {
                 "id": gid, "name": guild["name"], "icon_url": icon_url(gid, guild.get("icon")),
                 "member_count": guild.get("member_count", 0), "tiers": public_tiers(guild.get("tiers") or {}),
+                "recent": bool(guild.get("fresh") and guild.get("joined") and time.time() - guild["joined"] < 7 * 86400),
                 "channels": guild.get("channels", []), "roles": guild.get("roles", []),
             },
             "schema": await self.visible_schema(session),
