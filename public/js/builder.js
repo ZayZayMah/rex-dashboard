@@ -13,6 +13,9 @@ window.rexBuilder = (function () {
     ['{setting}', 'Setting name (setting events)'], ['{old}', 'Old value (setting events)'], ['{new}', 'New value (setting events)'],
     ['{command}', 'Name of this command or event'], ['{date}', 'Today, UTC'], ['{date.iso}', 'Today as 2027-01-31'], ['{weekday}', 'Day of the week'], ['{time}', 'Now, UTC'],
     ['{timestamp}', 'Full Discord date and time'], ['{timestamp.relative}', '"5 minutes ago" style time'], ['{random}', 'Random number 1 to 100'], ['{dice}', 'Dice roll 1 to 6'], ['{coin}', 'Heads or Tails'],
+    ['{role}', 'Role involved (role events)'], ['{emoji}', 'Emoji involved (reaction events)'], ['{reviewer}', 'Staff who reviewed an application or appeal'], ['{level}', 'New level (level up)'],
+    ['{prize}', 'Giveaway prize'], ['{winners}', 'Giveaway winners (mentions)'], ['{winner_count}', 'Number of winners'], ['{message_link}', 'Link to the message'], ['{reason}', 'Reason given'],
+    ['{case}', 'Warning or case number'], ['{incident}', 'Raid / betrayal incident ID'], ['{until}', 'Timeout end time'], ['{invite}', 'Invite code used'], ['{name}', 'Name of the thing (channel, role, thread)'], ['{remaining}', 'Items or time remaining'],
     ['{var.name}', 'A variable you set with "Set a variable" or "Pick at random"'], ['{counter.name}', 'A server counter'], ['{ucount.name}', 'The person\'s own counter'],
   ];
   const TOGGLES = [['anti_ping_enabled', 'Anti-ping'], ['anti_spam', 'Anti-spam'], ['anti_link', 'Anti-link'], ['anti_swear', 'Anti-swear'], ['automod', 'AutoMod'],
@@ -20,7 +23,29 @@ window.rexBuilder = (function () {
   const COND = [['has_role', 'Person has role'], ['is_staff', 'Person is staff'], ['is_admin', 'Person is an admin'], ['channel_is', 'Used in channel'],
     ['contains', 'Text or answers contain'], ['random', 'Random chance (%)'], ['account_younger_days', 'Account younger than (days)'], ['target_is_bot', 'Picked user is a bot'], ['user_is_bot', 'Person is a bot'], ['weekday_is', 'Today is (weekday)'], ['member_count_gte', 'Server has at least (members)'], ['var_gte', 'A variable is at least'], ['in_voice', 'Person is in a voice channel'], ['text_empty', 'No text was typed'], ['var_equals', 'A variable equals'], ['counter_gte', 'A counter is at least']];
   const TRIGGERS = [['member_join', 'Someone joins'], ['member_leave', 'Someone leaves'], ['member_ban', 'Someone is banned'], ['ticket_create', 'A ticket is created'],
-    ['settings_change', 'A server setting changes'], ['member_boost', 'Someone boosts the server'], ['voice_join', 'Someone joins a voice channel'], ['role_gained', 'Someone gets a role'], ['keyword', 'A message has a word or phrase'], ['interval', 'Every so often'], ['daily', 'Every day at a time']];
+    ['settings_change', 'A server setting changes'], ['member_boost', 'Someone boosts the server'], ['voice_join', 'Someone joins a voice channel'], ['role_gained', 'Someone gets a role'], ['keyword', 'A message has a word or phrase'], ['interval', 'Every so often'], ['daily', 'Every day at a time'],
+    ['message_sent', 'A message is sent'], ['message_edited', 'A message is edited'], ['message_deleted', 'A message is deleted'], ['reaction_added', 'A reaction is added'], ['reaction_removed', 'A reaction is removed'],
+    ['member_unban', 'Someone is unbanned'], ['member_timeout', 'Someone is timed out'], ['role_lost', 'Someone loses a role'], ['nick_changed', 'Someone changes nickname'], ['member_unboost', 'Someone stops boosting'], ['bot_joined', 'A bot is added'],
+    ['voice_leave', 'Someone leaves a voice channel'], ['voice_switch', 'Someone switches voice channel'], ['channel_created', 'A channel is created'], ['channel_deleted', 'A channel is deleted'], ['role_created', 'A role is created'], ['role_deleted', 'A role is deleted'],
+    ['thread_created', 'A thread is created'], ['invite_created', 'An invite is created'], ['server_renamed', 'The server is renamed'], ['event_created', 'A server event is created'],
+    ['application_submitted', 'An application is submitted'], ['application_accepted', 'An application is accepted'], ['application_denied', 'An application is denied'], ['appeal_accepted', 'A ban appeal is accepted'], ['appeal_denied', 'A ban appeal is denied'],
+    ['warn_issued', 'Someone is warned'], ['level_up', 'Someone levels up'], ['ticket_closed', 'A ticket is closed'], ['giveaway_ended', 'A giveaway ends'], ['raid_detected', 'Anti Raid detects a raid'], ['betrayal_detected', 'Anti Betray detects a betrayal']];
+  const TEXT_TRIGGERS = ['keyword', 'message_sent', 'message_edited', 'message_deleted'], EMOJI_TRIGGERS = ['reaction_added', 'reaction_removed'];
+  const CHANNEL_TRIGGERS = ['message_sent', 'message_edited', 'message_deleted', 'reaction_added', 'reaction_removed', 'voice_join', 'voice_leave', 'voice_switch', 'keyword'], ROLE_TRIGGERS = ['role_gained', 'role_lost'];
+  const HINTS = {
+    member_join: '{user} is the new member.', member_leave: '{user} is the member who left.', member_ban: '{target} is the banned user.', ticket_create: '{user} opened {ticket}.', keyword: '{user} wrote the message, {text} is what they wrote.',
+    role_gained: '{user} got the role {role}.', role_lost: '{user} lost the role {role}.', voice_join: '{user} joined {channel}.', voice_leave: '{user} left {channel}.', voice_switch: '{user} moved from {old} to {new} (now in {channel}).',
+    member_boost: '{user} just boosted.', member_unboost: '{user} stopped boosting.', settings_change: '{setting}, {old} and {new} describe the change, {user} made it.',
+    message_sent: '{user} wrote it in {channel}. {text} is the message and {message_link} jumps to it.', message_edited: '{user} edited it. {text} is the new text, {old} the old text.', message_deleted: '{user} wrote it. {text} is what it said.',
+    reaction_added: '{user} reacted with {emoji} in {channel}. {message_link} jumps to the message.', reaction_removed: '{user} removed {emoji} in {channel}.',
+    member_unban: '{target} was unbanned.', member_timeout: '{user} was timed out until {until}.', nick_changed: '{user} changed nickname from {old} to {new}.', bot_joined: '{user} is the bot that joined.',
+    channel_created: '{channel} was created.', channel_deleted: '{name} was deleted.', role_created: '{role} was created.', role_deleted: '{role} was deleted.', thread_created: '{channel} is the new thread, {user} started it.',
+    invite_created: '{user} made the invite {invite}.', server_renamed: 'The server was renamed from {old} to {new}.', event_created: '{name} is the new server event.',
+    application_submitted: '{user} applied for {what}.', application_accepted: '{user} was accepted for {what} by {reviewer}.', application_denied: '{user} was denied for {what} by {reviewer}.',
+    appeal_accepted: '{user} had their ban appeal accepted by {reviewer}.', appeal_denied: '{user} had their ban appeal denied by {reviewer}.', warn_issued: '{user} was warned by {target}. {reason} is why, case {case}.',
+    level_up: '{user} reached level {level}.', ticket_closed: '{user} owned {ticket}, {reviewer} closed it.', giveaway_ended: '{prize} ended. {winners} won ({winner_count}).',
+    raid_detected: 'Anti Raid opened incident {incident}. Great for pinging your staff.', betrayal_detected: 'Anti Betray opened incident {incident}. Great for pinging your staff.',
+  };
   const GROUPS = [
     ['Messages', ['message', 'embed', 'image_card', 'poll', 'dm', 'announce_ping', 'add_reaction_to_trigger', 'reply_trigger', 'react_last', 'delete_trigger_message', 'pin_trigger_message']],
     ['Edit messages', ['edit_message', 'delete_message', 'pin', 'react', 'thread']],
@@ -97,6 +122,85 @@ window.rexBuilder = (function () {
     stop: {}, toggle_role: { role: '', to: 'user' }, remove_timeout: { to: 'target' }, lock_channel: { channel: '' }, unlock_channel: { channel: '' }, rename_channel: { channel: '', name: '' }, set_topic: { channel: '', text: '' }, purge: { channel: '', amount: 10 }, create_invite: { channel: '', name: 'invite', hours: 24, uses: 1 }, math: { name: 'result', a: '', op: 'add', b: '' }, text_tools: { name: 'text', value: '', op: 'upper' }, random_number: { name: 'number', min: 1, max: 100 }, move_voice: { to: 'user', channel: '' }, disconnect_voice: { to: 'user' }, unban: { user_id: '', reason: '' }, add_reaction_to_trigger: { emoji: '👍' }, announce_ping: { channel: '', role: '', text: '' },
     pick: { name: '', options: ['', ''] }, counter: { name: '', scope: 'server', op: 'add', amount: 1 }, set_nick: { to: 'user', nick: '' }, slowmode: { channel: '', seconds: 5 },
   };
+  /* ---------------------------------------------------------- 53 more blocks */
+  const MINS = (l, o) => F('minutes', 'num', l || 'Minutes', Object.assign({ min: 1, max: 43200 }, o || {}));
+  Object.assign(BLOCKS, {
+    webhook_say: { i: '🎭', n: 'Say as someone', d: 'Posts with that person\'s name and picture.', f: [F('text', 'area', 'What they say', { vars: 1 }), F('as', 'select', 'Say it as', { o: WHO }), F('channel', 'channel', 'Channel (empty = here)')] },
+    dm_embed: { i: '📨', n: 'DM an embed', d: 'A private styled card.', f: [F('title', 'text', 'Title', { vars: 1 }), F('description', 'area', 'Description', { vars: 1 }), F('color', 'color', 'Colour'), F('to', 'select', 'Send to', { o: WHO })] },
+    bulk_react: { i: '🎉', n: 'Add several reactions', d: 'Up to 10 emojis on an earlier message.', f: [F('ref', 'ref', 'Which message'), F('emojis', 'text', 'Emojis (separated by spaces)')] },
+    clear_reactions: { i: '🧼', n: 'Clear reactions', d: 'Removes every reaction from a message.', f: [F('ref', 'ref', 'Which message')] },
+    unpin: { i: '📍', n: 'Unpin a message', d: '', f: [F('ref', 'ref', 'Which message')] },
+    typing: { i: '⌨️', n: 'Show "typing…"', d: 'Rex looks like it is typing for a moment.', f: [F('seconds', 'num', 'Seconds', { min: 1, max: 10 })] },
+    dm_owner: { i: '👑', n: 'DM the server owner', d: '', f: [F('text', 'area', 'Message', { vars: 1 })] },
+    serverlog_post: { i: '🗂️', n: 'Write to server log', d: 'Posts in your Server log channel.', f: [F('title', 'text', 'Title', { vars: 1 }), F('text', 'area', 'Text', { vars: 1 })] },
+    delete_channel: { i: '🗑️', n: 'Delete a channel', d: 'Careful: this is permanent.', f: [F('channel', 'channelreq', 'Channel')] },
+    create_category: { i: '📂', n: 'Create a category', d: '', f: [F('name', 'text', 'Name', { vars: 1 }), F('private', 'check', 'Hidden from everyone except Rex')] },
+    clone_channel: { i: '🧬', n: 'Duplicate a channel', d: 'Copies settings and permissions.', f: [F('channel', 'channel', 'Channel (empty = here)'), F('name', 'text', 'New name (optional)', { vars: 1 })] },
+    move_channel: { i: '🚚', n: 'Move a channel', d: 'Into another category.', f: [F('channel', 'channel', 'Channel (empty = here)'), F('category', 'category', 'Move it to', { empty: 'Choose a category' })] },
+    set_nsfw: { i: '🔞', n: 'Age-restrict a channel', d: '', f: [F('channel', 'channel', 'Channel (empty = here)'), F('mode', 'select', 'Do', { o: [['on', 'Turn on'], ['off', 'Turn off']] })] },
+    hide_channel: { i: '🙈', n: 'Hide a channel', d: 'Hidden from @everyone.', f: [F('channel', 'channel', 'Channel (empty = here)')] },
+    show_channel: { i: '👁️', n: 'Show a channel', d: 'Undo hiding for @everyone.', f: [F('channel', 'channel', 'Channel (empty = here)')] },
+    close_thread: { i: '🧶', n: 'Close this thread', d: 'Only works when the flow runs inside a thread.', f: [F('lock', 'check', 'Also lock it')] },
+    grant_channel_access: { i: '🔑', n: 'Give channel access', d: 'Lets one person see and write there.', f: [F('channel', 'channel', 'Channel (empty = here)'), F('to', 'select', 'Who', { o: WHO })] },
+    revoke_channel_access: { i: '🚷', n: 'Remove channel access', d: 'Removes their special access.', f: [F('channel', 'channel', 'Channel (empty = here)'), F('to', 'select', 'Who', { o: WHO })] },
+    lock_all_channels: { i: '🔐', n: 'Lock all channels', d: 'Lockdown: stops @everyone chatting (max 100).', f: [F('category', 'category', 'Only this category', { empty: 'Every channel' })] },
+    unlock_all_channels: { i: '🔓', n: 'Unlock all channels', d: 'Ends a lockdown.', f: [F('category', 'category', 'Only this category', { empty: 'Every channel' })] },
+    purge_member: { i: '🧹', n: 'Clear someone\'s messages', d: 'Deletes their latest messages in a channel.', f: [F('channel', 'channel', 'Channel (empty = here)'), F('to', 'select', 'Whose', { o: WHO }), F('amount', 'num', 'How many', { min: 1, max: 100 })] },
+    delete_role: { i: '❌', n: 'Delete a role', d: '', f: [F('role', 'role', 'Role')] },
+    rename_role: { i: '✏️', n: 'Rename a role', d: '', f: [F('role', 'role', 'Role'), F('name', 'text', 'New name', { vars: 1 })] },
+    recolor_role: { i: '🎨', n: 'Recolour a role', d: '', f: [F('role', 'role', 'Role'), F('color', 'color', 'Colour')] },
+    mass_role: { i: '👥', n: 'Give or take a role from a group', d: 'Everyone with one role (up to 200).', f: [F('from_role', 'role', 'Everyone who has'), F('mode', 'select', 'Do', { o: [['add', 'Give them'], ['remove', 'Take from them']] }), F('to_role', 'role', 'This role')] },
+    temp_role: { i: '⏱️', n: 'Temporary role', d: 'Rex removes it later, even after a restart.', f: [F('role', 'role', 'Role'), F('to', 'select', 'Give it to', { o: WHO }), MINS('Keep it for (minutes)', { max: 10080 })] },
+    rename_server: { i: '🏠', n: 'Rename the server', d: '', f: [F('name', 'text', 'New name', { vars: 1 })] },
+    create_event: { i: '📅', n: 'Create a server event', d: 'Shows up in the Events tab.', f: [F('name', 'text', 'Event name', { vars: 1 }), F('minutes', 'num', 'Starts in (minutes)', { min: 5, max: 43200 }), F('duration', 'num', 'Lasts (minutes)', { min: 15, max: 1440 }), F('location', 'text', 'Where (text)')] },
+    mute_voice: { i: '🔇', n: 'Server mute (voice)', d: 'They must be in a voice channel.', f: [F('to', 'select', 'Who', { o: WHO }), F('mode', 'select', 'Do', { o: [['on', 'Mute'], ['off', 'Unmute']] })] },
+    deafen_voice: { i: '🙉', n: 'Server deafen (voice)', d: 'They must be in a voice channel.', f: [F('to', 'select', 'Who', { o: WHO }), F('mode', 'select', 'Do', { o: [['on', 'Deafen'], ['off', 'Undeafen']] })] },
+    warn_member: { i: '⚠️', n: 'Warn someone', d: 'Adds a warning to their record.', f: [F('to', 'select', 'Who', { o: WHO }), F('reason', 'text', 'Reason', { vars: 1 })] },
+    clear_warnings: { i: '🧾', n: 'Clear warnings', d: 'Removes all of their warnings.', f: [F('to', 'select', 'Who', { o: WHO })] },
+    give_xp: { i: '⭐', n: 'Give XP', d: '', f: [F('to', 'select', 'Who', { o: WHO }), F('amount', 'num', 'Amount', { min: 1, max: 100000 })] },
+    remove_xp: { i: '➖', n: 'Take XP', d: '', f: [F('to', 'select', 'Who', { o: WHO }), F('amount', 'num', 'Amount', { min: 1, max: 100000 })] },
+    softban: { i: '🧨', n: 'Softban', d: 'Bans then unbans, deleting a day of their messages.', f: [F('to', 'select', 'Who', { o: WHO }), F('reason', 'text', 'Reason')] },
+    temp_ban: { i: '⏳', n: 'Temporary ban', d: 'Rex unbans them later, even after a restart.', f: [F('to', 'select', 'Who', { o: WHO }), MINS('Ban for (minutes)'), F('reason', 'text', 'Reason')] },
+    concat: { i: '➕', n: 'Join text', d: 'Into {var.name}.', f: [F('name', 'text', 'Variable name'), F('a', 'text', 'First text', { vars: 1 }), F('sep', 'text', 'Between them'), F('b', 'text', 'Second text', { vars: 1 })] },
+    replace_text: { i: '🔁', n: 'Replace text', d: 'Into {var.name}.', f: [F('name', 'text', 'Variable name'), F('value', 'text', 'Text', { vars: 1 }), F('find', 'text', 'Find'), F('with', 'text', 'Replace with', { vars: 1 })] },
+    slice_text: { i: '✂️', n: 'Take part of text', d: 'The first or last letters, into {var.name}.', f: [F('name', 'text', 'Variable name'), F('value', 'text', 'Text', { vars: 1 }), F('from', 'select', 'Take from', { o: [['start', 'The start'], ['end', 'The end']] }), F('count', 'num', 'How many letters', { min: 1, max: 500 })] },
+    word_at: { i: '🔡', n: 'Pick a word', d: 'The 1st, 2nd... word, into {var.name}.', f: [F('name', 'text', 'Variable name'), F('value', 'text', 'Text', { vars: 1 }), F('n', 'num', 'Word number', { min: 1, max: 50 })] },
+    math_more: { i: '🧮', n: 'More maths', d: 'Power, smallest, biggest, round and more.', f: [F('name', 'text', 'Variable name'), F('a', 'text', 'Number', { vars: 1 }), F('op', 'select', 'Do', { o: [['power', 'to the power of'], ['min', 'smaller of'], ['max', 'bigger of'], ['abs', 'absolute value'], ['round', 'round (second = decimals)'], ['floor', 'round down'], ['ceil', 'round up']] }), F('b', 'text', 'Second number', { vars: 1 })] },
+    future_time: { i: '🕒', n: 'Time from now', d: 'A Discord time into {var.name}.', f: [F('name', 'text', 'Variable name'), F('minutes', 'num', 'Minutes from now', { min: 0, max: 525600 }), F('style', 'select', 'Shown as', { o: [['R', '"in 5 minutes"'], ['f', 'Date and time'], ['F', 'Long date and time'], ['t', 'Time only'], ['D', 'Date only']] })] },
+    format_number: { i: '1️⃣', n: 'Format a number', d: '1234567 becomes 1,234,567.', f: [F('name', 'text', 'Variable name'), F('value', 'text', 'Number', { vars: 1 })] },
+    roll_dice: { i: '🎲', n: 'Roll dice', d: 'The total into {var.name}.', f: [F('name', 'text', 'Variable name'), F('count', 'num', 'How many dice', { min: 1, max: 20 }), F('sides', 'num', 'Sides each', { min: 2, max: 1000 })] },
+    random_member: { i: '🎯', n: 'Pick a random member', d: 'Their mention goes into {var.name}.', f: [F('name', 'text', 'Variable name'), F('role', 'role', 'From role', { empty: 'Everyone' }), F('bots', 'check', 'Allow bots')] },
+    cooldown: { i: '🧊', n: 'Cooldown', d: 'Stops the flow if it ran too recently. Use {remaining} in the message.', f: [F('seconds', 'num', 'Wait (seconds)', { min: 1, max: 86400 }), F('scope', 'select', 'Per', { o: [['user', 'Person'], ['server', 'Whole server']] }), F('message', 'text', 'Message when too soon', { vars: 1 })] },
+    gate_staff: { i: '🛡️', n: 'Only staff', d: 'Stops the flow for everyone else.', f: [F('message', 'text', 'Message for others (optional)', { vars: 1 })] },
+    gate_role: { i: '🏷️', n: 'Only people with a role', d: 'Stops the flow for everyone else.', f: [F('role', 'role', 'Role'), F('message', 'text', 'Message for others (optional)', { vars: 1 })] },
+    gate_channel: { i: '📍', n: 'Only in one channel', d: 'Stops the flow anywhere else.', f: [F('channel', 'channelreq', 'Channel'), F('message', 'text', 'Message elsewhere (optional)', { vars: 1 })] },
+    gate_boost: { i: '💎', n: 'Only boosters', d: 'Stops the flow for non-boosters.', f: [F('message', 'text', 'Message for others (optional)', { vars: 1 })] },
+    gate_account_age: { i: '📆', n: 'Only older accounts', d: 'Stops the flow for new accounts.', f: [F('days', 'num', 'Account at least (days old)', { min: 1, max: 3650 }), F('message', 'text', 'Message for new accounts (optional)', { vars: 1 })] },
+    gate_chance: { i: '🎰', n: 'Random chance', d: 'Only continues some of the time.', f: [F('percent', 'num', 'Chance to continue (%)', { min: 1, max: 99 })] },
+    gate_has_text: { i: '✍️', n: 'Only if text was typed', d: 'Stops the flow if no text was given.', f: [F('message', 'text', 'Message (optional)', { vars: 1 })] },
+  });
+  Object.assign(DEF, {
+    webhook_say: { text: '', as: 'user', channel: '' }, dm_embed: { title: '', description: '', color: '', to: 'user' }, bulk_react: { ref: 'last', emojis: '👍 🎉' }, clear_reactions: { ref: 'last' }, unpin: { ref: 'last' },
+    typing: { seconds: 3 }, dm_owner: { text: '' }, serverlog_post: { title: '', text: '' }, delete_channel: { channel: '' }, create_category: { name: '', private: false }, clone_channel: { channel: '', name: '' },
+    move_channel: { channel: '', category: '' }, set_nsfw: { channel: '', mode: 'on' }, hide_channel: { channel: '' }, show_channel: { channel: '' }, close_thread: { lock: false },
+    grant_channel_access: { channel: '', to: 'user' }, revoke_channel_access: { channel: '', to: 'user' }, lock_all_channels: { category: '' }, unlock_all_channels: { category: '' },
+    purge_member: { channel: '', to: 'target', amount: 20 }, delete_role: { role: '' }, rename_role: { role: '', name: '' }, recolor_role: { role: '', color: '' },
+    mass_role: { from_role: '', to_role: '', mode: 'add' }, temp_role: { role: '', to: 'user', minutes: 60 }, rename_server: { name: '' }, create_event: { name: '', minutes: 60, duration: 60, location: '' },
+    mute_voice: { to: 'user', mode: 'on' }, deafen_voice: { to: 'user', mode: 'on' }, warn_member: { to: 'target', reason: '' }, clear_warnings: { to: 'target' }, give_xp: { to: 'user', amount: 100 },
+    remove_xp: { to: 'user', amount: 100 }, softban: { to: 'target', reason: '' }, temp_ban: { to: 'target', minutes: 60, reason: '' }, concat: { name: 'joined', a: '', sep: ' ', b: '' },
+    replace_text: { name: 'text', value: '', find: '', with: '' }, slice_text: { name: 'text', value: '', from: 'start', count: 10 }, word_at: { name: 'word', value: '', n: 1 },
+    math_more: { name: 'result', a: '', op: 'power', b: '' }, future_time: { name: 'when', minutes: 60, style: 'R' }, format_number: { name: 'number', value: '' }, roll_dice: { name: 'roll', count: 1, sides: 6 },
+    random_member: { name: 'winner', role: '', bots: false }, cooldown: { seconds: 30, scope: 'user', message: 'Slow down! Try again in {remaining} seconds.' }, gate_staff: { message: '' },
+    gate_role: { role: '', message: '' }, gate_channel: { channel: '', message: '' }, gate_boost: { message: '' }, gate_account_age: { days: 7, message: '' }, gate_chance: { percent: 50 }, gate_has_text: { message: '' },
+  });
+  GROUPS.push(
+    ['More messages', ['webhook_say', 'dm_embed', 'bulk_react', 'clear_reactions', 'unpin', 'typing', 'dm_owner', 'serverlog_post']],
+    ['Channels', ['delete_channel', 'create_category', 'clone_channel', 'move_channel', 'set_nsfw', 'hide_channel', 'show_channel', 'close_thread', 'grant_channel_access', 'revoke_channel_access', 'lock_all_channels', 'unlock_all_channels', 'purge_member']],
+    ['Roles & server', ['delete_role', 'rename_role', 'recolor_role', 'mass_role', 'temp_role', 'rename_server', 'create_event']],
+    ['People', ['mute_voice', 'deafen_voice', 'warn_member', 'clear_warnings', 'give_xp', 'remove_xp', 'softban', 'temp_ban', 'random_member']],
+    ['Text & numbers', ['concat', 'replace_text', 'slice_text', 'word_at', 'math_more', 'future_time', 'format_number', 'roll_dice']],
+    ['Gates: stop unless…', ['cooldown', 'gate_staff', 'gate_role', 'gate_channel', 'gate_boost', 'gate_account_age', 'gate_chance', 'gate_has_text']],
+  );
   const EMOJIS = ["ok", "no", "warn", "info", "shield", "shield_alert", "gem", "star", "lock", "unlock", "ticket", "crown", "hourglass", "bot", "note", "chart", "party", "tools", "trophy", "clipboard", "sparkles", "users", "user", "trash", "link", "gift", "broom", "scale", "gavel", "mail", "message", "bulb", "scroll", "heart", "coins", "scissors", "globe", "hash", "plus", "folder", "ban", "settings", "masks", "palette", "bug", "rocket", "kick", "thumbs", "megaphone", "mute", "gamepad", "tv", "boom", "help", "home", "pin", "book", "grid", "search", "pencil", "repeat", "clock", "zap", "flag", "bell", "image", "tag", "calendar", "dice", "compass", "calc", "toolbox", "dot_green", "dot_red", "dot_yellow"];
   const uid = () => Math.random().toString(36).slice(2, 10);
   const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -128,7 +232,11 @@ window.rexBuilder = (function () {
     let editing = null;      // index of the flow being edited
     const root = h('div', { class: 'bld' });
     const dis = locked ? true : null;
-    const commit = () => set(spec.key, clone(list));
+    const isOn = (c) => (c.draft_error != null ? c.want_on !== false : c.enabled !== false);
+    const commit = () => {
+      list.forEach((c) => { if (c.draft_error != null) { c.enabled = c.want_on !== false; delete c.draft_error; } });
+      set(spec.key, clone(list));
+    };
     const textChans = guild.channels.filter((c) => c.type === 'text' || c.type === 'announcement');
     const cats = guild.channels.filter((c) => c.type === 'category');
     const roles = guild.roles.filter((r) => !r.managed).sort((a, b) => b.position - a.position);
@@ -166,8 +274,9 @@ window.rexBuilder = (function () {
         case 'select': el = h('select', { disabled: dis, onchange: (e) => { set1(e.target.value); if (f.rerender) rerender(); } }, f.o.map(([a, b]) => h('option', { value: a }, b))); el.value = v; break;
         case 'channel': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'Here'), textChans.map((c) => h('option', { value: c.id }, '#' + c.name))); el.value = v || ''; break;
         case 'voicechan': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'Choose a voice channel'), guild.channels.filter((c) => c.type === 'voice' || c.type === 'stage').map((c) => h('option', { value: c.id }, c.name))); el.value = v || ''; break;
-        case 'category': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'No category'), cats.map((c) => h('option', { value: c.id }, c.name))); el.value = v || ''; break;
-        case 'role': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'Choose a role'), roles.map((r) => h('option', { value: r.id }, r.name))); el.value = v || ''; break;
+        case 'category': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, f.empty || 'No category'), cats.map((c) => h('option', { value: c.id }, c.name))); el.value = v || ''; break;
+        case 'channelreq': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'Choose a channel'), textChans.map((c) => h('option', { value: c.id }, '#' + c.name))); el.value = v || ''; break;
+        case 'role': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, f.empty || 'Choose a role'), roles.map((r) => h('option', { value: r.id }, r.name))); el.value = v || ''; break;
         case 'tickettype': el = h('select', { disabled: dis, onchange: (e) => set1(e.target.value) }, h('option', { value: '' }, 'Default ticket'), ttypes().filter((t) => t.action !== 'link').map((t) => h('option', { value: t.label }, t.label))); el.value = v || ''; break;
         case 'label': el = h('input', { type: 'text', value: v || '', maxlength: 20, placeholder: 'e.g. welcome', disabled: dis, oninput: (e) => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''); set1(e.target.value); } }); break;
         case 'ref': { const names = []; (function walk(bs) { (bs || []).forEach((x) => { if (x.name && ['message', 'embed', 'image_card', 'poll'].includes(x.type)) names.push(x.name); if (x.type === 'branch') { walk(x.then); walk(x.else); } }); })(list[editing] ? list[editing].blocks : []);
@@ -430,12 +539,21 @@ window.rexBuilder = (function () {
     }
 
     /* ---------------------------------------------------------- list view */
+    window.addEventListener('rex-sync', () => {
+      try {
+        const src = Array.isArray(draft[spec.key]) ? draft[spec.key] : [];
+        let changed = false;
+        list.forEach((c) => { const m = src.find((x) => x.id === c.id); if (m && m.draft_error != null && c.draft_error == null) { c.draft_error = m.draft_error; c.want_on = m.want_on; c.enabled = m.enabled; changed = true; } });
+        if (changed && editing === null) paint();
+      } catch (er) { /* ignore */ }
+    });
     function listView() {
       const grid = h('div', { class: 'bld-grid' });
       list.forEach((c, i) => {
-        grid.append(h('div', { class: 'bld-tile' + (c.enabled === false ? ' off' : '') },
-          h('div', { class: 'bld-th' }, h('b', {}, isCmd ? '/' + c.name : c.name), h('button', { type: 'button', class: 'rocker', role: 'switch', 'aria-checked': String(c.enabled !== false), disabled: dis, 'aria-label': 'Enabled',
-            onclick: (e) => { c.enabled = c.enabled === false; e.currentTarget.setAttribute('aria-checked', String(c.enabled)); e.currentTarget.closest('.bld-tile').classList.toggle('off', !c.enabled); commit(); } })),
+        grid.append(h('div', { class: 'bld-tile' + (!isOn(c) || c.draft_error != null ? ' off' : '') },
+          h('div', { class: 'bld-th' }, h('b', {}, isCmd ? '/' + c.name : c.name), h('button', { type: 'button', class: 'rocker', role: 'switch', 'aria-checked': String(isOn(c)), disabled: dis, 'aria-label': 'Enabled',
+            onclick: (e) => { const on = !isOn(c); c.enabled = on; c.want_on = on; delete c.draft_error; e.currentTarget.setAttribute('aria-checked', String(on)); const t = e.currentTarget.closest('.bld-tile'); t.classList.toggle('off', !on); const b = t.querySelector('.bld-draft'); if (b) b.remove(); commit(); } })),
+          c.draft_error != null ? h('div', { class: 'bld-draft small', style: 'color:#e0a030;margin:4px 0' }, 'Saved as a draft and switched off: ' + (c.draft_error || 'unfinished block')) : null,
           h('div', { class: 'muted small bld-td' }, isCmd ? c.description : (TRIGGERS.find((t) => t[0] === c.trigger) || [0, c.trigger])[1]),
           h('div', { class: 'bld-tf' }, h('span', { class: 'chip' }, (c.blocks || []).length + ' block' + ((c.blocks || []).length === 1 ? '' : 's')),
             isCmd ? h('span', { class: 'chip' }, c.visibility && c.visibility.mode === 'staff' ? 'Staff only' : c.visibility && c.visibility.mode === 'roles' ? 'Some roles' : 'Everyone') : null,
@@ -455,11 +573,179 @@ window.rexBuilder = (function () {
     }
 
     /* ---------------------------------------------------------- editor */
+    /* ------------------------------------------------------ dry run (test button) */
+    const SENDERS = ['message', 'embed', 'image_card', 'poll', 'announce_ping', 'send_form'];
+    const NO_CHANNEL = ['member_join', 'member_leave', 'member_ban', 'member_unban', 'member_timeout', 'nick_changed', 'role_gained', 'role_lost', 'role_created', 'role_deleted', 'server_renamed', 'event_created', 'interval', 'daily', 'level_up', 'warn_issued', 'application_submitted', 'application_accepted', 'application_denied', 'appeal_accepted', 'appeal_denied', 'giveaway_ended', 'raid_detected', 'betrayal_detected', 'invite_created', 'bot_joined', 'channel_deleted'];
+    const GONE = ['member_leave', 'member_ban'];
+    const HARM = ['kick', 'ban', 'timeout', 'unban', 'purge', 'delete_channel'];
+    function dryRun(c) {
+      const out = [];
+      const add = (level, title, msg) => out.push({ level, title, msg });
+      const chanById = Object.fromEntries(guild.channels.map((x) => [x.id, x]));
+      const roleById = Object.fromEntries(guild.roles.map((x) => [x.id, x]));
+      const known = new Set(VARS.map(([v]) => v.slice(1, -1)));
+      const labels = []; const setVars = new Set(); let sentAny = false; let replies = false;
+      const usedRoles = [];
+      add('ok', 'Start', isCmd ? 'Someone runs /' + (c.name || '…') : 'When: ' + (TRIGGERS.find((t) => t[0] === c.trigger) || ['', c.trigger])[1]);
+      if (isCmd) {
+        if (!c.name) add('error', 'Command name', 'Give the command a name (for example "hello").');
+        else if (list.filter((x) => x.name === c.name).length > 1) add('error', 'Command name', '/' + c.name + ' is used by another command here. Names must be different.');
+        if (!c.description) add('error', 'Description', 'Discord needs a short description for every command.');
+        if (c.visibility && c.visibility.mode === 'roles' && !(c.visibility.roles || []).length) add('error', 'Who can use it', 'You picked "Only certain roles" but no roles are chosen, so nobody could use it.');
+      } else {
+        if (!c.name) add('warn', 'Event name', 'No name set. It will still work, but a name helps you find it later.');
+        if (c.trigger === 'interval' && (c.every_minutes || 60) < 15) add('warn', 'Timing', 'Runs every ' + c.every_minutes + ' minutes. Are you sure you meant that often? It can look like spam.');
+        if (c.filter_channel && !chanById[c.filter_channel]) add('error', 'Channel filter', 'The channel this event is limited to was deleted.');
+        if (c.filter_role && !roleById[c.filter_role]) add('error', 'Role filter', 'The role this event is limited to was deleted.');
+      }
+      if (!(c.blocks || []).length) { add('error', 'Blocks', 'There is nothing in this ' + (isCmd ? 'command' : 'event') + ' yet. Add a block first.'); return out; }
+      const chk = (txt, title) => {
+        String(txt || '').replace(/\{([a-z_][a-z0-9_.]*)\}/gi, (m, name) => {
+          const n = name.toLowerCase();
+          if (/^(var|counter|ucount)\./.test(n)) { if (n.startsWith('var.') && !setVars.has(n.slice(4))) add('warn', title, m + ' is used, but nothing before it sets that variable. It will be empty.'); return m; }
+          if (/^answer\.[1-5]$/.test(n)) { if (!isCmd) add('warn', title, m + ' only works in commands with a form.'); return m; }
+          if (!known.has(n)) { add('warn', title, m + " isn't a variable Rex knows. Did you spell it right? It will show as plain text."); return m; }
+          if (!isCmd && (n === 'text')) add('warn', title, m + ' only works in commands where people type text.');
+          if (isCmd && n.startsWith('target') && !(c.options && c.options.user)) add('warn', title, m + ' needs "Let people pick a user" switched on for this command.');
+          return m;
+        });
+        if (/@(everyone|here)/.test(String(txt || ''))) add('warn', title, 'This pings @everyone / @here. Are you sure?');
+      };
+      const walk = (blocks, depth, gated) => {
+        let stopped = false;
+        (blocks || []).forEach((b, i) => {
+          const spec = BLOCKS[b.type];
+          const title = spec ? spec.i + ' ' + spec.n : '❓ ' + b.type;
+          const startRows = out.length;
+          if (stopped) { add('warn', title, 'This block is after a "Stop" block, so it will never run.'); }
+          if (!spec) { add('error', title, 'Rex does not know this block. It will be skipped.'); return; }
+          let bad = 0;
+          const err = (m) => { bad++; add('error', title, m); };
+          const wrn = (m) => add('warn', title, m);
+          (spec.f || []).forEach((f) => {
+            const v = b[f.k];
+            const empty = v === undefined || v === null || v === '';
+            if (f.t === 'channelreq' || f.t === 'voicechan') {
+              if (empty) return err('Choose a ' + (f.t === 'voicechan' ? 'voice ' : '') + 'channel.');
+              const ch = chanById[v];
+              if (!ch) return err('That channel was deleted. Pick another.');
+              if (ch.usable === false) return err('Rex can’t use #' + ch.name + '. Give Rex access to it.');
+            } else if (f.t === 'channel') {
+              if (!empty) { const ch = chanById[v]; if (!ch) return err('That channel was deleted. Pick another.'); if (ch.usable === false) return err('Rex can’t send in #' + ch.name + '.'); }
+              else if (!isCmd && NO_CHANNEL.includes(c.trigger) && SENDERS.includes(b.type)) wrn('There is no channel to reply in for this event. Pick a channel in this block or nothing will be posted.');
+            } else if (f.t === 'category') {
+              if (!empty && !chanById[v]) err('That category was deleted.');
+            } else if (f.t === 'role') {
+              if (empty) { if (!f.empty) err('Choose a role.'); return; }
+              const r = roleById[v];
+              if (!r) return err('That role was deleted. Pick another.');
+              if (r.usable === false) return err('Rex’s role is below @' + r.name + ', so it can’t give or take it. Move Rex’s role higher.');
+              usedRoles.push({ type: b.type, id: v, to: b.to, i });
+            } else if (f.t === 'ref') {
+              if (empty || v === 'last') { if (!sentAny) wrn('There is no earlier message in this flow to point at.'); }
+              else if (!labels.includes(v)) err('This points at the message called "' + v + '", but no message before this block has that label.');
+            } else if (f.t === 'strlist') {
+              const n = (Array.isArray(v) ? v : []).filter((x) => String(x || '').trim()).length;
+              if (n < (f.min || 1)) err('Needs at least ' + (f.min || 1) + ' filled-in option' + ((f.min || 1) === 1 ? '' : 's') + '.');
+              (Array.isArray(v) ? v : []).forEach((x) => chk(x, title));
+            } else if (f.t === 'num') {
+              if (typeof v === 'number' && ((f.min !== undefined && v < f.min) || (f.max !== undefined && v > f.max))) wrn(f.l + ' is ' + v + ', outside ' + f.min + ' to ' + f.max + '. Rex will adjust it.');
+            } else if (f.t === 'text' || f.t === 'area') {
+              if (empty && ['message', 'dm', 'log', 'announce_ping'].includes(b.type) && f.k === 'text' && !((b.buttons || []).length)) err('The message is empty.');
+              if (empty && f.k === 'name' && ['set_var', 'pick', 'counter'].includes(b.type)) err('Give it a name.');
+              if (!empty && f.k === 'name' && ['set_var', 'pick', 'counter'].includes(b.type) && !/^[a-z0-9_]{1,24}$/i.test(String(v))) err('Names can only use letters, numbers and _.');
+              if (!empty) chk(v, title);
+            } else if (f.t === 'label') {
+              if (!empty) { if (labels.includes(v)) wrn('The label "' + v + '" is already used by an earlier block. Edits will hit the wrong message.'); }
+            }
+          });
+          // specific "are you sure" checks
+          if (SENDERS.includes(b.type)) { sentAny = true; replies = true; if (b.name) labels.push(b.name); }
+          if (b.type === 'dm') replies = true;
+          if (['set_var', 'pick'].includes(b.type) && b.name) setVars.add(String(b.name).toLowerCase());
+          if (b.type === 'embed' && !b.title && !b.description) err('An embed with no title and no description is empty.');
+          if (HARM.includes(b.type) && !gated && depth === 0) wrn('This ' + (spec.n || b.type).toLowerCase() + ' runs every single time. Is there a condition (If / else) that should come first?');
+          if (['kick', 'ban', 'timeout'].includes(b.type)) {
+            if (b.to === 'user' && isCmd) wrn('This hits the person who ran the command. Did you mean the picked user?');
+            if (b.to === 'target' && isCmd && !(c.options && c.options.user)) err('It acts on the picked user, but this command does not let people pick one.');
+            if (b.to === 'target' && !isCmd && !['member_ban', 'member_unban', 'warn_issued'].includes(c.trigger)) wrn('This event has no “picked user”, only the person it is about. Did you mean “the person who ran it”?');
+          }
+          if (GONE.includes(c.trigger) && (b.type === 'dm' || ['add_role', 'remove_role', 'toggle_role', 'timeout', 'set_nick'].includes(b.type))) wrn('The person has already left or been banned, so this can’t reach them.');
+          if (b.type === 'wait' && (b.seconds || 0) > 60) wrn('Waits ' + b.seconds + ' seconds. Are you sure you meant that long?');
+          if (b.type === 'stop' && i < blocks.length - 1) stopped = true;
+          if (b.type === 'branch') {
+            const k = b.if || {};
+            if (['has_role', 'channel_is'].includes(k.kind) && !k.value) err('The condition has nothing chosen to check.');
+            else if (k.kind === 'has_role' && k.value && !roleById[k.value]) err('The role in the condition was deleted.');
+            else if (k.kind === 'channel_is' && k.value && !chanById[k.value]) err('The channel in the condition was deleted.');
+            if (!(b.then || []).length && !(b.else || []).length) wrn('Both sides of this If / else are empty. It does nothing.');
+            if (out.length === startRows) add('ok', title, 'Checks the condition, then runs the matching side.');
+            walk(b.then, depth + 1, true); walk(b.else, depth + 1, true);
+            return;
+          }
+          if (out.length === startRows) {
+            let what = spec.d || '';
+            const ch = b.channel && chanById[b.channel];
+            if (ch) what = 'Would use #' + ch.name + '. ' + what;
+            const r = b.role && roleById[b.role];
+            if (r) what = 'Would use @' + r.name + '. ' + what;
+            const t = String(b.text || b.title || b.description || '').trim();
+            if (t) what = 'Says "' + t.slice(0, 60) + (t.length > 60 ? '…' : '') + '". ' + what;
+            add('ok', title, (what || 'Looks fine.').trim());
+          }
+        });
+      };
+      walk(c.blocks, 0, false);
+      // pairs that undo each other
+      usedRoles.forEach((a, ia) => usedRoles.forEach((b2, ib) => {
+        if (ib > ia && a.id === b2.id && a.to === b2.to && ((a.type === 'add_role' && b2.type === 'remove_role') || (a.type === 'remove_role' && b2.type === 'add_role') || (a.type === 'add_role' && b2.type === 'toggle_role') || (a.type === 'toggle_role' && b2.type === 'add_role')))
+          add('warn', 'Roles', 'One block ' + a.type.replace('_', ' ') + 's @' + (roleById[a.id] || {}).name + ' and a later one undoes it. Did you mean that?');
+      }));
+      if (isCmd && !replies) add('warn', 'Reply', 'Nothing in this command replies to the person who ran it, so Discord may show “the application did not respond”.');
+      return out;
+    }
+    function testFlow(c) {
+      const results = dryRun(c);
+      const errs = results.filter((r) => r.level === 'error').length, warns = results.filter((r) => r.level === 'warn').length;
+      const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const icon = { ok: '✓', warn: '!', error: '✕', run: '…' };
+      const back = h('div', { class: 'dlg-back', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Test run' });
+      const rows = h('div', { class: 'tst-rows', 'aria-live': 'polite' });
+      const bar = h('div', { class: 'tst-bar' }, h('i', {}));
+      const sum = h('div', { class: 'tst-sum' });
+      const close = () => { cancelled = true; back.remove(); document.removeEventListener('keydown', onKey); };
+      const onKey = (e) => { if (e.key === 'Escape') close(); };
+      let cancelled = false;
+      const again = h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { close(); testFlow(c); } }, '↻ Run again');
+      const done = h('button', { type: 'button', class: 'btn sm', onclick: close }, 'Close');
+      back.append(h('div', { class: 'dlg tst' }, h('h3', {}, '🧪 Test run'), h('p', { class: 'muted small' }, 'Pretend run of “' + (isCmd ? '/' + (c.name || 'command') : (c.name || 'event')) + '”. Nothing is sent, changed or deleted.'),
+        bar, rows, sum, h('div', { class: 'dlg-actions' }, again, done)));
+      document.body.append(back); document.addEventListener('keydown', onKey); done.focus();
+      const sleep = (ms) => new Promise((r) => setTimeout(r, still ? 0 : ms));
+      (async () => {
+        for (let i = 0; i < results.length; i++) {
+          if (cancelled) return;
+          const r = results[i];
+          const row = h('div', { class: 'tst-row run' }, h('span', { class: 'tst-ic' }, icon.run), h('div', {}, h('b', {}, r.title), h('div', { class: 'small' }, r.level === 'ok' ? 'Checking…' : 'Checking…')));
+          rows.append(row); row.scrollIntoView && row.scrollIntoView({ block: 'nearest' });
+          await sleep(r.level === 'ok' ? 260 : 380);
+          if (cancelled) return;
+          row.className = 'tst-row ' + r.level; row.firstChild.textContent = icon[r.level]; row.lastChild.lastChild.textContent = r.msg;
+          bar.firstChild.style.width = Math.round(((i + 1) / results.length) * 100) + '%';
+          bar.className = 'tst-bar ' + (errs && results.slice(0, i + 1).some((x) => x.level === 'error') ? 'error' : results.slice(0, i + 1).some((x) => x.level === 'warn') ? 'warn' : 'ok');
+          await sleep(120);
+        }
+        sum.className = 'tst-sum ' + (errs ? 'error' : warns ? 'warn' : 'ok');
+        sum.textContent = errs ? '✕ Wouldn’t run yet: fix ' + errs + ' red problem' + (errs === 1 ? '' : 's') + (warns ? ' and check ' + warns + ' yellow note' + (warns === 1 ? '' : 's') : '') + '.'
+          : warns ? '! Would run, but check ' + warns + ' yellow note' + (warns === 1 ? '' : 's') + ' first.' : '✓ Everything checks out. This would run.';
+        sum.setAttribute('role', 'status');
+      })();
+    }
     function editor(c) {
       const rerender = () => paint();
       const top = h('div', { class: 'bld-etop' },
         h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { editing = null; paint(); } }, '← Back'),
-        h('b', {}, isCmd ? 'Command builder' : 'Event builder'), h('span', { class: 'grow' }), varsButton());
+        h('b', {}, isCmd ? 'Command builder' : 'Event builder'), h('span', { class: 'grow' }), h('button', { type: 'button', class: 'btn sm', onclick: () => testFlow(c) }, '🧪 Test'), varsButton());
       const meta = h('div', { class: 'bld-meta' });
       if (isCmd) {
         meta.append(
@@ -478,9 +764,12 @@ window.rexBuilder = (function () {
           h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Event name'), h('input', { type: 'text', value: c.name, maxlength: 40, placeholder: 'Welcome gift', disabled: dis, oninput: (e) => { c.name = e.target.value; commit(); } })),
           h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Runs when'), (() => { const s = h('select', { disabled: dis, onchange: (e) => { c.trigger = e.target.value; commit(); paint(); } }, TRIGGERS.map(([a, b]) => h('option', { value: a }, b))); s.value = c.trigger; return s; })()),
           c.trigger === 'interval' ? h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Every (minutes, 5 to 1440)'), h('input', { type: 'number', min: 5, max: 1440, value: c.every_minutes, disabled: dis, oninput: (e) => { c.every_minutes = parseInt(e.target.value, 10) || 60; commit(); } })) : null,
-          c.trigger === 'keyword' ? h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Word or phrase to look for'), h('input', { type: 'text', maxlength: 40, value: c.keyword || '', placeholder: 'free nitro', disabled: dis, oninput: (e) => { c.keyword = e.target.value; commit(); } })) : null,
+          TEXT_TRIGGERS.includes(c.trigger) ? h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, c.trigger === 'keyword' ? 'Word or phrase to look for' : 'Only if the message contains (optional)'), h('input', { type: 'text', maxlength: 40, value: c.keyword || '', placeholder: 'free nitro', disabled: dis, oninput: (e) => { c.keyword = e.target.value; commit(); } })) : null,
+          EMOJI_TRIGGERS.includes(c.trigger) ? h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Only this emoji (optional)'), h('input', { type: 'text', maxlength: 40, value: c.keyword || '', placeholder: '👍', disabled: dis, oninput: (e) => { c.keyword = e.target.value; commit(); } })) : null,
+          CHANNEL_TRIGGERS.includes(c.trigger) ? h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Only in this channel (optional)'), (() => { const s2 = h('select', { disabled: dis, onchange: (e) => { c.filter_channel = e.target.value; commit(); } }, h('option', { value: '' }, 'Any channel'), guild.channels.filter((x) => x.type !== 'category').map((x) => h('option', { value: x.id }, (x.type === 'voice' || x.type === 'stage' ? '🔊 ' : '#') + x.name))); s2.value = c.filter_channel || ''; return s2; })()) : null,
+          ROLE_TRIGGERS.includes(c.trigger) ? h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Only for this role (optional)'), (() => { const s2 = h('select', { disabled: dis, onchange: (e) => { c.filter_role = e.target.value; commit(); } }, h('option', { value: '' }, 'Any role'), roles.map((r) => h('option', { value: r.id }, r.name))); s2.value = c.filter_role || ''; return s2; })()) : null,
           c.trigger === 'daily' ? h('label', { class: 'bld-f' }, h('span', { class: 'bld-fl' }, 'Time (UTC)'), h('input', { type: 'time', value: c.at || '18:00', disabled: dis, oninput: (e) => { c.at = e.target.value; commit(); } })) : null,
-          h('p', { class: 'muted small' }, c.trigger === 'member_join' ? '{user} is the new member.' : c.trigger === 'member_leave' ? '{user} is the member who left.' : c.trigger === 'member_ban' ? '{target} is the banned user.' : c.trigger === 'ticket_create' ? '{user} opened {ticket}.' : c.trigger === 'keyword' ? '{user} wrote the message, {text} is what they wrote.' : c.trigger === 'role_gained' ? '{user} got the role {setting}.' : c.trigger === 'voice_join' ? '{user} joined {channel}.' : c.trigger === 'member_boost' ? '{user} just boosted.' : c.trigger === 'settings_change' ? '{setting}, {old} and {new} describe the change, {user} made it.' : 'Messages need a channel picked in the block.'));
+          h('p', { class: 'muted small' }, HINTS[c.trigger] || 'Messages need a channel picked in the block.'));
       }
       if (o.studio) return h('div', { class: 'sb-editor' }, top, board(c, rerender, meta));
       return h('div', {}, top, meta,

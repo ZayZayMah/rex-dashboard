@@ -1009,3 +1009,23 @@ body.page-studio .srv-spacer { display: none; }
 .combo-opts button.off { opacity: .45; cursor: not-allowed; filter: grayscale(1); }
 .no-access { margin-top: .4rem; padding: .45rem .65rem; border-radius: 8px; font-size: .82rem; background: rgba(237,66,69,.12); border: 1px solid rgba(237,66,69,.45); color: #ff8d90; }
 .no-access[hidden] { display: none; }
+
+/* builder test run */
+.dlg.tst { width: min(100%, 560px); max-height: 86vh; display: flex; flex-direction: column; }
+.tst-rows { display: grid; gap: 8px; overflow: auto; margin: 12px 0; padding-right: 4px; min-height: 80px; }
+.tst-row { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--edge); border-left-width: 4px; background: rgba(255,255,255,.03); animation: tstIn .22s ease; }
+.tst-row .small { color: var(--steel, #9bb); margin-top: 2px; }
+.tst-ic { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: .85rem; background: rgba(255,255,255,.08); }
+.tst-row.run { border-left-color: var(--edge2); } .tst-row.run .tst-ic { animation: tstPulse .9s ease-in-out infinite; }
+.tst-row.ok { border-left-color: #22c55e; background: rgba(34,197,94,.09); } .tst-row.ok .tst-ic { background: #22c55e; color: #052e16; }
+.tst-row.warn { border-left-color: #eab308; background: rgba(234,179,8,.10); } .tst-row.warn .tst-ic { background: #eab308; color: #422006; }
+.tst-row.error { border-left-color: #ef4444; background: rgba(239,68,68,.11); } .tst-row.error .tst-ic { background: #ef4444; color: #450a0a; }
+.tst-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+.tst-bar i { display: block; height: 100%; width: 0; background: #22c55e; transition: width .25s ease, background .25s ease; }
+.tst-bar.warn i { background: #eab308; } .tst-bar.error i { background: #ef4444; }
+.tst-sum { font-weight: 700; padding: 10px 12px; border-radius: 12px; margin-bottom: 12px; }
+.tst-sum:empty { display: none; }
+.tst-sum.ok { background: rgba(34,197,94,.14); color: #4ade80; } .tst-sum.warn { background: rgba(234,179,8,.14); color: #facc15; } .tst-sum.error { background: rgba(239,68,68,.14); color: #f87171; }
+@keyframes tstIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes tstPulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .tst-row, .tst-row.run .tst-ic { animation: none; } .tst-bar i { transition: none; } }

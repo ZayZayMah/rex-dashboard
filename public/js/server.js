@@ -752,6 +752,28 @@
     savebar.querySelector('#savecount').textContent = n + (n === 1 ? ' unsaved change' : ' unsaved changes');
     savebar.classList.toggle('show', n > 0);
   }
+  /* What the person saved is kept until Rex's snapshot catches up, and a rejected save puts their work back (never wipes it). */
+  const sent = {};
+  function adopt(server, inFlight) {
+    Object.keys(server).forEach((k) => {
+      if (inFlight.has(k)) return;
+      const s0 = sent[k];
+      if (s0) {
+        if (!eq(server[k], s0.before) || Date.now() - s0.t > 120000) delete sent[k];
+        else return;      // the snapshot still shows the old value: don't let it overwrite what was just saved
+      }
+      if (eq(draft[k], original[k])) draft[k] = server[k];
+      original[k] = server[k];
+      try { window.dispatchEvent(new CustomEvent('rex-sync', { detail: { key: k } })); } catch (e) { /* ignore */ }
+    });
+  }
+  function restoreRejected(res) {
+    const errs = (res && res.errors) || {};
+    Object.keys(errs).forEach((k) => {
+      const s0 = sent[k]; if (!s0) return;
+      draft[k] = s0.val; original[k] = s0.before; errors[k] = String(errs[k]); delete sent[k];
+    });
+  }
   let polling = null;
   async function refresh() {
     try {
@@ -760,7 +782,7 @@
       pending = d.pending || []; results = d.results || results;
       const server = d.values || {};
       const inFlight = new Set(pending.flatMap((p) => p.keys || []));
-      Object.keys(server).forEach((k) => { if (inFlight.has(k)) return; if (eq(draft[k], original[k])) draft[k] = server[k]; original[k] = server[k]; });
+      adopt(server, inFlight);
       drawHead(); show(current, true);
     } catch (e) { /* next tick */ }
   }
@@ -771,7 +793,8 @@
       pending = d.pending || []; results = d.results || results;
       const server = d.values || {};
       const inFlight = new Set(pending.flatMap((p) => p.keys || []));
-      Object.keys(server).forEach((k) => { if (inFlight.has(k)) return; if (eq(draft[k], original[k])) draft[k] = server[k]; original[k] = server[k]; });
+      if (had && !pending.length) restoreRejected(results[0]);
+      adopt(server, inFlight);
       if (had && !pending.length) {
         const first = results[0];
         if (first && Object.keys(first.errors || {}).length) toast('Rex rejected part of that change. Open the activity log.', 'bad'); else { toast('Rex applied your changes.', 'good'); flashBar('Saved and applied', 'done', 2600); }
@@ -797,7 +820,7 @@
       const res = await api('/api/guilds/' + encodeURIComponent(gid) + '/settings', { method: 'PUT', body: { changes, silent: ownerMode && hideLog } });
       if (res.queued) {
         pending = pending.concat([{ id: res.id, keys: res.keys }]);
-        Object.keys(changes).forEach((k) => { original[k] = changes[k]; });
+        Object.keys(changes).forEach((k) => { sent[k] = { val: JSON.parse(JSON.stringify(changes[k])), before: JSON.parse(JSON.stringify(original[k] === undefined ? null : original[k])), t: Date.now() }; original[k] = changes[k]; });
         flashBar('Sent to Rex. Applying...', 'saving'); startPolling();
       }
       show(current, true); drawConsole();
