@@ -171,7 +171,7 @@ const ABOUT_KEYS = ['about', 'commands', 'premium', 'live', 'docs', 'updates', '
 function subnav(active) {
   const item = (href, label, key) => h('a', { href, class: active === key ? 'active' : '' }, label);
   return h('nav', { class: 'subnav', 'aria-label': 'About sections' },
-    item('/about', 'Overview', 'about'), item('/commands', 'Commands', 'commands'), item('/premium', 'Premium', 'premium'), item('/live', 'Live stats', 'live'), item('/updates', 'Updates', 'updates'), item('/welcome', 'Guide', 'welcome'), item('/docs', 'Docs', 'docs'));
+    item('/about', 'Overview', 'about'), item('/commands', 'Commands', 'commands'), item('/premium', 'Premium', 'premium'), item('/live', 'Live stats', 'live'), item('/updates', 'Updates', 'updates'), item('/welcome', 'Guide', 'welcome'), item('/docs', 'Docs', 'docs'), item('/ai', 'Ask Rex', 'ai'));
 }
 
 function renderMaintenance(m, isOwnerPage) {

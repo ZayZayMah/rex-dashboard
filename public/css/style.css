@@ -1029,3 +1029,15 @@ body.page-studio .srv-spacer { display: none; }
 @keyframes tstIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes tstPulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .tst-row, .tst-row.run .tst-ic { animation: none; } .tst-bar i { transition: none; } }
+
+/* ask rex (AI) page */
+.ai-box { display: grid; gap: 10px; }
+.ai-log { height: min(56vh, 520px); overflow: auto; display: grid; gap: 10px; align-content: start; padding: 14px; border: 1px solid var(--edge); border-radius: 18px; background: var(--plate); }
+.ai-msg { max-width: 88%; padding: 10px 14px; border-radius: 16px; border: 1px solid var(--edge); white-space: pre-wrap; word-break: break-word; }
+.ai-msg b { display: block; font-size: .75rem; opacity: .7; margin-bottom: 2px; }
+.ai-msg.me { justify-self: end; background: rgba(47,140,255,.16); }
+.ai-msg.rex { justify-self: start; background: rgba(255,255,255,.04); }
+.ai-msg.wait .ai-t { animation: tstPulse 1s ease-in-out infinite; }
+.ai-msg.err { border-color: #ef4444; }
+.ai-row { display: flex; gap: 10px; align-items: flex-end; }
+.ai-in { flex: 1; resize: vertical; min-height: 48px; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--edge2); background: var(--plate); color: inherit; }

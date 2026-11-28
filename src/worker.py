@@ -197,7 +197,7 @@ async def http(method, url, headers=None, body=None):
     return int(resp.status), await resp.text()
 
 
-HOT_PREFIXES = ("q:all", "res:", "ores:", "guild:", "xpq", "watch")
+HOT_PREFIXES = ("q:all", "res:", "ores:", "guild:", "xpq", "watch", "ai:")   # "ai:" counters change on every reply, so they stay out of KV (1,000 writes/day on the free plan)
 
 
 class Store:
@@ -1020,6 +1020,24 @@ class Default(WorkerEntrypoint):
                 raise HttpError(403, "forbidden", "Only server admins can read incident reports.")
             return json_response(rec, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
 
+        if path == "/api/ai/usage" and method == "GET":
+            import ai
+            return json_response(await ai.usage(self))
+        if path == "/api/ai/chat" and method == "POST":
+            import ai
+            self.check_mutation(request, url, session)
+            uid = str(session["user"]["id"])
+            if rate_limited("aiweb:" + uid, 6, 60):
+                raise HttpError(429, "slow_down", "Slow down a little. Try again in a minute.")
+            raw = await self.read_json(request, 16 * 1024)
+            hist = [{"who": ("Rex" if m.get("role") == "assistant" else "You"), "text": clean_str(m.get("text"), 300)} for m in (raw.get("history") or [])[-6:] if isinstance(m, dict)]
+            req = {"question": clean_str(raw.get("question"), 1500), "history": hist, "user": uid, "name": clean_str(session["user"].get("global_name") or session["user"].get("username"), 40),
+                   "guild": "web", "guild_name": "the Rex website", "tier": "free", "web": True,
+                   "persona": "You are chatting on the Rex website. You can explain Rex's features and help with Discord questions."}
+            try:
+                return json_response(await ai.handle(self, req))
+            except Exception as err:
+                return json_response({"ok": False, "reason": "error", "message": "My brain tripped just now. Try again in a minute.", "detail": type(err).__name__})
         if path == "/api/me" and method == "GET":
             await self.note_user(session)
             await features.deliver_pending(self, session["user"]["id"], url)
@@ -1693,6 +1711,16 @@ class Default(WorkerEntrypoint):
             stats["hist"] = hist[-96:]
             await self.store.put("stats:latest", stats)
             return json_response({"ok": True})
+        if tail == ["aiusage"] and method == "GET":
+            import ai
+            return json_response(await ai.usage(self))
+        if tail == ["ai"] and method == "POST":
+            import ai
+            raw = await self.read_json(request, 256 * 1024)
+            try:
+                return json_response(await ai.handle(self, raw))
+            except Exception as err:
+                return json_response({"ok": False, "reason": "error", "message": "My brain tripped just now. Try again in a minute.", "detail": type(err).__name__ + ": " + str(err)[:160]})
         if tail == ["updates"] and method == "POST":
             import updates
             return await updates.bot_route(self, urlparse(request.url), await self.read_json(request, 128 * 1024))

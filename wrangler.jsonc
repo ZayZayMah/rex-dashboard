@@ -25,6 +25,9 @@
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Hub"] }],
 
+  // Workers AI (free plan: 10,000 neurons a day). Powers /ask and the @Rex chat in Discord and the /ai page on the website.
+  "ai": { "binding": "AI" },
+
   // Non-secret settings only. Real secrets go in Cloudflare -> Settings -> Variables and Secrets.
   "vars": {
     // Permissions requested when someone adds REX to a server (8 = Administrator).
