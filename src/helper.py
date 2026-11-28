@@ -991,3 +991,61 @@ def ticket_summary(c):
     """Lines for the ticket channel: onboarding answers, then the recent conversation."""
     d = (c.get("flow") or {}).get("data") or {}
     return [(k, v) for k, v in d.get("_sum", [])]
+
+
+# ----------------------------------------------------------------------------------------------- when the scripted helper is probably getting it wrong
+CORRECTION = re.compile(
+    r"(\bi (meant|mean|said|asked|was asking|was saying)\b|\bthat'?s not what\b|\bnot what i (asked|meant|said|wanted)\b|\byou'?re not (listening|helping|understanding|reading)\b|"
+    r"\byou (don'?t|do not|dont) (understand|get it|listen)\b|\b(wrong|different) (answer|thing|question)\b|\bdidn'?t (answer|help|read)\b|\bthis isn'?t helping\b|\bnot helping\b|"
+    r"\bsame (answer|thing|reply) again\b|\bstop (repeating|saying)\b|\bread (what i|my)\b|\bi already (tried|did|told|said)\b|\bthat doesn'?t (help|work|answer)\b|\bnot my (question|problem|issue)\b|"
+    r"\bno+[ ,.!]+(i|that|it|its|it's|not)\b)", re.I)
+
+
+def shouting(text):
+    letters = [ch for ch in str(text) if ch.isalpha()]
+    return len(letters) >= 8 and sum(1 for ch in letters if ch.isupper()) / len(letters) > 0.6
+
+
+def wrong_signal(text, prev_bot=None, new_say=None, same_step=False):
+    """Why the scripted helper is probably missing the point, or '' when it looks fine. Cheap: no AI involved."""
+    t = str(text or "").strip()
+    if not t:
+        return ""
+    if CORRECTION.search(t):
+        return "correction"
+    if shouting(t) or re.search(r"[!?]{3,}", t):
+        return "upset"
+    if prev_bot and new_say and _n(prev_bot) == _n(new_say):
+        return "repeat"
+    if same_step and len(t.split()) >= 6 and meaningful(t):
+        return "missed"
+    return ""
+
+
+def kb_context(texts, extra=None, n=3):
+    """Up to n help-article answers that match what the person wrote (used to ground the AI so it does not invent things)."""
+    seen, out = set(), []
+    for tx in texts:
+        it = find_answer(tx, extra)
+        if it and it["title"] not in seen:
+            seen.add(it["title"])
+            a = it["answer"]
+            a = a[0] if isinstance(a, (list, tuple)) else a
+            out.append({"title": it["title"], "answer": fill(a)[:700]})
+        if len(out) >= n:
+            break
+    return out
+
+
+def ai_turn_after(f, human, last_user):
+    """Update the flow after an AI reply. The script does not advance (the AI answered instead); when the AI thinks a person is needed
+    we go to the normal 'open a ticket?' offer so the person still has to agree to it."""
+    f["good"] = max(f.get("good", 0), 1)
+    d = f["data"]
+    if human:
+        if not d.get("_sum"):
+            _add_sum(d, "What they said", last_user)
+        f["step"] = "offer"
+        return [OPEN_T, NO_T], "offer"
+    p = _step_prompt(f)
+    return list(p["chips"]), f["step"]

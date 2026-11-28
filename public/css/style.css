@@ -1041,3 +1041,13 @@ body.page-studio .srv-spacer { display: none; }
 .ai-msg.err { border-color: #ef4444; }
 .ai-row { display: flex; gap: 10px; align-items: flex-end; }
 .ai-in { flex: 1; resize: vertical; min-height: 48px; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--edge2); background: var(--plate); color: inherit; }
+
+/* AI automod setup chat */
+.ai-setup{display:grid;gap:10px;width:100%}
+.ai-log{display:grid;gap:8px;max-height:260px;overflow:auto;padding:2px}
+.ai-msg{padding:9px 12px;border-radius:12px;max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.93rem}
+.ai-msg.rex{background:rgba(46,230,182,.10);border:1px solid rgba(46,230,182,.25);justify-self:start}
+.ai-msg.you{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);justify-self:end}
+.ai-setup textarea{width:100%;resize:vertical}
+.ai-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ai-done{padding:10px 12px;border-radius:10px;background:rgba(46,230,182,.08);border:1px solid rgba(46,230,182,.25)}

@@ -42,11 +42,24 @@
     const icons = { help: '💬', bug: '🐛', premium: '💎', appeal: '🔨', feedback: '💡' };
     const full = d.convs.length >= max;
     root.replaceChildren(h('div', { class: 'page-head' }, h('h1', {}, 'Support'), h('p', { class: 'muted' }, 'Pick what you need. Rex will ask a few quick questions and answer what he can. If it needs a person, Rex opens a ticket for you.')),
+      d.can_ai ? aiToggle(d.ai_only) : null,
       d.cooldown ? h('div', { class: 'notice' }, 'Support chat is paused for you for about ' + (d.cooldown > 5400 ? Math.ceil(d.cooldown / 3600) + ' hour(s)' : Math.ceil(d.cooldown / 60) + ' minute(s)') + '.') : null,
       full ? h('div', { class: 'notice' }, 'You have ' + max + ' chats. Close or delete one below before starting another.') : null,
       h('div', { class: 'sup-types' }, Object.entries(d.types).filter(([k]) => k !== 'feedback').map(([k, name]) => h('button', { class: 'sup-type', type: 'button', disabled: !!d.cooldown || full, onclick: () => start(k) }, h('span', { class: 'ic' }, icons[k] || '💬'), h('b', {}, name)))),
       h('div', { class: 'frame', style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px' }, h('span', { class: 'ic', style: 'font-size:28px' }, '💡'), h('div', { style: 'flex:1;min-width:200px' }, h('b', {}, 'Feedback'), h('p', { class: 'muted small', style: 'margin:4px 0 0' }, 'One permanent chat for ideas and suggestions. It never closes and doesn\'t count towards your ' + max + ' chats.')), h('button', { class: 'btn', type: 'button', disabled: !!d.cooldown, onclick: () => start('feedback') }, d.feedback ? 'Open feedback chat' : 'Start feedback chat')),
       d.convs.length ? h('div', { class: 'frame' }, h('h3', {}, 'Your chats'), h('div', { class: 'sup-list' }, d.convs.map((c) => h('button', { type: 'button', class: 'sup-row', onclick: () => openConv(c.id) }, h('b', {}, d.types[c.type] || 'Help'), h('span', { class: 'pill ' + pillClass(c) }, c.label), h('small', { class: 'muted' }, timeAgo(c.updated)))))) : null);
+  }
+  // Owner mode only, and only for that owner: send every text message to the AI instead of waiting for the premade replies to slip up.
+  function aiToggle(on) {
+    const b = h('button', { type: 'button', class: 'rocker', role: 'switch', 'aria-checked': String(!!on), 'aria-label': 'Use AI only for my support replies' });
+    b.addEventListener('click', async () => {
+      const next = b.getAttribute('aria-checked') !== 'true';
+      b.disabled = true;
+      try { const r = await api('/api/support/aimode', { method: 'POST', body: { on: next } }); b.setAttribute('aria-checked', String(!!r.ai_only)); toast(r.ai_only ? 'AI-only replies on (just for you)' : 'Back to premade replies', 'good'); } catch (e) { toast(e.message, 'bad'); }
+      b.disabled = false;
+    });
+    return h('div', { class: 'frame', style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px' }, h('div', { style: 'flex:1;min-width:200px' }, h('b', {}, 'Owner: AI-only replies'),
+      h('p', { class: 'muted small', style: 'margin:4px 0 0' }, 'Only for you. Rex answers your typed messages with the AI instead of the premade replies (buttons still work). Uses free AI allowance, and falls back to premade replies when it runs out.')), b);
   }
   async function start(type) { try { show(await api('/api/support/new', { method: 'POST', body: { type, theme: theme() } })); } catch (e) { toast(e.message, 'bad'); } }
   async function openConv(id) { try { show(await api('/api/support/' + id)); } catch (e) { toast(e.message, 'bad'); } }

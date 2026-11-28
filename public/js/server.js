@@ -362,7 +362,56 @@
     if (spec.multiline && !locked && window.RexEmojiPicker && typeof window.RexEmojiPicker.button === 'function') { try { return h('div', { class: 'emo-wrap' }, h('div', { class: 'emo-row' }, window.RexEmojiPicker.button(() => el)), el); } catch (e) { /* the picker is optional; the plain box below still works */ } }
     return el;
   }
+  /* One-shot AI setup chat for AI automod. The person describes what they want, the AI proposes settings (checked again by the Worker and the bot),
+     they land in the draft, and the chat closes: it can't be used again until "Run the setup again" is pressed. Keeps AI use small. */
+  function aiSetup(spec, locked) {
+    const KEY = spec.key, LIMIT = 6;
+    const box = h('div', { class: 'ai-setup' });
+    const hist = [];
+    function done(note, initial) {
+      if (!initial) set(KEY, true);
+      box.replaceChildren(h('div', { class: 'ai-done' }, h('strong', {}, 'Set up by AI. '), note || 'Check everything below, change what you like, then Save.'),
+        locked ? null : h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { hist.length = 0; set(KEY, false); paint(); } }, 'Run the setup again'));
+      if (!initial) show(current, true);
+    }
+    function paint() {
+      const log = h('div', { class: 'ai-log', 'aria-live': 'polite' });
+      const add = (who, text) => log.append(h('div', { class: 'ai-msg ' + who }, text));
+      if (!hist.length) add('rex', 'Tell me how you want it. For example: "Stop people selling Roblox stuff in #general and send them to #market. Be strict about swear dodging."');
+      hist.forEach((m) => add(m.role === 'user' ? 'you' : 'rex', m.text));
+      const input = h('textarea', { rows: 3, maxlength: 600, placeholder: 'Describe what you want...', 'aria-label': 'Describe your AI automod setup', disabled: locked ? true : null });
+      const status = h('div', { class: 'muted small', role: 'status' });
+      const turns = () => hist.filter((m) => m.role === 'user').length;
+      const send = h('button', { type: 'button', class: 'btn sm', disabled: locked ? true : null }, 'Send');
+      const skip = h('button', { type: 'button', class: 'btn ghost sm', onclick: () => done('Fill in the settings by hand below.') }, 'Skip, I will edit by hand');
+      let busy = false;
+      async function go() {
+        const text = input.value.trim();
+        if (!text || busy) return;
+        busy = true; send.disabled = true; input.disabled = true; status.textContent = 'Thinking...';
+        hist.push({ role: 'user', text });
+        add('you', text); input.value = '';
+        try {
+          const r = await api('/api/ai/aimod-setup', { method: 'POST', body: { gid: guild.id, history: hist } });
+          if (!r.ok) { hist.pop(); status.textContent = r.message || 'The AI is not available right now.'; busy = false; send.disabled = false; input.disabled = false; if (r.reason === 'turns') done(r.message); return; }
+          hist.push({ role: 'assistant', text: r.say });
+          add('rex', r.say);
+          Object.keys(r.changes || {}).forEach((k) => set(k, r.changes[k]));
+          status.textContent = r.note || '';
+          if (r.done || turns() >= LIMIT) { done(r.done ? '' : 'That is as far as the chat goes. Edit anything below.'); return; }
+          status.textContent = (status.textContent ? status.textContent + ' ' : '') + (LIMIT - turns()) + ' message(s) left.';
+        } catch (e) { hist.pop(); status.textContent = (e && e.message) || 'Something went wrong. Try again.'; }
+        busy = false; send.disabled = false; input.disabled = false; input.focus();
+      }
+      send.addEventListener('click', go);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+      box.replaceChildren(log, input, h('div', { class: 'ai-actions' }, send, skip), status);
+    }
+    if (draft[KEY]) done('Check everything below, change what you like, then Save.', true); else paint();
+    return box;
+  }
   function control(spec, locked) {
+    if (spec.key === 'ai_automod.setup_done') return aiSetup(spec, locked);
     switch (spec.type) {
       case 'toggle': return rocker(spec.key, locked);
       case 'text': case 'url': return textControl(spec, locked);
@@ -432,7 +481,7 @@
   }
   function settingRow(spec, sectionLock) {
     const reason = sectionLock || lockReason(spec), locked = !!reason;
-    const wide = spec.type === 'tickettypes' || spec.type === 'ticketpanels' || spec.type === 'applyforms' || spec.type === 'card' || spec.type === 'channels' || spec.type === 'levelroles' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline);
+    const wide = spec.type === 'tickettypes' || spec.type === 'ticketpanels' || spec.type === 'applyforms' || spec.type === 'card' || spec.type === 'channels' || spec.type === 'levelroles' || spec.type === 'roles' || (spec.type === 'text' && spec.multiline) || spec.key === 'ai_automod.setup_done';
     return h('div', { class: 'set-row' + (locked ? ' locked' : '') + (wide ? ' wide' : '') },
       h('div', {}, h('label', { class: 'name', for: 'f-' + spec.key }, nameLine(spec, sectionLock)), h('div', { class: 'desc' }, spec.description),
         hintFor(spec) ? h('div', { class: 'hint' }, hintFor(spec)) : null,
@@ -471,9 +520,12 @@
       g.items.push(s);
     });
     groups.forEach((g, gi) => {
-      const toggles = g.items.filter((s) => s.type === 'toggle'), rest = g.items.filter((s) => s.type !== 'toggle');
+      const isSw = (s) => s.type === 'toggle' && s.key !== 'ai_automod.setup_done';
+      const toggles = g.items.filter(isSw), rest = g.items.filter((s) => !isSw(s));
       const surface = g.name ? SURF[gi % SURF.length] : '';
       const node = h('div', { class: 'group ' + surface }, g.name ? h('h3', {}, g.name) : null);
+      const setupRow = rest.find((s) => s.key === 'ai_automod.setup_done');
+      if (setupRow) { node.append(safeRow(setupRow, () => settingRow(setupRow, secLock))); rest.splice(rest.indexOf(setupRow), 1); }
       if (toggles.length) node.append(h('div', { class: 'switch-grid' }, toggles.map((s) => safeRow(s, () => switchCard(s, secLock)))));
       if (rest.length) node.append(h('div', { style: toggles.length ? 'margin-top:12px' : '' }, rest.map((s) => safeRow(s, () => settingRow(s, secLock)))));
       box.append(node);

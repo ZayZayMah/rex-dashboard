@@ -227,7 +227,19 @@ async def route(w, request, url, path, method, session):
         fb = [r for r in convs if r["type"] == "feedback"][:1]
         convs = [r for r in convs if r["type"] != "feedback"]
         cool = await _cool(w, uid)
-        return jr({"feedback": fb[0]["id"] if fb else "", "convs": convs[:MAX_CHATS], "cooldown": max(0, int(cool["until"] - H("now")())) if cool else 0, "types": SUPPORT_TYPES, "max": MAX_CHATS})
+        can_ai = bool(w.owner_mode(session))
+        return jr({"can_ai": can_ai, "ai_only": bool(can_ai and await w.store.get("supai:" + uid)), "feedback": fb[0]["id"] if fb else "", "convs": convs[:MAX_CHATS], "cooldown": max(0, int(cool["until"] - H("now")())) if cool else 0, "types": SUPPORT_TYPES, "max": MAX_CHATS})
+    if tail == ["aimode"] and method == "POST":
+        w.check_mutation(request, url, session)
+        if not w.owner_mode(session):
+            raise err(403, "forbidden", "Only owners in owner mode can change this.")
+        body = await w.read_json(request, 256)
+        on = bool(body.get("on")) if isinstance(body, dict) else False
+        if on:
+            await w.store.put("supai:" + uid, True, 60 * 60 * 24 * 365)
+        else:
+            await w.store.delete("supai:" + uid)
+        return jr({"ok": True, "ai_only": on})
     if tail == ["new"] and method == "POST":
         w.check_mutation(request, url, session)
         if H("rate_limited")("supnew:" + uid, 6, 3600):
@@ -300,12 +312,34 @@ async def route(w, request, url, path, method, session):
                 return jr(_public(c))
             # Rex answers (always decided here on the server)
             helper.set_context(w.invite_url(), _theme(body))
-            turn = helper.reply(c, text, choice, await _kb_extra(w), _theme(body))
-            for line in turn["say"]:
+            extra_kb = await _kb_extra(w)
+            before_step, before_data = c["flow"].get("step"), json.loads(json.dumps(c["flow"].get("data") or {}))
+            prev_bot = next((m["x"] for m in reversed(c["msgs"][:-1]) if m.get("f") == "b"), "")
+            turn = helper.reply(c, text, choice, extra_kb, _theme(body))
+            say_lines, chips_out, step_out = turn["say"], turn["chips"], turn["step"]
+            # The premade replies stay in charge. The AI only steps in when the person seems to be saying "you got it wrong" (or the owner turned on AI-only for themselves).
+            if (text and not choice and not turn["action"] and c.get("type") in ("help", "bug", "premium")
+                    and not helper.MILD.search(text) and not helper.SEVERE.search(text)):
+                ai_only = bool(w.owner_mode(session)) and bool(await w.store.get("supai:" + uid))
+                why = "the owner chose AI-only replies" if ai_only else helper.wrong_signal(text, prev_bot, (say_lines or [""])[0], same_step=(step_out == before_step))
+                if why and c.get("ai_n", 0) < (60 if ai_only else 6) and not H("rate_limited")("supai:" + uid, 60 if ai_only else 12, 3600):
+                    try:
+                        import ai as _ai
+                        tr = [{"who": "Person" if m.get("f") == "u" else "Rex", "text": m.get("x")} for m in c["msgs"] if m.get("f") in ("u", "b")][-10:]
+                        r = await _ai.support_reply(w, {"type": c.get("type"), "name": c.get("name", "").split(" ")[0], "why": why, "transcript": tr,
+                                                        "kb": helper.kb_context([m["text"] for m in tr if m["who"] == "Person"][-3:][::-1] + [text], extra_kb)})
+                    except Exception:
+                        r = {"ok": False}
+                    if r.get("ok"):
+                        c["flow"]["data"], c["flow"]["step"] = before_data, before_step      # the AI answered, so the script does not move on
+                        chips_out, step_out = helper.ai_turn_after(c["flow"], bool(r.get("human")), text)
+                        say_lines = [r["say"]] + (helper._step_prompt(c["flow"])["say"] if r.get("human") else [])
+                        c["ai_n"] = c.get("ai_n", 0) + 1
+            for line in say_lines:
                 c["msgs"].append(_msg("b", line))
-            c["chips"] = [list(x) for x in turn["chips"]]
-            if turn["step"]:
-                c["flow"]["step"] = turn["step"]
+            c["chips"] = [list(x) for x in chips_out]
+            if step_out:
+                c["flow"]["step"] = step_out
             act = turn["action"]
             if c.get("type") == "feedback" and act in ("noise", "done"):
                 act = None

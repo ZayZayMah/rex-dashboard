@@ -1,6 +1,20 @@
 {
- "build": "793a7fefd8",
+ "build": "203f00b302",
  "entries": [
+  {
+   "id": "w-2026-11-28-aimod",
+   "date": "2026-11-28",
+   "kind": "website",
+   "topic": "updates",
+   "title": "AI automod setup, Guardian page and smarter support",
+   "summary": "Describe your AI automod once and the AI fills in the settings, Guardian has its own page, and support brings in the AI only when it is needed.",
+   "items": [
+    "🤖 New AI automod page (Ultra): tell the AI what you want, it fills in the settings, then the chat closes and you edit everything by hand.",
+    "🛡️ Anti Raid and Anti Betray now have their own Guardian page with all their settings.",
+    "🆘 The support chat uses premade replies first and brings in the AI for a deeper answer only when it is getting things wrong.",
+    "🔧 Owners get an AI-only switch on the Support page (just for themselves)."
+   ]
+  },
   {
    "id": "w-2026-11-23-studio",
    "date": "2026-11-23",

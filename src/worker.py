@@ -1038,6 +1038,36 @@ class Default(WorkerEntrypoint):
                 return json_response(await ai.handle(self, req))
             except Exception as err:
                 return json_response({"ok": False, "reason": "error", "message": "My brain tripped just now. Try again in a minute.", "detail": type(err).__name__})
+        if path == "/api/ai/aimod-setup" and method == "POST":
+            import ai
+            self.check_mutation(request, url, session)
+            raw = await self.read_json(request, 16 * 1024)
+            gid = str(raw.get("gid") or "")
+            access = self.guild_access(session, gid)
+            guild = await self.store.get("guild:" + gid)
+            if not guild:
+                raise HttpError(404, "bot_not_in_server", "REX is not in that server yet.")
+            if not access["admin"] and not self.owner_mode(session):
+                raise HttpError(403, "forbidden", "You need the Administrator permission to run this setup.")
+            if not self.owner_mode(session) and not tier_active(guild, "ultra"):
+                raise HttpError(403, "needs_ultra", "AI automod needs REX Ultra on this server.")
+            if rate_limited("aisetup:" + str(session["user"]["id"]), 8, 60):
+                raise HttpError(429, "slow_down", "Slow down a little. Try again in a minute.")
+            schema = await self.get_schema()
+            if not schema:
+                raise HttpError(503, "bot_not_synced", "REX has not sent its settings list yet. Is the bot online?")
+            hist = []
+            for m in (raw.get("history") or [])[-14:]:
+                if isinstance(m, dict) and clean_str(m.get("text"), 600):
+                    hist.append({"role": "assistant" if m.get("role") == "assistant" else "user", "text": clean_str(m.get("text"), 600)})
+            if not hist or hist[-1]["role"] != "user":
+                raise HttpError(400, "bad_request", "Send your message first.")
+            try:
+                return json_response(await ai.aimod_setup(self, guild, guild.get("values") or {}, index_schema(schema), hist))
+            except HttpError:
+                raise
+            except Exception as err:
+                return json_response({"ok": False, "reason": "error", "message": "My brain tripped just now. Try again in a minute, or edit the settings below by hand.", "detail": type(err).__name__})
         if path == "/api/me" and method == "GET":
             await self.note_user(session)
             await features.deliver_pending(self, session["user"]["id"], url)
@@ -1711,6 +1741,12 @@ class Default(WorkerEntrypoint):
             stats["hist"] = hist[-96:]
             await self.store.put("stats:latest", stats)
             return json_response({"ok": True})
+        if tail == ["aimod"] and method == "POST":
+            import ai
+            try:
+                return json_response(await ai.mod_check(self, await self.read_json(request, 16 * 1024)))
+            except Exception as err:
+                return json_response({"ok": False, "reason": "error", "detail": type(err).__name__})
         if tail == ["aiusage"] and method == "GET":
             import ai
             return json_response(await ai.usage(self))
